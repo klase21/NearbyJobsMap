@@ -1,0 +1,44 @@
+{
+  "metadata": {
+    "source": "albamon",
+    "capturedAt": "2026-08-05T15:40:00+09:00",
+    "sourcePageType": "detail",
+    "evidenceType": "observed_json_ld",
+    "sanitized": true,
+    "notes": ["공개 상세의 JSON-LD, 표시 근무조건, 공개 지도 링크 좌표를 수동 축약", "연락처·담당자·본문·추적값 제외", "BFF 요청이나 응답에 의존하지 않음"]
+  },
+  "sourceUrl": "https://www.albamon.com/jobs/detail/118270285",
+  "jsonLdBlocks": [
+    {
+      "@context": "https://schema.org",
+      "@type": "JobPosting",
+      "title": "일급 11만원(당일지급) - 호텔 세탁물 분류,정리 작업",
+      "datePosted": "2026-08-04",
+      "validThrough": "2026-08-24",
+      "employmentType": "PART_TIME",
+      "experienceRequirements": "신입",
+      "workHours": "풀타임",
+      "hiringOrganization": { "@type": "Organization", "name": "주식회사 피플코리아" },
+      "baseSalary": { "@type": "MonetaryAmount", "currency": "KRW", "value": { "@type": "QuantitativeValue", "value": 110000, "unitText": "DAY" } },
+      "jobLocation": [
+        { "@type": "Place", "address": { "@type": "PostalAddress", "streetAddress": "술이홀로 956", "addressLocality": "법원읍", "addressRegion": "파주시" } }
+      ]
+    }
+  ],
+  "visible": {
+    "salaryText": "일급 110,000원",
+    "workDaysText": "월~금",
+    "workHoursText": "08:00~17:00 (휴게 60분)",
+    "educationRequirement": "학력무관",
+    "category": "상하차·소화물 분류",
+    "addressText": "파주시 법원읍 술이홀로 956",
+    "district": null,
+    "neighborhood": "법원읍",
+    "nearestStation": null,
+    "latitude": 37.855262756347656,
+    "longitude": 126.8779525756836,
+    "workplaceCount": 1,
+    "locationUndecided": false,
+    "explicitClosed": false
+  }
+}

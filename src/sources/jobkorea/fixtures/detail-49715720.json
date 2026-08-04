@@ -1,0 +1,45 @@
+{
+  "metadata": {
+    "source": "jobkorea",
+    "capturedAt": "2026-08-05T15:35:00+09:00",
+    "sourcePageType": "detail",
+    "evidenceType": "observed_json_ld",
+    "sanitized": true,
+    "notes": [
+      "공개 상세 페이지 JSON-LD와 표시 필드의 수동 축약",
+      "RESEARCH.md의 다중 근무지 언급은 현재 공개 DOM에서 재확인되지 않아 workplaceCount=1로 기록",
+      "연락처와 설명 본문은 제외"
+    ]
+  },
+  "sourceUrl": "https://www.jobkorea.co.kr/Recruit/GI_Read/49715720",
+  "jsonLdBlocks": [
+    { "@context": "https://schema.org", "@type": "BreadcrumbList" },
+    {
+      "@context": "https://schema.org",
+      "@type": "JobPosting",
+      "title": "문제성 발관리 선생님을 모십니다. [경력 우대 / 신입 가능]",
+      "datePosted": "2026-08-04",
+      "validThrough": "2026-09-03T23:59",
+      "employmentType": "FULL_TIME",
+      "experienceRequirements": "신입·경력",
+      "educationRequirements": "학력무관",
+      "identifier": { "@type": "PropertyValue", "name": "JobKorea", "value": "49715720" },
+      "url": "https://www.jobkorea.co.kr/Recruit/GI_Read/49715720",
+      "hiringOrganization": { "@type": "Organization", "name": "푸스케어 청량리역점" },
+      "baseSalary": { "@type": "MonetaryAmount", "currency": "KRW", "value": { "@type": "QuantitativeValue", "minValue": 2200000, "maxValue": 4510000, "unitText": "MONTH" } },
+      "jobLocation": { "@type": "Place", "address": { "@type": "PostalAddress", "streetAddress": "서울 동대문구 서울시립대로 94 (전농동, 전농동새마을금고) 3층" } }
+    }
+  ],
+  "visible": {
+    "salaryText": "월급 220~450만원 (면접 후 결정)",
+    "workDaysText": "주 5일(일요일, 평일 선택 휴무)",
+    "workHoursText": "10:00 ~ 20:00",
+    "nearestStation": "청량리역",
+    "addressText": "서울 동대문구 서울시립대로 94 (전농동, 전농동새마을금고) 3층",
+    "city": "서울",
+    "district": "동대문구",
+    "neighborhood": "전농동",
+    "explicitClosed": false,
+    "workplaceCount": 1
+  }
+}

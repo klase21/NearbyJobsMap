@@ -1,0 +1,38 @@
+{
+  "metadata": {
+    "source": "albamon",
+    "capturedAt": "2026-08-05T15:45:00+09:00",
+    "sourcePageType": "listing",
+    "evidenceType": "observed_html",
+    "sanitized": true,
+    "notes": ["공개 지역별 목록 첫 페이지의 상단 로고 공고를 수동 축약", "추적 쿼리 제거", "상단 노출 공고는 promoted=true로 분리"]
+  },
+  "items": [
+    {
+      "sourcePostingId": "118279576",
+      "sourceUrl": "https://www.albamon.com/jobs/detail/118279576",
+      "title": "뉴뉴 하우스 강남점 파트타임 채용",
+      "companyName": "뉴뉴 하우스 강남점",
+      "salaryText": "시급 14,400원",
+      "regionText": "서울 송파구 방이동",
+      "workDaysText": null,
+      "workHoursText": null,
+      "employmentTypes": ["파트타임"],
+      "deadlineText": null,
+      "promoted": true
+    },
+    {
+      "sourcePostingId": "118278018",
+      "sourceUrl": "https://www.albamon.com/jobs/detail/118278018",
+      "title": "마켓컬리 N마트 이용 고객 문의 응대",
+      "companyName": "트랜스코스모스코리아",
+      "salaryText": "월급 2,456,880원",
+      "regionText": "서울 양천구 신월2동",
+      "workDaysText": null,
+      "workHoursText": "근무시간 선택",
+      "employmentTypes": [],
+      "deadlineText": null,
+      "promoted": true
+    }
+  ]
+}

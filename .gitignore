@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+data/private/
+data/raw/
+data/live/
+exports/
+cookies.json
+session.json
+playwright/.auth/
+*.db
+*.sqlite

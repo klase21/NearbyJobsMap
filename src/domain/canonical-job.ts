@@ -1,0 +1,45 @@
+import type { JobSource } from "./job-source.js";
+import type { LocationAccuracy } from "./location.js";
+import type { PostingStatus } from "./posting-status.js";
+import type { CanonicalSalary } from "./salary.js";
+
+export interface CanonicalJob {
+  id: string;
+  source: JobSource;
+  sourcePostingId: string;
+  sourceUrl: string;
+  canonicalUrl: string | null;
+  title: string;
+  companyName: string;
+  normalizedCompanyName: string | null;
+  descriptionSummary: string | null;
+  categories: string[];
+  employmentTypes: string[];
+  experienceRequirement: string | null;
+  educationRequirement: string | null;
+  salary: CanonicalSalary;
+  workDaysOriginalText: string | null;
+  workStartTime: string | null;
+  workEndTime: string | null;
+  shiftType: string | null;
+  addressOriginalText: string | null;
+  roadAddress: string | null;
+  parcelAddress: string | null;
+  city: string | null;
+  district: string | null;
+  neighborhood: string | null;
+  nearestStation: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  locationAccuracy: LocationAccuracy;
+  workplaceCount: number | null;
+  postedAt: string | null;
+  modifiedAt: string | null;
+  expiresAt: string | null;
+  postingStatus: PostingStatus;
+  promoted: boolean | null;
+  remote: boolean | null;
+  collectedAt: string;
+  lastVerifiedAt: string;
+  rawPayloadReference: string | null;
+}

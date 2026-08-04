@@ -1,0 +1,61 @@
+{
+  "metadata": {
+    "source": "jobkorea",
+    "capturedAt": "2026-08-05T15:30:00+09:00",
+    "sourcePageType": "listing",
+    "evidenceType": "observed_html",
+    "sanitized": true,
+    "notes": [
+      "공개 서울 키워드 검색 첫 페이지에서 수동 축약",
+      "쿼리의 추적 파라미터를 제거하고 파싱에 필요한 표시 필드만 보존",
+      "급여는 일반 검색 목록에서 안정적으로 확인되지 않아 null로 보존"
+    ]
+  },
+  "items": [
+    {
+      "sourcePostingId": "49711856",
+      "sourceUrl": "https://www.jobkorea.co.kr/Recruit/GI_Read/49711856",
+      "title": "출판사 북디자이너 채용",
+      "companyName": "현대지성",
+      "salaryText": null,
+      "regionText": "서울",
+      "categories": ["디자인"],
+      "employmentTypes": [],
+      "experienceRequirement": null,
+      "educationRequirement": null,
+      "postedAt": null,
+      "deadlineText": null,
+      "promoted": null
+    },
+    {
+      "sourcePostingId": "49678812",
+      "sourceUrl": "https://www.jobkorea.co.kr/Recruit/GI_Read/49678812",
+      "title": "기장사업본부 영업팀 채용",
+      "companyName": "지수회계법인",
+      "salaryText": null,
+      "regionText": "서울",
+      "categories": ["영업"],
+      "employmentTypes": [],
+      "experienceRequirement": null,
+      "educationRequirement": null,
+      "postedAt": null,
+      "deadlineText": null,
+      "promoted": null
+    },
+    {
+      "sourcePostingId": "49715720",
+      "sourceUrl": "https://www.jobkorea.co.kr/Recruit/GI_Read/49715720",
+      "title": "문제성 발관리 선생님을 모십니다. [경력 우대 / 신입 가능]",
+      "companyName": "푸스케어 청량리역점",
+      "salaryText": "월급 220~450만원 (면접 후 결정)",
+      "regionText": "서울 동대문구",
+      "categories": ["고객서비스·리테일"],
+      "employmentTypes": ["정규직"],
+      "experienceRequirement": "신입·경력",
+      "educationRequirement": "학력무관",
+      "postedAt": "2026-08-04",
+      "deadlineText": "2026-09-03",
+      "promoted": null
+    }
+  ]
+}

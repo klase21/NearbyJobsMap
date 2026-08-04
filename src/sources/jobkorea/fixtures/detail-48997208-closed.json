@@ -1,0 +1,20 @@
+{
+  "metadata": {
+    "source": "jobkorea",
+    "capturedAt": "2026-08-05T12:00:00+09:00",
+    "sourcePageType": "detail",
+    "evidenceType": "observed_html",
+    "sanitized": true,
+    "notes": ["RESEARCH.md에서 공개 접근이 관찰된 마감 상세의 최소 축약", "JSON-LD 전체 계약은 재검증하지 않음", "연락처와 본문 제외"]
+  },
+  "sourceUrl": "https://www.jobkorea.co.kr/Recruit/GI_Read/48997208",
+  "jsonLdBlocks": [],
+  "visible": {
+    "salaryText": "회사 내규에 따름 (면접 후 결정)",
+    "addressText": "서울 강남구",
+    "city": "서울",
+    "district": "강남구",
+    "explicitClosed": true,
+    "workplaceCount": 1
+  }
+}
