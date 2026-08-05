@@ -8,6 +8,7 @@ import type { AlbamonDetailFixture, AlbamonListingFixture } from "../../sources/
 
 const listingUrl = new URL("../../sources/albamon/fixtures/listing-area-2026-08-05.json", import.meta.url);
 const detailUrl = new URL("../../sources/albamon/fixtures/detail-118270285.json", import.meta.url);
+const annualUrl = new URL("../../sources/albamon/fixtures/detail-117771568-annual-incentive.json", import.meta.url);
 
 describe("알바몬 fixture 계약", () => {
   it("목록 급여 원문과 노출 상태를 보존한다", async () => {
@@ -59,6 +60,27 @@ describe("알바몬 fixture 계약", () => {
     expect(result.value?.roadAddress).toBe("술이홀로 956");
   });
 
+  it("관찰된 연봉과 별도 인센티브 문구를 원문 그대로 보존한다", async () => {
+    const detail = parseAlbamonDetail(await loadFixture<AlbamonDetailFixture>(annualUrl));
+    expect(detail.diagnostics.map((item) => item.code)).not.toContain("ALBAMON_ANNUAL_SALARY_SHAPE_CHANGED");
+    expect(detail.value?.salaryText).toContain("인센티브 별도");
+    const listing = { sourcePostingId: "117771568", sourceUrl: "https://m.albamon.com/jobs/detail/117771568", title: "VIP 고객관리 및 세일즈 채용", companyName: "잡코리아파트너스 유한회사", salaryText: null, regionText: "서울 서초구", workDaysText: null, workHoursText: null, employmentTypes: [], deadlineText: null, promoted: null, capturedAt: "2026-08-05T14:05:00+09:00" };
+    const job = normalizeAlbamon(listing, detail.value ?? undefined);
+    expect(job.salary).toMatchObject({ type: "annual", minimumAmount: 30_000_000, maximumAmount: 30_000_000, includesIncentive: true, normalizedMonthlyMinimum: 2_500_000, normalizationConfidence: "low" });
+  });
+
+  it("근무지 미정 문구는 원문을 남기고 좌표·주소를 비운다", () => {
+    const fixture: AlbamonDetailFixture = { metadata: { source: "albamon", capturedAt: "2026-08-05", sourcePageType: "detail", evidenceType: "observed_html", sanitized: true, notes: [] }, sourceUrl: "https://www.albamon.com/jobs/detail/1", visible: { addressText: "근무지 면접 후 결정", latitude: 37.5, longitude: 127 } };
+    const detail = parseAlbamonDetail(fixture);
+    expect(detail.value?.locationUndecided).toBe(true);
+    expect(detail.diagnostics.map((item) => item.code)).toContain("ALBAMON_LOCATION_UNDECIDED_TEXT_DETECTED");
+    const listing = { sourcePostingId: "1", sourceUrl: fixture.sourceUrl, title: "검증 입력", companyName: "검증 회사", salaryText: null, regionText: null, workDaysText: null, workHoursText: null, employmentTypes: [], deadlineText: null, promoted: null, capturedAt: "2026-08-05" };
+    const job = normalizeAlbamon(listing, detail.value ?? undefined);
+    expect(job.locationAccuracy).toBe("location_undecided");
+    expect(job.addressOriginalText).toBe("근무지 면접 후 결정");
+    expect(job.roadAddress).toBeNull(); expect(job.latitude).toBeNull(); expect(job.longitude).toBeNull();
+  });
+
   it("빈 목록과 위치 형태 변경을 진단한다", () => {
     const metadata: AlbamonListingFixture["metadata"] = { source: "albamon", capturedAt: "2026-08-05", sourcePageType: "listing", evidenceType: "observed_html", sanitized: true, notes: [] };
     expect(parseAlbamonListing({ metadata, items: [] }).diagnostics[0]?.code).toBe("ALBAMON_LISTING_ITEMS_EMPTY");
@@ -67,6 +89,6 @@ describe("알바몬 fixture 계약", () => {
   });
 
   it("fixture에 개인정보·세션·토큰이 없다", async () => {
-    for (const url of [listingUrl, detailUrl]) expect(inspectFixtureSafety(await readFile(url, "utf8"))).toEqual([]);
+    for (const url of [listingUrl, detailUrl, annualUrl]) expect(inspectFixtureSafety(await readFile(url, "utf8"))).toEqual([]);
   });
 });

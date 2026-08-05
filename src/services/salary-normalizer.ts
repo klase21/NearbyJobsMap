@@ -29,7 +29,7 @@ export function normalizeSalary(
       conversion = { factor: 1, basis: "월급 원문 금액", confidence: "high" };
       break;
     case "annual":
-      conversion = { factor: 1 / policy.annualMonths, basis: `연봉 ÷ ${policy.annualMonths}개월`, confidence: "medium" };
+      conversion = { factor: 1 / policy.annualMonths, basis: `연봉 ÷ ${policy.annualMonths}개월`, confidence: salary.includesIncentive || salary.negotiable ? "low" : "medium" };
       break;
     default:
       return salary;

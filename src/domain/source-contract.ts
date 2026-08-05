@@ -7,12 +7,15 @@ export type EvidenceClassification =
   | "Inferred"
   | "Unknown";
 
+export type FixtureContractCase = "annual_salary" | "multiple_locations" | "location_undecided";
+
 export interface FixtureMetadata {
   source: "jobkorea" | "albamon";
   capturedAt: string;
   sourcePageType: "listing" | "detail";
   evidenceType: "observed_html" | "observed_json_ld" | "observed_internal_json";
   sanitized: true;
+  contractCases?: FixtureContractCase[];
   notes: string[];
 }
 

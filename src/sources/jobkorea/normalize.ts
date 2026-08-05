@@ -20,6 +20,14 @@ export function normalizeJobKorea(listing: JobKoreaListing, detail?: JobKoreaDet
   const canonicalUrl = canonicalizeUrl(detail?.canonicalUrl ?? listing.sourceUrl);
   const expiresAt = detail?.expiresAt ?? null;
   const verifiedAt = detail?.capturedAt ?? listing.capturedAt;
+  const multiple = (detail?.workplaceCount ?? 0) > 1;
+  const undecided = detail?.locationUndecided ?? false;
+  const workplaces = (detail?.workplaces ?? []).map((workplace) => ({
+    ...workplace,
+    parcelAddress: null,
+    accuracy: classifyLocation(workplace),
+    isHeadquartersOnly: false,
+  }));
   return {
     id: `jobkorea:${listing.sourcePostingId}`,
     source: "jobkorea",
@@ -40,15 +48,16 @@ export function normalizeJobKorea(listing: JobKoreaListing, detail?: JobKoreaDet
     workEndTime: detail?.workEndTime ?? null,
     shiftType: null,
     addressOriginalText,
-    roadAddress: detail?.roadAddress ?? null,
+    roadAddress: multiple || undecided ? null : detail?.roadAddress ?? null,
     parcelAddress: null,
-    city: detail?.city ?? null,
-    district: detail?.district ?? null,
-    neighborhood: detail?.neighborhood ?? null,
-    nearestStation: detail?.nearestStation ?? null,
+    city: multiple || undecided ? null : detail?.city ?? null,
+    district: multiple || undecided ? null : detail?.district ?? null,
+    neighborhood: multiple || undecided ? null : detail?.neighborhood ?? null,
+    nearestStation: multiple || undecided ? null : detail?.nearestStation ?? null,
     latitude: null,
     longitude: null,
-    locationAccuracy: classifyLocation({ roadAddress: detail?.roadAddress ?? null, addressOriginalText, city: detail?.city ?? null, district: detail?.district ?? null, neighborhood: detail?.neighborhood ?? null, nearestStation: detail?.nearestStation ?? null, workplaceCount: detail?.workplaceCount ?? null }),
+    locationAccuracy: classifyLocation({ roadAddress: detail?.roadAddress ?? null, addressOriginalText, city: detail?.city ?? null, district: detail?.district ?? null, neighborhood: detail?.neighborhood ?? null, nearestStation: detail?.nearestStation ?? null, workplaceCount: detail?.workplaceCount ?? null, locationUndecided: undecided }),
+    workplaces,
     workplaceCount: detail?.workplaceCount ?? null,
     postedAt: detail?.postedAt ?? listing.postedAt,
     modifiedAt: null,

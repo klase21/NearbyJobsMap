@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "source": "jobkorea", "capturedAt": "2026-08-05T13:45:00+09:00", "sourcePageType": "detail", "evidenceType": "observed_json_ld", "sanitized": true,
+    "contractCases": ["annual_salary"],
+    "notes": ["공개 상세의 근무지와 기업정보 위치가 다른 사례를 수동 축약", "기업정보 위치는 headquartersAddressText로만 보존하고 근무지 배열에 넣지 않음", "연락처·담당자·지원자 통계·본문 제외"]
+  },
+  "sourceUrl": "https://www.jobkorea.co.kr/Recruit/GI_Read/49493208",
+  "jsonLdBlocks": [{
+    "@context": "https://schema.org", "@type": "JobPosting", "title": "생산 정규직 채용", "datePosted": "2026-07-01", "validThrough": "2026-08-30T23:59", "employmentType": "FULL_TIME",
+    "identifier": { "@type": "PropertyValue", "name": "JobKorea", "value": "49493208" }, "url": "https://www.jobkorea.co.kr/Recruit/GI_Read/49493208",
+    "hiringOrganization": { "@type": "Organization", "name": "인풍코리아" },
+    "baseSalary": { "@type": "MonetaryAmount", "currency": "KRW", "value": { "@type": "QuantitativeValue", "minValue": 38000000, "maxValue": 40010000, "unitText": "YEAR" } },
+    "jobLocation": { "@type": "Place", "address": { "@type": "PostalAddress", "streetAddress": "충북 진천군 이월면 노원리 45-10" } }
+  }],
+  "visible": {
+    "salaryText": "연봉 3,800~4,000만원 (면접 후 결정)", "addressText": "충북 진천군 이월면 노원리 45-10", "city": "충북", "district": "진천군", "neighborhood": "이월면",
+    "headquartersAddressText": "서울 강남구 개포로 623 (개포동)", "explicitClosed": false, "workplaceCount": 1
+  }
+}

@@ -17,7 +17,7 @@ describe("공고 카드", () => {
       onMapFocus={() => undefined} onUserStatusChange={() => undefined} cardRef={() => undefined} />);
     expect(screen.getByText("기능 검증용 가상 공고")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /원문/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /지도에서 보기/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /지도 표시 불가/ })).toBeDisabled();
   });
   it("사용자 상태 변경은 별도 callback으로 전달", () => {
     const onChange = vi.fn();
@@ -32,5 +32,11 @@ describe("공고 카드", () => {
       onMapFocus={() => undefined} onUserStatusChange={() => undefined} cardRef={() => undefined} />);
     expect(screen.getByText(/월 환산 예상 2,800,000원 · 신뢰도 높음/)).toBeInTheDocument();
     expect(screen.getByText(/서울 · 강남구/)).toBeInTheDocument();
+  });
+  it("근무지 미정은 목록에 남기고 지도 표시 불가 사유를 제공", () => {
+    const undecided: UiJobRecord = { ...demo, job: { ...demo.job, addressOriginalText: "근무지 면접 후 결정", roadAddress: null, city: null, district: null, neighborhood: null, latitude: null, longitude: null, workplaces: [], workplaceCount: null, locationAccuracy: "location_undecided" } };
+    render(<JobCard record={undecided} rank={1} selected={false} origin={DEFAULT_ORIGIN} userStatus="reviewing" onSelect={() => undefined} onMapFocus={() => undefined} onUserStatusChange={() => undefined} cardRef={() => undefined} />);
+    expect(screen.getByText("근무지 미정")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /지도 표시 불가/ })).toBeDisabled();
   });
 });

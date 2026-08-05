@@ -1,6 +1,6 @@
 import type { LocationAccuracy } from "../domain/location";
 import type { SalaryType } from "../domain/salary";
-import type { JobFilterState, RegionGroup, SortOption, UiJobRecord, UserOrigin } from "../domain/ui-job";
+import type { JobFilterState, MapPosition, RegionGroup, SortOption, UiJobRecord, UserOrigin } from "../domain/ui-job";
 import { haversineDistanceKm } from "./distance";
 
 export const DEFAULT_FILTERS: JobFilterState = {
@@ -11,7 +11,26 @@ export const DEFAULT_FILTERS: JobFilterState = {
 };
 
 const EXACT_LOCATION = new Set<LocationAccuracy>(["exact_coordinate", "exact_address"]);
-const ESTIMATED_LOCATION = new Set<LocationAccuracy>(["neighborhood", "district", "city", "station_area", "multiple_locations"]);
+const ESTIMATED_LOCATION = new Set<LocationAccuracy>(["neighborhood", "district", "city", "station_area"]);
+
+export function getMapPositions(record: UiJobRecord): MapPosition[] {
+  if (record.job.locationAccuracy === "multiple_locations") {
+    return record.job.workplaces.flatMap((workplace) => Number.isFinite(workplace.latitude) && Number.isFinite(workplace.longitude) && !workplace.isHeadquartersOnly
+      ? [{ latitude: workplace.latitude!, longitude: workplace.longitude!, kind: "exact" as const, provenance: record.isFictional ? "fictional_demo" as const : "source" as const }]
+      : []);
+  }
+  if (["headquarters_only", "location_undecided", "unavailable"].includes(record.job.locationAccuracy)) return [];
+  return record.mapPosition ? [record.mapPosition] : [];
+}
+
+export function isMapEligible(record: UiJobRecord): boolean {
+  return getMapPositions(record).length > 0;
+}
+
+const distanceFromOrigin = (record: UiJobRecord, origin: UserOrigin): number | null => {
+  const distances = getMapPositions(record).map((position) => haversineDistanceKm(origin, position));
+  return distances.length ? Math.min(...distances) : null;
+};
 
 export function getRegionGroup(record: UiJobRecord): RegionGroup | null {
   const text = `${record.job.addressOriginalText ?? ""} ${record.job.city ?? ""}`;
@@ -84,7 +103,7 @@ export function sortJobs(records: UiJobRecord[], sort: SortOption, origin: UserO
     switch (sort) {
       case "newest": result = compareNumbers(dateValue(a.record.job.postedAt), dateValue(b.record.job.postedAt), "desc"); break;
       case "deadline": result = compareNumbers(dateValue(a.record.job.expiresAt), dateValue(b.record.job.expiresAt), "asc"); break;
-      case "distance": result = compareNumbers(a.record.mapPosition ? haversineDistanceKm(origin, a.record.mapPosition) : null, b.record.mapPosition ? haversineDistanceKm(origin, b.record.mapPosition) : null, "asc"); break;
+      case "distance": result = compareNumbers(distanceFromOrigin(a.record, origin), distanceFromOrigin(b.record, origin), "asc"); break;
       case "hourly": result = compareNumbers(salaryValue(a.record, "hourly"), salaryValue(b.record, "hourly"), "desc"); break;
       case "daily": result = compareNumbers(salaryValue(a.record, "daily"), salaryValue(b.record, "daily"), "desc"); break;
       case "monthly": result = compareNumbers(salaryValue(a.record, "monthly"), salaryValue(b.record, "monthly"), "desc"); break;

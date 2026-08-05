@@ -6,6 +6,7 @@ import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "re
 import type { UiJobRecord, UserOrigin } from "../../domain/ui-job";
 import { haversineDistanceKm } from "../../services/distance";
 import { LOCATION_LABELS, SOURCE_LABELS } from "../../services/job-display";
+import { getMapPositions, isMapEligible } from "../../services/job-search";
 
 interface JobMapClientProps {
   records: UiJobRecord[];
@@ -25,12 +26,13 @@ function markerIcon(className: string, size = 22) {
 function MapEffects({ records, selectedJobId, fitRequest }: Pick<JobMapClientProps, "records" | "selectedJobId" | "fitRequest">) {
   const map = useMap();
   useEffect(() => {
-    const positions = records.flatMap((record) => record.mapPosition ? [[record.mapPosition.latitude, record.mapPosition.longitude] as [number, number]] : []);
+    const positions = records.flatMap((record) => getMapPositions(record).map((position) => [position.latitude, position.longitude] as [number, number]));
     if (positions.length === 1) map.setView(positions[0]!, 13);
     else if (positions.length > 1) map.fitBounds(new LatLngBounds(positions), { padding: [42, 42], maxZoom: 13 });
   }, [fitRequest, map, records]);
   useEffect(() => {
-    const selected = records.find((record) => record.job.id === selectedJobId)?.mapPosition;
+    const selectedRecord = records.find((record) => record.job.id === selectedJobId);
+    const selected = selectedRecord ? getMapPositions(selectedRecord)[0] ?? null : null;
     if (selected) map.flyTo([selected.latitude, selected.longitude], Math.max(map.getZoom(), 13), { duration: .5 });
   }, [map, records, selectedJobId]);
   return null;
@@ -42,7 +44,7 @@ function OriginSelection({ enabled, onOriginChange }: { enabled: boolean; onOrig
 }
 
 export default function JobMapClient(props: JobMapClientProps) {
-  const mapped = props.records.filter((record) => record.mapPosition);
+  const mapped = props.records.filter(isMapEligible);
   return (
     <MapContainer center={[37.44, 126.98]} zoom={10} scrollWheelZoom className="leaflet-container" zoomControl>
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={19}
@@ -53,11 +55,10 @@ export default function JobMapClient(props: JobMapClientProps) {
       <Marker position={[props.origin.latitude, props.origin.longitude]} icon={markerIcon("origin")}>
         <Popup><strong>{props.origin.name}</strong><p className="popup-meta">거리 계산 기준점</p></Popup>
       </Marker>
-      {mapped.map((record) => {
-        const position = record.mapPosition!;
+      {mapped.flatMap((record) => getMapPositions(record).map((position, positionIndex) => {
         const selected = record.job.id === props.selectedJobId;
         return (
-          <Marker key={record.job.id} position={[position.latitude, position.longitude]}
+          <Marker key={`${record.job.id}:${positionIndex}`} position={[position.latitude, position.longitude]}
             icon={markerIcon(selected ? "selected" : position.kind === "estimated" ? "estimated" : "", selected ? 30 : 22)}
             eventHandlers={{ click: () => props.onSelect(record.job.id) }}>
             <Popup>
@@ -69,7 +70,7 @@ export default function JobMapClient(props: JobMapClientProps) {
             </Popup>
           </Marker>
         );
-      })}
+      }))}
     </MapContainer>
   );
 }

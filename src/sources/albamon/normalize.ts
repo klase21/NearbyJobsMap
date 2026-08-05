@@ -14,6 +14,14 @@ export function normalizeAlbamon(listing: AlbamonListing, detail?: AlbamonDetail
   const canonicalUrl = canonicalizeUrl(detail?.canonicalUrl ?? listing.sourceUrl);
   const verifiedAt = detail?.capturedAt ?? listing.capturedAt;
   const expiresAt = detail?.expiresAt ?? null;
+  const multiple = (detail?.workplaceCount ?? 0) > 1;
+  const undecided = detail?.locationUndecided ?? false;
+  const workplaces = (detail?.workplaces ?? []).map((workplace) => ({
+    ...workplace,
+    parcelAddress: null,
+    accuracy: classifyLocation(workplace),
+    isHeadquartersOnly: false,
+  }));
   return {
     id: `albamon:${listing.sourcePostingId}`, source: "albamon", sourcePostingId: listing.sourcePostingId,
     sourceUrl: listing.sourceUrl, canonicalUrl, title: detail?.title ?? listing.title, companyName: detail?.companyName ?? listing.companyName,
@@ -21,13 +29,13 @@ export function normalizeAlbamon(listing: AlbamonListing, detail?: AlbamonDetail
     categories: detail?.category ? [detail.category] : [], employmentTypes: detail?.employmentType ? [detail.employmentType] : listing.employmentTypes,
     experienceRequirement: detail?.experienceRequirement ?? null, educationRequirement: detail?.educationRequirement ?? null, salary,
     workDaysOriginalText: detail?.workDaysOriginalText ?? listing.workDaysText, workStartTime: detail?.workStartTime ?? null,
-    workEndTime: detail?.workEndTime ?? null, shiftType: null, addressOriginalText, roadAddress: detail?.roadAddress ?? null,
-    parcelAddress: null, city: detail?.city ?? null, district: detail?.district ?? null, neighborhood: detail?.neighborhood ?? null,
-    nearestStation: detail?.nearestStation ?? null, latitude: detail?.latitude ?? null, longitude: detail?.longitude ?? null,
+    workEndTime: detail?.workEndTime ?? null, shiftType: null, addressOriginalText, roadAddress: multiple || undecided ? null : detail?.roadAddress ?? null,
+    parcelAddress: null, city: multiple || undecided ? null : detail?.city ?? null, district: multiple || undecided ? null : detail?.district ?? null, neighborhood: multiple || undecided ? null : detail?.neighborhood ?? null,
+    nearestStation: multiple || undecided ? null : detail?.nearestStation ?? null, latitude: multiple || undecided ? null : detail?.latitude ?? null, longitude: multiple || undecided ? null : detail?.longitude ?? null,
     locationAccuracy: classifyLocation({ latitude: detail?.latitude ?? null, longitude: detail?.longitude ?? null, roadAddress: detail?.roadAddress ?? null,
       addressOriginalText, city: detail?.city ?? null, district: detail?.district ?? null, neighborhood: detail?.neighborhood ?? null,
       nearestStation: detail?.nearestStation ?? null, workplaceCount: detail?.workplaceCount ?? null, locationUndecided: detail?.locationUndecided ?? false }),
-    workplaceCount: detail?.workplaceCount ?? null, postedAt: detail?.postedAt ?? null, modifiedAt: null, expiresAt,
+    workplaces, workplaceCount: detail?.workplaceCount ?? null, postedAt: detail?.postedAt ?? null, modifiedAt: null, expiresAt,
     postingStatus: classifyPostingStatus({ explicitClosed: detail?.explicitClosed ?? false, expiresAt }, new Date(verifiedAt)),
     promoted: listing.promoted, remote: null, collectedAt: listing.capturedAt, lastVerifiedAt: verifiedAt,
     rawPayloadReference: "src/sources/albamon/fixtures",

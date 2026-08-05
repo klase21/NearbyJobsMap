@@ -20,6 +20,14 @@ describe("한국어 급여 파서", () => {
     expect(parsed.maximumAmount).toBe(maximum);
   });
 
+  it("연봉 이상 표현은 보장되지 않은 상한을 만들지 않는다", () => {
+    const parsed = parseSalary("연 4,000만원 이상");
+    expect(parsed.type).toBe("annual");
+    expect(parsed.minimumAmount).toBe(40_000_000);
+    expect(parsed.maximumAmount).toBeNull();
+    expect(normalizeSalary(parsed).normalizedMonthlyMinimum).toBeNull();
+  });
+
   it("회사 내규를 0으로 만들지 않는다", () => {
     const parsed = parseSalary("회사 내규에 따름");
     expect(parsed.type).toBe("company_policy");
@@ -68,5 +76,12 @@ describe("월 환산", () => {
     const normalized = normalizeSalary(parseSalary("연봉 36,000,000원"));
     expect(normalized.normalizedMonthlyMinimum).toBe(3_000_000);
     expect(normalized.originalText).toBe("연봉 36,000,000원");
+  });
+
+  it("별도 인센티브가 있는 연봉 환산은 낮은 신뢰도로 표시한다", () => {
+    const normalized = normalizeSalary(parseSalary("연봉 3,600만원 + 인센티브 별도"));
+    expect(normalized.normalizedMonthlyMinimum).toBe(3_000_000);
+    expect(normalized.normalizationConfidence).toBe("low");
+    expect(normalized.includesIncentive).toBe(true);
   });
 });

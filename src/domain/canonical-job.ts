@@ -3,6 +3,20 @@ import type { LocationAccuracy } from "./location";
 import type { PostingStatus } from "./posting-status";
 import type { CanonicalSalary } from "./salary";
 
+export interface CanonicalWorkplace {
+  originalText: string;
+  roadAddress: string | null;
+  parcelAddress: string | null;
+  city: string | null;
+  district: string | null;
+  neighborhood: string | null;
+  nearestStation: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  accuracy: LocationAccuracy;
+  isHeadquartersOnly: boolean;
+}
+
 export interface CanonicalJob {
   id: string;
   source: JobSource;
@@ -32,6 +46,8 @@ export interface CanonicalJob {
   latitude: number | null;
   longitude: number | null;
   locationAccuracy: LocationAccuracy;
+  /** Structured evidence is authoritative; singular location fields are a legacy primary-location view. */
+  workplaces: CanonicalWorkplace[];
   workplaceCount: number | null;
   postedAt: string | null;
   modifiedAt: string | null;

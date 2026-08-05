@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { UiJobRecord, UserOrigin } from "../../domain/ui-job";
 import { MapErrorBoundary } from "./MapErrorBoundary";
 import { OriginControls } from "./OriginControls";
+import { isMapEligible } from "../../services/job-search";
 
 const JobMapClient = dynamic(() => import("./JobMapClient"), {
   ssr: false,
@@ -23,7 +24,7 @@ export function MapPanel(props: MapPanelProps) {
   const [selectingOrigin, setSelectingOrigin] = useState(false);
   const [fitRequest, setFitRequest] = useState(1);
   const [tileErrors, setTileErrors] = useState(0);
-  const mappedCount = props.records.filter((record) => record.mapPosition).length;
+  const mappedCount = props.records.filter(isMapEligible).length;
   const updateOrigin = (origin: UserOrigin) => { props.onOriginChange(origin); setSelectingOrigin(false); };
   return (
     <section className="map-panel" aria-label="현재 필터 결과 지도">

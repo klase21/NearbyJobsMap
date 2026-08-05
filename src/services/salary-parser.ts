@@ -26,6 +26,8 @@ function parseAmounts(text: string): [number | null, number | null] {
   }
   const single = text.match(/[\d,.]+\s*만?\s*원?/);
   const value = single ? amountFromToken(single[0], false) : null;
+  if (/이상|부터/.test(text)) return [value, null];
+  if (/이하|까지/.test(text)) return [null, value];
   return [value, value];
 }
 

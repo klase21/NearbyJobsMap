@@ -29,6 +29,17 @@ export interface AlbamonJsonLd {
   workHours?: unknown;
 }
 
+export interface AlbamonWorkplaceEvidence {
+  originalText: string;
+  roadAddress: string | null;
+  city: string | null;
+  district: string | null;
+  neighborhood: string | null;
+  nearestStation: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 export interface AlbamonDetailFixture {
   metadata: FixtureMetadata;
   sourceUrl: string;
@@ -48,6 +59,8 @@ export interface AlbamonDetailFixture {
     workplaceCount?: number | null;
     locationUndecided?: boolean;
     explicitClosed?: boolean;
+    workplaces?: AlbamonWorkplaceEvidence[];
+    headquartersAddressText?: string | null;
   };
 }
 
@@ -65,5 +78,5 @@ export interface AlbamonDetail {
   neighborhood: string | null; nearestStation: string | null; latitude: number | null; longitude: number | null;
   workDaysOriginalText: string | null; workStartTime: string | null; workEndTime: string | null;
   postedAt: string | null; expiresAt: string | null; explicitClosed: boolean; workplaceCount: number | null;
-  locationUndecided: boolean; capturedAt: string;
+  workplaces: AlbamonWorkplaceEvidence[]; locationUndecided: boolean; capturedAt: string;
 }

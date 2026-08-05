@@ -1,0 +1,20 @@
+{
+  "metadata": {
+    "source": "albamon", "capturedAt": "2026-08-05T14:05:00+09:00", "sourcePageType": "detail", "evidenceType": "observed_json_ld", "sanitized": true,
+    "contractCases": ["annual_salary"],
+    "notes": ["공개 모바일 상세의 연봉·회사내규·인센티브 표시와 JobPosting JSON-LD를 수동 축약", "인센티브는 구조화 연봉에 포함된 보장액으로 해석하지 않음", "연락처·담당자·본문·추적 쿼리 제외"]
+  },
+  "sourceUrl": "https://m.albamon.com/jobs/detail/117771568",
+  "jsonLdBlocks": [{
+    "@context": "https://schema.org", "@type": "JobPosting", "title": "VIP 고객관리 및 세일즈 채용", "datePosted": "2026-07-08", "validThrough": "2026-08-13",
+    "employmentType": ["PART_TIME", "FULL_TIME"], "experienceRequirements": ["경력무관", "경력"],
+    "hiringOrganization": { "@type": "Organization", "name": "잡코리아파트너스 유한회사" },
+    "baseSalary": { "@type": "MonetaryAmount", "currency": "KRW", "value": { "@type": "QuantitativeValue", "value": 30000000, "unitText": "YEAR" } },
+    "jobLocation": [{ "@type": "Place", "address": { "@type": "PostalAddress", "addressCountry": "대한민국", "addressLocality": "서초구", "addressRegion": "서울", "streetAddress": "반포동 강남 신세계백화점" } }],
+    "workHours": "저녁"
+  }],
+  "visible": {
+    "salaryText": "연봉 30,000,000원 회사 내규에 따름 (면접 후 경력 및 직전 연봉을 고려하여 협의) + 인센티브 별도 (매장/개인 타겟 성과에 따라 상이)",
+    "addressText": "서울 서초구 반포동 강남 신세계백화점", "district": "서초구", "neighborhood": "반포동", "workplaceCount": 1, "locationUndecided": false, "explicitClosed": false
+  }
+}

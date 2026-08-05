@@ -1,0 +1,27 @@
+{
+  "metadata": {
+    "source": "jobkorea",
+    "capturedAt": "2026-08-05T13:30:00+09:00",
+    "sourcePageType": "detail",
+    "evidenceType": "observed_json_ld",
+    "sanitized": true,
+    "contractCases": ["annual_salary"],
+    "notes": ["공개 상세의 연봉 범위와 JobPosting JSON-LD를 수동 축약", "연락처·담당자·지원자 통계·본문 제외", "표시 상한 3,300만원과 JSON-LD 상한 33,010,000원의 차이를 보존"]
+  },
+  "sourceUrl": "https://www.jobkorea.co.kr/Recruit/GI_Read/49090158",
+  "jsonLdBlocks": [{
+    "@context": "https://schema.org", "@type": "JobPosting",
+    "title": "PC유지보수 파견직원 모집",
+    "datePosted": "2026-04-30", "validThrough": "2026-06-29T23:59", "employmentType": "FULL_TIME",
+    "experienceRequirements": "경력", "educationRequirements": "고졸 이상",
+    "identifier": { "@type": "PropertyValue", "name": "JobKorea", "value": "49090158" },
+    "url": "https://www.jobkorea.co.kr/Recruit/GI_Read/49090158",
+    "hiringOrganization": { "@type": "Organization", "name": "엔플러스시스템즈" },
+    "baseSalary": { "@type": "MonetaryAmount", "currency": "KRW", "value": { "@type": "QuantitativeValue", "minValue": 30000000, "maxValue": 33010000, "unitText": "YEAR" } },
+    "jobLocation": { "@type": "Place", "address": { "@type": "PostalAddress", "streetAddress": "서울 영등포구 국제금융로6길 42 (여의도동)" } }
+  }],
+  "visible": {
+    "salaryText": "연봉 3,000~3,300만원 (면접 후 결정)", "addressText": "서울 영등포구 국제금융로6길 42 (여의도동)",
+    "city": "서울", "district": "영등포구", "neighborhood": "여의도동", "explicitClosed": true, "workplaceCount": 1
+  }
+}

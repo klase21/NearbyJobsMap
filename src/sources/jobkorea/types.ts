@@ -36,7 +36,18 @@ export interface JobKoreaJsonLd {
     currency?: unknown;
     value?: { minValue?: unknown; maxValue?: unknown; value?: unknown; unitText?: unknown };
   };
-  jobLocation?: { address?: { streetAddress?: unknown } };
+  jobLocation?: Array<{ address?: { streetAddress?: unknown; addressLocality?: unknown; addressRegion?: unknown } }> | { address?: { streetAddress?: unknown; addressLocality?: unknown; addressRegion?: unknown } };
+}
+
+export interface JobKoreaWorkplaceEvidence {
+  originalText: string;
+  roadAddress: string | null;
+  city: string | null;
+  district: string | null;
+  neighborhood: string | null;
+  nearestStation: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface JobKoreaDetailFixture {
@@ -54,6 +65,9 @@ export interface JobKoreaDetailFixture {
     neighborhood?: string | null;
     explicitClosed?: boolean;
     workplaceCount?: number | null;
+    workplaces?: JobKoreaWorkplaceEvidence[];
+    headquartersAddressText?: string | null;
+    locationUndecided?: boolean;
   };
 }
 
@@ -97,6 +111,8 @@ export interface JobKoreaDetail {
   postedAt: string | null;
   expiresAt: string | null;
   explicitClosed: boolean;
+  workplaces: JobKoreaWorkplaceEvidence[];
   workplaceCount: number | null;
+  locationUndecided: boolean;
   capturedAt: string;
 }

@@ -25,7 +25,9 @@ function createDemoRecord(input: DemoInput): UiJobRecord {
     nearestStation: input.station ?? null,
     latitude: input.locationAccuracy === "exact_coordinate" && input.mapPosition ? input.mapPosition.latitude : null,
     longitude: input.locationAccuracy === "exact_coordinate" && input.mapPosition ? input.mapPosition.longitude : null,
-    locationAccuracy: input.locationAccuracy, workplaceCount: input.locationAccuracy === "multiple_locations" ? 2 : 1,
+    locationAccuracy: input.locationAccuracy,
+    workplaces: input.locationAccuracy === "location_undecided" || input.locationAccuracy === "unavailable" || input.locationAccuracy === "multiple_locations" ? [] : [{ originalText: input.address, roadAddress: input.locationAccuracy === "exact_address" || input.locationAccuracy === "exact_coordinate" ? input.address : null, parcelAddress: null, city: input.city, district: input.district ?? null, neighborhood: input.neighborhood ?? null, nearestStation: input.station ?? null, latitude: input.locationAccuracy === "exact_coordinate" && input.mapPosition ? input.mapPosition.latitude : null, longitude: input.locationAccuracy === "exact_coordinate" && input.mapPosition ? input.mapPosition.longitude : null, accuracy: input.locationAccuracy, isHeadquartersOnly: false }],
+    workplaceCount: input.locationAccuracy === "multiple_locations" ? 2 : input.locationAccuracy === "location_undecided" ? null : 1,
     postedAt: input.postedAt, modifiedAt: null, expiresAt: input.expiresAt ?? null, postingStatus: input.postingStatus,
     promoted: false, remote: false, collectedAt: "2026-08-05T09:00:00+09:00", lastVerifiedAt: "2026-08-05T09:00:00+09:00", rawPayloadReference: null,
   };
