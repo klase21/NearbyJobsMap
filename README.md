@@ -133,6 +133,8 @@ synthetic JobKorea형 DOM 테스트는 일반 결과, 일반+광고·추천, 중
 
 이 변경 뒤 허용된 실제 page-1/max-details-0 dry-run은 정확히 한 번 실행됐고 4.377초에 구조화 종료됐다. navigation과 readiness는 완료됐지만 snapshot은 15ms 후 `ReferenceError: __name is not defined`로 실패해 최종 분류는 `unexpected_page`였다. 이는 TypeScript/tsx가 `page.evaluate` callback에 삽입한 이름 보존 helper가 browser page realm에는 없었던 별도의 실행 경계 결함이다. 최종 구현은 callback 전달 대신 self-contained JavaScript literal을 평가하여 helper 주입을 제거했고, lifecycle 진단은 구조화 오류 code를 보존하며 외부 stack 줄을 제거한다. 실제 실행은 승인된 1회 제한 때문에 반복하지 않았다. 따라서 final URL, title, ordinary/promoted/rejected/duplicate 수는 여전히 `null`이며 로그인·CAPTCHA·verification·access denial도 관찰되지 않았다. robots 1회, search navigation 1회, detail/direct/DB write 0회였다.
 
+별도 승인된 최종 page-1/max-details-0 dry-run에서 corrected evaluator는 실제 공개 검색 페이지에서도 schema 1 snapshot을 20ms에 정상 반환했고 전체 명령은 4.197초에 종료됐다. `__name` 및 serialization 오류는 재발하지 않았다. 최종 URL은 `https://www.jobkorea.co.kr/Search?stext=AI&tabType=recruit&Page_No=1`, 제목은 `'AI' 관련 📢 채용공고 | 총 13,609건의 검색결과`였다. numeric detail-link evidence 88개 중 ordinary 0, promoted 28, rejected 60으로 측정되어 분류는 `malformed_results`였다. 로그인·CAPTCHA·verification·access-denied·명시적 empty 표시는 관찰되지 않았다. 이 결과는 snapshot lifecycle 성공과 현재 ordinary-container 계약 불일치를 함께 뜻하며 후보가 없다는 뜻은 아니다. 상세, page 2, direct, retry, DB write는 모두 0이었다.
+
 원샷 관찰 데이터를 로컬에서 모두 제거하려면 서버를 중지하고 전체 로컬 DB reset 후 fixture/demo를 다시 준비한다. 이 작업은 사용자 상태 localStorage를 지우지 않는다.
 
 ```powershell
@@ -190,8 +192,8 @@ npm run db:status
 - 연봉 단일값·범위·인센티브 표시는 source fixture로 확인했지만, 복수 근무지와 근무지 미정의 실제 상세 구조는 이번 소스별 3건 제한에서 찾지 못해 여전히 미검증이다.
 - 알바몬의 관찰된 내부 BFF는 공식 API가 아니며 live 코드가 호출하거나 의존하지 않는다.
 - 잡코리아 browser transport의 기술적 접근 가능성·robots 결과는 이용허가가 아니다. 현행 계약·저작권·재가공·보관 범위는 미확인이다.
-- bounded search는 최대 2페이지만 검증하며 전체 pagination, 최신성 보장, 삭제 동기화, 자동 refresh가 없다. page-1 lifecycle과 합성 snapshot 계약은 검증됐지만 self-contained evaluator의 실제 source-page 재검증은 이번 1회 제한 이후로 남아 있고 direct `_GI_List` 익명 계약도 미확정이다.
+- bounded search는 최대 2페이지만 검증하며 전체 pagination, 최신성 보장, 삭제 동기화, 자동 refresh가 없다. page-1 lifecycle과 실제 schema 1 snapshot은 검증됐지만 현재 ordinary-result container는 인식되지 않아 `malformed_results`이며 direct `_GI_List` 익명 계약도 미확정이다.
 
 ## 다음 개발 단계
 
-다음 정확한 작업은 **이번 self-contained evaluator 수정 검토 후 page-1/max-details-0 Playwright dry-run을 별도 승인으로 단 한 번 재검증하여 snapshot completion과 ordinary candidate extraction을 측정하는 것**이다. 그 결과가 `valid_search_results`로 확인되기 전에는 page 2, 상세, direct 요청을 열지 않고, 성공하더라도 full pagination은 별도 승인 전 시작하지 않는다.
+다음 정확한 작업은 **외부 요청 없이 현재 `malformed_results`를 설명할 수 있도록 ordinary/promoted/rejected의 집계 사유와 최소 container signature를 JSON-safe snapshot 진단에 추가하고 synthetic DOM 계약으로 검증하는 것**이다. 그 변경이 별도 검토되기 전에는 실제 재실행, page 2, 상세, direct 요청을 열지 않으며 full pagination은 계속 별도 승인 대상이다.
