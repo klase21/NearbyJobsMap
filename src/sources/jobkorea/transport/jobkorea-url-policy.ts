@@ -41,3 +41,24 @@ export function validateJobKoreaRedirect(from: string, location: string, kind: J
 export function sourcePostingIdFromUrl(url: string): string | null {
   return new URL(url).pathname.match(/\/GI_Read\/(\d+)/i)?.[1] ?? null;
 }
+
+export function normalizeJobKoreaSearchUrl(candidate: string): string {
+  const normalized = normalizeJobKoreaUrl(candidate, "listing");
+  const url = new URL(normalized);
+  if (!/^\/Search\/?$/i.test(url.pathname)) throw new JobKoreaTransportError("JOBKOREA_SEARCH_URL_REJECTED", "공개 /Search 경로만 허용합니다.", null);
+  const page = url.searchParams.get("Page_No");
+  if (page !== null && page !== "1" && page !== "2") throw new JobKoreaTransportError("JOBKOREA_SEARCH_PAGE_INVALID", "Page_No는 1 또는 2만 허용합니다.", null);
+  if (!url.searchParams.has("tabType")) url.searchParams.set("tabType", "recruit");
+  url.searchParams.set("Page_No", page ?? "1");
+  return url.toString();
+}
+
+export function jobKoreaSearchPageUrl(searchUrl: string, pageNumber: 1 | 2): string {
+  const url = new URL(normalizeJobKoreaSearchUrl(searchUrl));
+  url.searchParams.set("Page_No", String(pageNumber));
+  return url.toString();
+}
+
+export function parseJobKoreaSearchPageNumber(searchUrl: string): 1 | 2 {
+  return new URL(normalizeJobKoreaSearchUrl(searchUrl)).searchParams.get("Page_No") === "2" ? 2 : 1;
+}

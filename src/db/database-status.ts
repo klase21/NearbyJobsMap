@@ -13,9 +13,9 @@ export function getDatabaseStatus(database: Database.Database, path = getDatabas
       id: string; ingestion_type: IngestionType; status: string; started_at: string;
       inserted_count: number; updated_count: number; unchanged_count: number; failed_count: number; permission_status: "unverified" | "blocked" | null;
     }>;
-  const latestOneShot = database.prepare(`SELECT id, status, started_at, permission_status FROM ingestion_runs
+  const latestOneShot = database.prepare(`SELECT id, status, started_at, permission_status, selected_transport FROM ingestion_runs
     WHERE ingestion_type = 'jobkorea_one_shot_transport' ORDER BY started_at DESC LIMIT 1`).get() as
-    { id: string; status: string; started_at: string; permission_status: "unverified" | "blocked" | null } | undefined;
+    { id: string; status: string; started_at: string; permission_status: "unverified" | "blocked" | null; selected_transport: "playwright" | "direct" | null } | undefined;
   return {
     path,
     appliedMigrations,
@@ -36,6 +36,6 @@ export function getDatabaseStatus(database: Database.Database, path = getDatabas
       inserted: run.inserted_count, updated: run.updated_count, unchanged: run.unchanged_count, failed: run.failed_count,
       permissionStatus: run.permission_status })),
     latestOneShotRun: latestOneShot ? { id: latestOneShot.id, status: latestOneShot.status, startedAt: latestOneShot.started_at,
-      permissionStatus: latestOneShot.permission_status } : null,
+      permissionStatus: latestOneShot.permission_status, selectedTransport: latestOneShot.selected_transport } : null,
   };
 }

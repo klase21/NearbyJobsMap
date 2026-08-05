@@ -69,6 +69,13 @@
 - transport 테스트는 주입된 mock HTTP만 사용하며 자동화된 테스트에서 live source 요청을 만들지 않는다.
 - `--dry-run`은 jobs, child collection, provenance, ingestion run을 포함한 모든 DB write를 금지한다.
 - 알바몬 live transport와 production crawler는 각각 별도의 명시적 승인이 필요하다.
+- Playwright는 정상 공개 페이지 렌더링에만 사용하며 stealth plugin, webdriver 속성 위장, CAPTCHA·검증·access-control 우회에 사용하지 않는다.
+- Playwright run마다 새 격리 context를 사용하고 cookie, storage state, 저장 browser profile을 import·export·재사용하지 않는다.
+- 잡코리아 검색 page의 empty 판정에 `addedCount === 0` 또는 `uniqueNewCount === 0`을 사용하지 않는다. duplicate-only page, blocked page, login page, timeout, parser failure는 empty가 아니다.
+- `_GI_List`는 관찰된 internal/public-page 계약일 뿐 공식 API가 아니다. cookie, session, authorization, token, signed value가 필요하면 direct transport를 실행하지 않는다.
+- 잡코리아 bounded browser 검증은 수동 `--confirm` 명령만 허용하며 검색 최대 2페이지, 상세 최대 3건, direct 최대 1회, robots 최대 1회를 넘기지 않는다.
+- 과거 AI 검색 607페이지 crawl을 자동으로 재실행하지 않는다. full pagination과 request cap 확대는 별도 명시적 승인이 필요하다.
+- browser/direct transport 자동 테스트는 mock 또는 synthetic sanitized contract만 사용하고 live source를 호출하지 않는다.
 
 ## Product and UX Guidance
 

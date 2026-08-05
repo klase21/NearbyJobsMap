@@ -3,7 +3,7 @@ import type { CanonicalJob } from "../domain/canonical-job";
 import type { JobSource } from "../domain/job-source";
 import type { DataProvenanceKind, PermissionStatus } from "../domain/data-provenance";
 
-export const REQUIRED_MIGRATION_VERSION = "0002";
+export const REQUIRED_MIGRATION_VERSION = "0003";
 
 export type RecordKind = DataProvenanceKind;
 export type EvidenceType = "observed_html" | "observed_json_ld" | "observed_internal_json" | "fictional_demo" | "public_page_observation";
@@ -22,6 +22,10 @@ export interface IngestionMetadata {
   observedAt?: string | null;
   sanitizerVersion?: string | null;
   parserVersion?: string | null;
+  observationKind?: "bounded_public_browser_observation" | null;
+  observationTransport?: "playwright" | "direct" | null;
+  pageNumber?: number | null;
+  listingPosition?: number | null;
 }
 
 export interface TransportRunMetadata {
@@ -31,6 +35,8 @@ export interface TransportRunMetadata {
   contentRequestLimit: number;
   preflightRequestLimit: number;
   dryRun: boolean;
+  selectedTransport?: "playwright" | "direct" | null;
+  searchPageCount?: number;
 }
 
 export interface TransportRunCompletion {
@@ -38,6 +44,9 @@ export interface TransportRunCompletion {
   contentRequests: number;
   selectedDetailCount: number;
   blockedCount: number;
+  browserNavigations?: number;
+  detailNavigations?: number;
+  directRequests?: number;
 }
 
 export interface IngestionRecord {
@@ -107,5 +116,6 @@ export interface DatabaseStatus {
     status: string;
     startedAt: string;
     permissionStatus: PermissionStatus;
+    selectedTransport: "playwright" | "direct" | null;
   } | null;
 }

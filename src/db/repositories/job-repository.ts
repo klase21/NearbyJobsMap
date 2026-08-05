@@ -28,6 +28,7 @@ const JOB_COLUMNS = [
   "expires_at", "posting_status", "promoted", "remote", "collected_at", "last_verified_at", "raw_payload_reference", "record_kind", "is_fictional",
   "evidence_type", "source_fixture_reference", "display_map_latitude", "display_map_longitude", "display_map_kind", "display_map_provenance",
   "provenance_kind", "permission_status", "provenance_evidence_type", "provenance_listing_url", "provenance_detail_url", "observed_at", "sanitizer_version", "parser_version",
+  "observation_kind", "observation_transport", "observation_page_number", "observation_listing_position",
   "content_hash", "created_at", "updated_at",
 ] as const;
 
@@ -61,6 +62,8 @@ function parameters(job: CanonicalJob, metadata: IngestionMetadata, contentHash:
     provenance_kind: metadata.recordKind, permission_status: metadata.permissionStatus ?? null, provenance_evidence_type: metadata.evidenceType,
     provenance_listing_url: metadata.listingUrl ?? null, provenance_detail_url: metadata.detailUrl ?? null,
     observed_at: metadata.observedAt ?? null, sanitizer_version: metadata.sanitizerVersion ?? null, parser_version: metadata.parserVersion ?? null,
+    observation_kind: metadata.observationKind ?? null, observation_transport: metadata.observationTransport ?? null,
+    observation_page_number: metadata.pageNumber ?? null, observation_listing_position: metadata.listingPosition ?? null,
     content_hash: contentHash, created_at: createdAt, updated_at: updatedAt,
   };
 }
@@ -147,15 +150,19 @@ export class JobRepository {
 
   private recordProvenance(jobId: string, metadata: IngestionMetadata, now: string): void {
     this.database.prepare(`INSERT INTO job_provenance_history
-      (job_id, provenance_kind, evidence_type, source_reference, permission_status, listing_url, detail_url, observed_at, sanitizer_version, parser_version, first_seen_at, last_seen_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (job_id, provenance_kind, evidence_type, source_reference, permission_status, listing_url, detail_url, observed_at, sanitizer_version, parser_version,
+       observation_kind, observation_transport, page_number, listing_position, first_seen_at, last_seen_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(job_id, provenance_kind, source_reference) DO UPDATE SET
         permission_status = excluded.permission_status, listing_url = excluded.listing_url, detail_url = excluded.detail_url,
         observed_at = excluded.observed_at, sanitizer_version = excluded.sanitizer_version, parser_version = excluded.parser_version,
+        observation_kind = excluded.observation_kind, observation_transport = excluded.observation_transport,
+        page_number = excluded.page_number, listing_position = excluded.listing_position,
         last_seen_at = excluded.last_seen_at`)
       .run(jobId, metadata.recordKind, metadata.evidenceType, metadata.sourceFixtureReference, metadata.permissionStatus ?? null,
         metadata.listingUrl ?? null, metadata.detailUrl ?? null, metadata.observedAt ?? null, metadata.sanitizerVersion ?? null,
-        metadata.parserVersion ?? null, now, now);
+        metadata.parserVersion ?? null, metadata.observationKind ?? null, metadata.observationTransport ?? null,
+        metadata.pageNumber ?? null, metadata.listingPosition ?? null, now, now);
   }
 
   previewUpsert(job: CanonicalJob, metadata: IngestionMetadata): UpsertResult {
@@ -188,9 +195,11 @@ export class JobRepository {
         if (existing?.content_hash === contentHash) {
           this.recordProvenance(persistedId, metadata, now);
           this.database.prepare(`UPDATE jobs SET provenance_kind = ?, permission_status = ?, provenance_evidence_type = ?, provenance_listing_url = ?, provenance_detail_url = ?,
-            observed_at = ?, sanitizer_version = ?, parser_version = ?, evidence_type = ?, source_fixture_reference = ?, last_verified_at = ? WHERE id = ?`)
+            observed_at = ?, sanitizer_version = ?, parser_version = ?, observation_kind = ?, observation_transport = ?, observation_page_number = ?,
+            observation_listing_position = ?, evidence_type = ?, source_fixture_reference = ?, last_verified_at = ? WHERE id = ?`)
             .run(metadata.recordKind, metadata.permissionStatus ?? null, metadata.evidenceType, metadata.listingUrl ?? null, metadata.detailUrl ?? null,
-              metadata.observedAt ?? null, metadata.sanitizerVersion ?? null, metadata.parserVersion ?? null, legacyEvidenceType(metadata.evidenceType),
+              metadata.observedAt ?? null, metadata.sanitizerVersion ?? null, metadata.parserVersion ?? null, metadata.observationKind ?? null,
+              metadata.observationTransport ?? null, metadata.pageNumber ?? null, metadata.listingPosition ?? null, legacyEvidenceType(metadata.evidenceType),
               metadata.sourceFixtureReference, job.lastVerifiedAt, persistedId);
           return;
         }
@@ -254,7 +263,10 @@ export class JobRepository {
       metadata: { recordKind, evidenceType, sourceFixtureReference: requiredString(row, "source_fixture_reference"), mapPosition,
         permissionStatus,
         listingUrl: nullableString(row, "provenance_listing_url"), detailUrl: nullableString(row, "provenance_detail_url"),
-        observedAt: nullableString(row, "observed_at"), sanitizerVersion: nullableString(row, "sanitizer_version"), parserVersion: nullableString(row, "parser_version") },
+        observedAt: nullableString(row, "observed_at"), sanitizerVersion: nullableString(row, "sanitizer_version"), parserVersion: nullableString(row, "parser_version"),
+        observationKind: (nullableString(row, "observation_kind") as IngestionMetadata["observationKind"]) ?? null,
+        observationTransport: (nullableString(row, "observation_transport") as IngestionMetadata["observationTransport"]) ?? null,
+        pageNumber: nullableNumber(row, "observation_page_number"), listingPosition: nullableNumber(row, "observation_listing_position") },
       contentHash: requiredString(row, "content_hash"), createdAt: requiredString(row, "created_at"), updatedAt: requiredString(row, "updated_at"),
     };
   }

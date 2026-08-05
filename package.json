@@ -14,6 +14,7 @@
     "db:reset": "tsx scripts/db-reset.ts",
     "setup:local": "tsx scripts/setup-local.ts",
     "transport:jobkorea:once": "tsx scripts/jobkorea-one-shot.ts",
+    "transport:jobkorea:search:once": "tsx scripts/jobkorea-search-one-shot.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run"
@@ -30,6 +31,7 @@
     "@types/react-dom": "^19.2.4",
     "eslint": "^10.8.0",
     "jsdom": "^30.0.1",
+    "playwright": "^1.62.1",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.7",
     "typescript": "^6.0.3",
