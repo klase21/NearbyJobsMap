@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { assessDuplicate } from "../../services/duplicate-detector.js";
-import { canonicalJob } from "../factories.js";
+import { assessDuplicate } from "../../services/duplicate-detector";
+import { canonicalJob } from "../factories";
 
 describe("중복 판별", () => {
   it("동일 source posting ID는 exact다", () => {

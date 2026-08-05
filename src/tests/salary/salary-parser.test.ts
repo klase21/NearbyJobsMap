@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { normalizeSalary } from "../../services/salary-normalizer.js";
-import { parseSalary } from "../../services/salary-parser.js";
+import { normalizeSalary } from "../../services/salary-normalizer";
+import { parseSalary } from "../../services/salary-parser";
 
 describe("한국어 급여 파서", () => {
   it.each([

@@ -1,5 +1,5 @@
-import type { CanonicalJob } from "./canonical-job.js";
-import type { JobSource } from "./job-source.js";
+import type { CanonicalJob } from "./canonical-job";
+import type { JobSource } from "./job-source";
 
 export type EvidenceClassification =
   | "Observed"

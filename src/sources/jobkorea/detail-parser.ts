@@ -1,5 +1,5 @@
-import type { ParseDiagnostic, ParseResult } from "../../domain/source-contract.js";
-import type { JobKoreaDetail, JobKoreaDetailFixture, JobKoreaJsonLd } from "./types.js";
+import type { ParseDiagnostic, ParseResult } from "../../domain/source-contract";
+import type { JobKoreaDetail, JobKoreaDetailFixture, JobKoreaJsonLd } from "./types";
 
 function text(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;

@@ -1,4 +1,4 @@
-import type { CanonicalSalary } from "../domain/salary.js";
+import type { CanonicalSalary } from "../domain/salary";
 
 export interface SalaryNormalizationPolicy {
   monthlyHours: number;

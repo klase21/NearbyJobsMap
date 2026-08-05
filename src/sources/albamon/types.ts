@@ -1,4 +1,4 @@
-import type { FixtureMetadata } from "../../domain/source-contract.js";
+import type { FixtureMetadata } from "../../domain/source-contract";
 
 export interface AlbamonListingFixtureItem {
   sourcePostingId?: string;

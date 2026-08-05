@@ -1,4 +1,4 @@
-import type { CanonicalJob } from "../domain/canonical-job.js";
+import type { CanonicalJob } from "../domain/canonical-job";
 
 export interface DuplicateAssessment {
   classification: "exact" | "probable" | "related" | "different" | "unknown";

@@ -1,9 +1,9 @@
-import type { CanonicalJob } from "../../domain/canonical-job.js";
-import { classifyLocation } from "../../services/location-classifier.js";
-import { classifyPostingStatus } from "../../services/posting-lifecycle.js";
-import { normalizeSalary } from "../../services/salary-normalizer.js";
-import { parseSalary } from "../../services/salary-parser.js";
-import type { JobKoreaDetail, JobKoreaListing } from "./types.js";
+import type { CanonicalJob } from "../../domain/canonical-job";
+import { classifyLocation } from "../../services/location-classifier";
+import { classifyPostingStatus } from "../../services/posting-lifecycle";
+import { normalizeSalary } from "../../services/salary-normalizer";
+import { parseSalary } from "../../services/salary-parser";
+import type { JobKoreaDetail, JobKoreaListing } from "./types";
 
 function canonicalizeUrl(value: string): string {
   const url = new URL(value);

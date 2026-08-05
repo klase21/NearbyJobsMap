@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseJobKoreaDetail } from "../../sources/jobkorea/detail-parser.js";
-import { parseJobKoreaListing } from "../../sources/jobkorea/listing-parser.js";
-import { normalizeJobKorea } from "../../sources/jobkorea/normalize.js";
-import type { JobKoreaDetailFixture, JobKoreaListingFixture } from "../../sources/jobkorea/types.js";
-import { inspectFixtureSafety, loadFixture } from "../../services/fixture-loader.js";
+import { parseJobKoreaDetail } from "../../sources/jobkorea/detail-parser";
+import { parseJobKoreaListing } from "../../sources/jobkorea/listing-parser";
+import { normalizeJobKorea } from "../../sources/jobkorea/normalize";
+import type { JobKoreaDetailFixture, JobKoreaListingFixture } from "../../sources/jobkorea/types";
+import { inspectFixtureSafety, loadFixture } from "../../services/fixture-loader";
 import { readFile } from "node:fs/promises";
 
 const listingUrl = new URL("../../sources/jobkorea/fixtures/listing-seoul-2026-08-05.json", import.meta.url);

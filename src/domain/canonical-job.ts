@@ -1,7 +1,7 @@
-import type { JobSource } from "./job-source.js";
-import type { LocationAccuracy } from "./location.js";
-import type { PostingStatus } from "./posting-status.js";
-import type { CanonicalSalary } from "./salary.js";
+import type { JobSource } from "./job-source";
+import type { LocationAccuracy } from "./location";
+import type { PostingStatus } from "./posting-status";
+import type { CanonicalSalary } from "./salary";
 
 export interface CanonicalJob {
   id: string;

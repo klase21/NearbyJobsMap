@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyPostingStatus } from "../../services/posting-lifecycle.js";
+import { classifyPostingStatus } from "../../services/posting-lifecycle";
 
 const now = new Date("2026-08-05T00:00:00Z");
 

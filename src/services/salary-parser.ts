@@ -1,4 +1,4 @@
-import type { CanonicalSalary, SalaryType } from "../domain/salary.js";
+import type { CanonicalSalary, SalaryType } from "../domain/salary";
 
 const TYPE_PATTERNS: Array<[RegExp, SalaryType]> = [
   [/시급|시간급/, "hourly"],

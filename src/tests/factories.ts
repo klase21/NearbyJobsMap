@@ -1,5 +1,5 @@
-import type { CanonicalJob } from "../domain/canonical-job.js";
-import { parseSalary } from "../services/salary-parser.js";
+import type { CanonicalJob } from "../domain/canonical-job";
+import { parseSalary } from "../services/salary-parser";
 
 export function canonicalJob(overrides: Partial<CanonicalJob> = {}): CanonicalJob {
   return {

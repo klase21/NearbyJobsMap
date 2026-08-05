@@ -1,4 +1,4 @@
-import type { LocationAccuracy, LocationEvidence } from "../domain/location.js";
+import type { LocationAccuracy, LocationEvidence } from "../domain/location";
 
 export function classifyLocation(evidence: LocationEvidence): LocationAccuracy {
   if ((evidence.workplaceCount ?? 0) > 1) return "multiple_locations";

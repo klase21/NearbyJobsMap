@@ -1,5 +1,5 @@
-import type { ParseDiagnostic, ParseResult } from "../../domain/source-contract.js";
-import type { AlbamonDetail, AlbamonDetailFixture, AlbamonJsonLd } from "./types.js";
+import type { ParseDiagnostic, ParseResult } from "../../domain/source-contract";
+import type { AlbamonDetail, AlbamonDetailFixture, AlbamonJsonLd } from "./types";
 
 function text(value: unknown): string | null { return typeof value === "string" && value.trim() ? value : null; }
 function number(value: unknown): number | null { return typeof value === "number" && Number.isFinite(value) ? value : null; }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyLocation } from "../../services/location-classifier.js";
+import { classifyLocation } from "../../services/location-classifier";
 
 describe("위치 정확도 분류", () => {
   it.each([

@@ -1,6 +1,6 @@
 # Project Identity
 
-이 프로젝트는 로컬 우선 통합 채용 목록과 보조적 근무지 지도를 위한 데이터 계약 기반이다. 현재 단계는 잡코리아·알바몬의 작은 sanitized fixture와 parser만 다룬다.
+이 프로젝트는 로컬 우선 통합 채용 목록과 보조적 근무지 지도를 위한 fixture 기반 UI MVP다. 현재 활성 소스는 잡코리아·알바몬이며, 작은 sanitized fixture와 명시적인 가상 공고만 화면에 제공한다.
 
 ## Project Direction
 
@@ -21,6 +21,9 @@
 - fixture 최소화·비식별화 규칙
 - 정확 좌표와 추정 위치를 구분하는 `LocationAccuracy`
 - exact duplicate와 probable duplicate의 구분
+- UI가 직접 소비하는 `CanonicalJob` 단일 공고 계약
+- 목록 우선·지도 보조의 제품 위계
+- 버전이 있는 브라우저 저장소 경계
 
 ## Non-Negotiable Rules
 
@@ -34,6 +37,13 @@
 - 쿠키, 세션, 토큰, 개인 연락처, 실제 대량 데이터를 커밋하지 않는다.
 - 불필요한 Markdown 파일을 만들지 않는다.
 - 관련 없는 정상 동작을 수정하지 않는다.
+- 두 번째 비호환 UI 전용 공고 모델을 만들지 않는다.
+- parser·급여 파싱·위치 분류 로직을 React component에 넣지 않는다.
+- 가상 공고를 실제 활성 공고처럼 표현하거나 가짜 원문 링크를 만들지 않는다.
+- 소스 공고 생명주기와 사용자 지원 상태를 같은 필드로 합치지 않는다.
+- 지도용 추정 좌표를 정확 좌표로 표현하지 않는다.
+- 명시적 승인 없이 live network collection을 추가하지 않는다.
+- 목록 우선 동작과 지도 보조 동작을 뒤바꾸지 않는다.
 
 ## Product and UX Guidance
 
@@ -50,6 +60,7 @@
 npm run typecheck
 npm run lint
 npm test
+npm run build
 ```
 
 fixture 변경은 명시 필드 assertion과 민감정보 검사도 통과해야 한다. 실패를 광범위한 lint 비활성화나 타입 회피로 숨기지 않는다.
@@ -63,3 +74,13 @@ fixture 변경은 명시 필드 assertion과 민감정보 검사도 통과해야
 - `RESEARCH.md`
 - `reports/FIXTURE_VALIDATION.md`
 - 추후 명시적으로 요청된 필수 GitHub template
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

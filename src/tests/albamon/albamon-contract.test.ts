@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { inspectFixtureSafety, loadFixture } from "../../services/fixture-loader.js";
-import { parseAlbamonDetail } from "../../sources/albamon/detail-parser.js";
-import { parseAlbamonListing } from "../../sources/albamon/listing-parser.js";
-import { normalizeAlbamon } from "../../sources/albamon/normalize.js";
-import type { AlbamonDetailFixture, AlbamonListingFixture } from "../../sources/albamon/types.js";
+import { inspectFixtureSafety, loadFixture } from "../../services/fixture-loader";
+import { parseAlbamonDetail } from "../../sources/albamon/detail-parser";
+import { parseAlbamonListing } from "../../sources/albamon/listing-parser";
+import { normalizeAlbamon } from "../../sources/albamon/normalize";
+import type { AlbamonDetailFixture, AlbamonListingFixture } from "../../sources/albamon/types";
 
 const listingUrl = new URL("../../sources/albamon/fixtures/listing-area-2026-08-05.json", import.meta.url);
 const detailUrl = new URL("../../sources/albamon/fixtures/detail-118270285.json", import.meta.url);

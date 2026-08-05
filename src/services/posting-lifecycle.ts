@@ -1,4 +1,4 @@
-import type { PostingStatus } from "../domain/posting-status.js";
+import type { PostingStatus } from "../domain/posting-status";
 
 export interface PostingLifecycleEvidence {
   explicitClosed?: boolean;

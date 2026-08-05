@@ -1,5 +1,5 @@
-import type { ParseDiagnostic, SourceListingPage } from "../../domain/source-contract.js";
-import type { AlbamonListing, AlbamonListingFixture, AlbamonListingFixtureItem } from "./types.js";
+import type { ParseDiagnostic, SourceListingPage } from "../../domain/source-contract";
+import type { AlbamonListing, AlbamonListingFixture, AlbamonListingFixtureItem } from "./types";
 
 function parseItem(item: AlbamonListingFixtureItem, capturedAt: string, index: number) {
   const diagnostics: ParseDiagnostic[] = [];

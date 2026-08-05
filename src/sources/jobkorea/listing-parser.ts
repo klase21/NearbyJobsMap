@@ -1,5 +1,5 @@
-import type { ParseDiagnostic, SourceListingPage } from "../../domain/source-contract.js";
-import type { JobKoreaListing, JobKoreaListingFixture, JobKoreaListingFixtureItem } from "./types.js";
+import type { ParseDiagnostic, SourceListingPage } from "../../domain/source-contract";
+import type { JobKoreaListing, JobKoreaListingFixture, JobKoreaListingFixtureItem } from "./types";
 
 function parseItem(item: JobKoreaListingFixtureItem, capturedAt: string, index: number) {
   const diagnostics: ParseDiagnostic[] = [];
