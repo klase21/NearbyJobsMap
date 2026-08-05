@@ -1,59 +1,53 @@
 import type { ParseDiagnostic } from "../../../domain/source-contract";
 import { normalizeJobKoreaUrl, sourcePostingIdFromUrl } from "./jobkorea-url-policy";
-import type { JobKoreaListingCandidate, JobKoreaListingPageResult, JobKoreaRenderedPageSnapshot, JobKoreaSearchPageClassification } from "./jobkorea-search-types";
+import type { JobKoreaListingCandidate, JobKoreaListingPageResult, JobKoreaPageSnapshot, JobKoreaSearchPageClassification } from "./jobkorea-search-types";
 
 const blockedClassifications = new Set<JobKoreaSearchPageClassification>(["login_redirect", "verification_page", "captcha_page", "access_denied"]);
+const unmeasuredClassifications = new Set<JobKoreaSearchPageClassification>(["login_redirect", "verification_page", "captcha_page", "access_denied"]);
 const diagnostic = (code: string, message: string, severity: ParseDiagnostic["severity"] = "warning"): ParseDiagnostic => ({ severity, code, field: null, message });
 
-export function classifyJobKoreaRenderedPage(snapshot: JobKoreaRenderedPageSnapshot): JobKoreaSearchPageClassification {
-  const url = new URL(snapshot.finalUrl);
-  const text = `${snapshot.title} ${snapshot.bodyText}`.replace(/\s+/g, " ").toLowerCase();
-  if (url.pathname === "/") return "root_redirect";
-  if (/\/(?:login|member\/login)/i.test(url.pathname) || /로그인이\s*필요|회원\s*로그인/.test(text)) return "login_redirect";
-  if (/captcha|자동입력\s*방지|로봇이\s*아닙니다/.test(text)) return "captcha_page";
-  if (/본인\s*확인|보안\s*확인|verification/.test(text)) return "verification_page";
-  if (/접근이\s*차단|access\s*denied|비정상적인\s*접근|권한이\s*없습니다/.test(text)) return "access_denied";
-  const hasOrdinaryEvidence = snapshot.anchors.some(({ ordinaryContainer, promotedEvidence, recommendationEvidence }) => ordinaryContainer && !promotedEvidence && !recommendationEvidence);
-  if (hasOrdinaryEvidence) return "valid_search_results";
-  if (snapshot.sourceReportsNoResults) return "valid_empty_results";
-  if (snapshot.anchors.length) return "malformed_results";
+export function classifyJobKoreaRenderedPage(snapshot: JobKoreaPageSnapshot): JobKoreaSearchPageClassification {
+  let pathname: string;
+  try { pathname = new URL(snapshot.finalUrl).pathname; } catch { return "unexpected_page"; }
+  if (/\/(?:login|member\/login)/i.test(pathname) || (snapshot.evidence.loginMarkerCount ?? 0) > 0) return "login_redirect";
+  if ((snapshot.evidence.captchaMarkerCount ?? 0) > 0) return "captcha_page";
+  if ((snapshot.evidence.verificationMarkerCount ?? 0) > 0) return "verification_page";
+  if ((snapshot.evidence.accessDeniedMarkerCount ?? 0) > 0) return "access_denied";
+  if (pathname === "/") return "root_redirect";
+  if (!snapshot.extractionCompleted || snapshot.diagnostics.some(({ code }) => code === "JOBKOREA_SNAPSHOT_EVALUATION_FAILED")) return "malformed_results";
+  if (snapshot.ordinaryCandidates.length > 0 && (snapshot.evidence.ordinaryDetailLinkCount ?? 0) > 0) return "valid_search_results";
+  if ((snapshot.evidence.noResultMarkerCount ?? 0) > 0) return "valid_empty_results";
+  if ((snapshot.evidence.ordinaryContainerCount ?? 0) > 0 || (snapshot.evidence.allNumericDetailLinkCount ?? 0) > 0
+    || snapshot.promotedCandidates.length > 0 || snapshot.rejectedCandidates.length > 0) return "malformed_results";
   return "unexpected_page";
 }
 
-export function buildJobKoreaListingPageResult(snapshot: JobKoreaRenderedPageSnapshot, pageNumber: number, globalSeen = new Set<string>()): JobKoreaListingPageResult {
+export function buildJobKoreaListingPageResult(snapshot: JobKoreaPageSnapshot, pageNumber: number, globalSeen = new Set<string>()): JobKoreaListingPageResult {
   const classification = classifyJobKoreaRenderedPage(snapshot);
-  const diagnostics: ParseDiagnostic[] = [];
+  const diagnostics: ParseDiagnostic[] = snapshot.diagnostics.map(({ code, message }) => diagnostic(code, message,
+    code === "JOBKOREA_SNAPSHOT_EVALUATION_FAILED" ? "error" : "warning"));
   const candidates: JobKoreaListingCandidate[] = [];
   const withinPage = new Set<string>();
-  let extractedCount = 0;
-  let ordinaryPostingCount = 0;
-  let promotedPostingCount = 0;
-  let rejectedCandidateCount = 0;
-  let duplicateWithinPageCount = 0;
-  let uniqueNewCount = 0;
+  const countsMeasured = snapshot.extractionCompleted && !unmeasuredClassifications.has(classification);
+  let duplicateWithinPageCount: number | null = countsMeasured ? 0 : null;
+  let uniqueNewCount: number | null = countsMeasured ? 0 : null;
 
   if (classification === "valid_search_results") {
-    for (const anchor of snapshot.anchors) {
-      if (!/\/Recruit\/GI_Read\//i.test(anchor.href)) continue;
-      extractedCount += 1;
-      if (anchor.promotedEvidence) { promotedPostingCount += 1; continue; }
-      if (anchor.recommendationEvidence || !anchor.ordinaryContainer) { rejectedCandidateCount += 1; continue; }
-      ordinaryPostingCount += 1;
+    for (const candidate of snapshot.ordinaryCandidates) {
       try {
-        const sourceUrl = normalizeJobKoreaUrl(new URL(anchor.href, snapshot.finalUrl).toString(), "detail");
+        const sourceUrl = normalizeJobKoreaUrl(candidate.href, "detail");
         const sourcePostingId = sourcePostingIdFromUrl(sourceUrl);
-        if (!sourcePostingId || (anchor.dataGno && anchor.dataGno !== sourcePostingId)) {
-          rejectedCandidateCount += 1;
+        if (!sourcePostingId || candidate.postingId !== sourcePostingId || (candidate.rowId && candidate.rowId !== sourcePostingId)) {
           diagnostics.push(diagnostic("JOBKOREA_LISTING_ID_MISMATCH", "행 ID와 상세 URL ID가 일치하지 않습니다."));
           continue;
         }
-        if (withinPage.has(sourceUrl)) { duplicateWithinPageCount += 1; continue; }
+        if (withinPage.has(sourceUrl)) { duplicateWithinPageCount = (duplicateWithinPageCount ?? 0) + 1; continue; }
         withinPage.add(sourceUrl);
-        if (!globalSeen.has(sourceUrl)) { globalSeen.add(sourceUrl); uniqueNewCount += 1; }
-        candidates.push({ sourcePostingId, sourceUrl, title: anchor.title.trim() || `잡코리아 공고 ${sourcePostingId}`,
-          companyName: anchor.companyName.trim() || "상세 페이지 확인 전", pageNumber, listingPosition: candidates.length + 1, promoted: false });
+        if (!globalSeen.has(sourceUrl)) { globalSeen.add(sourceUrl); uniqueNewCount = (uniqueNewCount ?? 0) + 1; }
+        candidates.push({ sourcePostingId, sourceUrl, title: candidate.title.trim() || `잡코리아 공고 ${sourcePostingId}`,
+          companyName: candidate.companyName.trim() || "상세 페이지 확인 전", pageNumber,
+          listingPosition: candidate.position, promoted: false });
       } catch {
-        rejectedCandidateCount += 1;
         diagnostics.push(diagnostic("JOBKOREA_DETAIL_URL_REJECTED", "유효하지 않은 상세 후보 URL을 제외했습니다."));
       }
     }
@@ -64,8 +58,13 @@ export function buildJobKoreaListingPageResult(snapshot: JobKoreaRenderedPageSna
   }
   const parserFailure = classification === "malformed_results" || classification === "unexpected_page" || (classification === "valid_search_results" && candidates.length === 0);
   return {
-    pageNumber, classification, extractedCount, ordinaryPostingCount, promotedPostingCount, rejectedCandidateCount,
-    duplicateWithinPageCount, uniqueNewCount, sourceReportsNoResults: snapshot.sourceReportsNoResults,
+    pageNumber, snapshotSchemaVersion: snapshot.schemaVersion, finalUrl: snapshot.finalUrl, pageTitle: snapshot.pageTitle, classification,
+    extractedCount: countsMeasured ? snapshot.evidence.allNumericDetailLinkCount : null,
+    ordinaryPostingCount: countsMeasured ? snapshot.evidence.ordinaryDetailLinkCount : null,
+    promotedPostingCount: countsMeasured ? snapshot.evidence.promotedDetailLinkCount : null,
+    rejectedCandidateCount: countsMeasured ? snapshot.evidence.rejectedDetailLinkCount : null,
+    duplicateWithinPageCount, uniqueNewCount,
+    sourceReportsNoResults: countsMeasured ? (snapshot.evidence.noResultMarkerCount ?? 0) > 0 : null,
     validEmptyPage: classification === "valid_empty_results", blocked: blockedClassifications.has(classification), parserFailure,
     diagnostics, candidates,
   };

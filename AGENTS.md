@@ -79,6 +79,15 @@
 - page-1/max-details-0 Playwright 진단 명령의 40초 내부 예산과 단계별 timeout을 약화하지 않는다. page·browser cleanup은 상한을 가져야 하며 정상 close가 멈추면 해당 임시 BrowserServer만 종료한다.
 - lifecycle timeout도 구조화된 page result와 단계 진단을 반환해야 하며 raw stack trace나 무기한 pending command로 끝내지 않는다.
 
+- Playwright `page.evaluate` 결과는 명시적인 JSON-safe plain object만 허용한다. DOM node, browser-native object, raw `Error`, `URL`, `Map`, `Set`, `BigInt`, handle을 경계 밖으로 반환하지 않는다.
+- JobKorea page snapshot은 schema version과 256 KiB 직렬화 상한을 유지하며 raw HTML이나 전체 본문을 포함하지 않는다.
+- snapshot이 완성되지 않은 후보 수는 `0`으로 바꾸지 않고 `null`/unknown으로 유지한다.
+- 추천 영역만의 링크나 전역 numeric detail-link 존재만으로 ordinary search result를 판정하지 않는다.
+- JobKorea synthetic browser 테스트는 외부 네트워크 없이 실행한다.
+- 실제 source 검증은 별도 승인된 bounded run 한 번으로 제한하며 자동 재시도하지 않는다.
+- listing snapshot 추출이 실제로 검증되기 전에는 detail navigation을 추가하지 않는다.
+- transport dry-run은 SQLite jobs, ingestion runs, provenance를 쓰지 않는다.
+
 ## Product and UX Guidance
 
 - 목록이 주 인터페이스이고 지도는 보조다.

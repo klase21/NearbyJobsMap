@@ -38,36 +38,65 @@ export interface JobKoreaListingCandidate {
   promoted: boolean;
 }
 
-export interface JobKoreaRenderedAnchor {
+export interface JobKoreaSnapshotDiagnostic {
+  code: string;
+  message: string;
+}
+
+export interface JobKoreaSnapshotOrdinaryCandidate {
+  postingId: string;
   href: string;
   title: string;
   companyName: string;
-  containerText: string;
-  dataGno: string | null;
-  ordinaryContainer: boolean;
-  promotedEvidence: boolean;
-  recommendationEvidence: boolean;
+  position: number;
+  rowId: string | null;
+  sourceSelector: string;
 }
 
-export interface JobKoreaRenderedPageSnapshot {
+export interface JobKoreaSnapshotExcludedCandidate {
+  postingId?: string | null;
+  href: string | null;
+  reason: string;
+}
+
+export interface JobKoreaPageSnapshot {
+  schemaVersion: 1;
   finalUrl: string;
-  title: string;
-  bodyText: string;
-  anchors: JobKoreaRenderedAnchor[];
-  sourceReportsNoResults: boolean;
-  directObservation: JobKoreaDirectContractObservation | null;
+  pageTitle: string;
+  readyState: string;
+  extractionCompleted: boolean;
+  evidence: {
+    ordinaryContainerCount: number | null;
+    ordinaryDetailLinkCount: number | null;
+    allNumericDetailLinkCount: number | null;
+    promotedContainerCount: number | null;
+    promotedDetailLinkCount: number | null;
+    rejectedDetailLinkCount: number | null;
+    noResultMarkerCount: number | null;
+    loginMarkerCount: number | null;
+    captchaMarkerCount: number | null;
+    verificationMarkerCount: number | null;
+    accessDeniedMarkerCount: number | null;
+  };
+  ordinaryCandidates: JobKoreaSnapshotOrdinaryCandidate[];
+  promotedCandidates: Array<JobKoreaSnapshotExcludedCandidate & { postingId: string | null }>;
+  rejectedCandidates: JobKoreaSnapshotExcludedCandidate[];
+  diagnostics: JobKoreaSnapshotDiagnostic[];
 }
 
 export interface JobKoreaListingPageResult {
   pageNumber: number;
+  snapshotSchemaVersion: 1 | null;
+  finalUrl: string | null;
+  pageTitle: string | null;
   classification: JobKoreaSearchPageClassification;
-  extractedCount: number;
-  ordinaryPostingCount: number;
-  promotedPostingCount: number;
-  rejectedCandidateCount: number;
-  duplicateWithinPageCount: number;
-  uniqueNewCount: number;
-  sourceReportsNoResults: boolean;
+  extractedCount: number | null;
+  ordinaryPostingCount: number | null;
+  promotedPostingCount: number | null;
+  rejectedCandidateCount: number | null;
+  duplicateWithinPageCount: number | null;
+  uniqueNewCount: number | null;
+  sourceReportsNoResults: boolean | null;
   validEmptyPage: boolean;
   blocked: boolean;
   parserFailure: boolean;

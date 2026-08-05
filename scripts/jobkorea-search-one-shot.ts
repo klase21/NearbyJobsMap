@@ -5,6 +5,7 @@ import { JobKoreaTransportError } from "../src/sources/jobkorea/transport/jobkor
 import { JOBKOREA_PAGE1_COMMAND_BUDGET_MS } from "../src/sources/jobkorea/transport/jobkorea-lifecycle";
 import { parseJobKoreaSearchCliArgs } from "../src/sources/jobkorea/transport/jobkorea-search-cli";
 import { runJobKoreaSearchOneShot } from "../src/sources/jobkorea/transport/jobkorea-search-one-shot";
+import { formatJobKoreaSearchResult } from "../src/sources/jobkorea/transport/jobkorea-search-output";
 
 async function main(): Promise<void> {
   const options = parseJobKoreaSearchCliArgs(process.argv.slice(2));
@@ -22,32 +23,8 @@ async function main(): Promise<void> {
   try {
     if (!listAppliedMigrations(database).includes(REQUIRED_MIGRATION_VERSION)) throw new JobKoreaTransportError("JOBKOREA_MIGRATION_MISSING", `migration ${REQUIRED_MIGRATION_VERSION}이 필요합니다.`);
     const result = await runJobKoreaSearchOneShot(options, { database });
-    console.log("\n잡코리아 bounded 검색 전송 결과");
-    console.log(`실행 상태: ${result.status}`);
-    console.log(`사용 transport: ${result.transportUsed}`);
-    console.log(`권한 상태: ${result.permissionStatus === "blocked" ? "차단" : "미확인"}`);
-    console.log(`robots 요청: ${result.robotsRequests}/1`);
-    console.log(`검색 navigation: ${result.searchNavigations}/${options.pages}`);
-    console.log(`상세 navigation: ${result.detailNavigations}/${options.maxDetails}`);
-    console.log(`direct 요청: ${result.directRequests}/1`);
-    for (const page of result.pageResults) {
-      console.log(`page=${page.pageNumber} classification=${page.classification} extracted=${page.extractedCount} ordinary=${page.ordinaryPostingCount} promoted=${page.promotedPostingCount} within_page_duplicates=${page.duplicateWithinPageCount} unique_new=${page.uniqueNewCount} valid_empty=${page.validEmptyPage}`);
-      console.log(`  first_ids=${page.candidates.slice(0, 3).map(({ sourcePostingId }) => sourcePostingId).join(",") || "none"}`);
-    }
-    console.log(`선택=${result.selectedCandidates} 전역중복=${result.globalDuplicateCount} 삽입=${result.inserted} 갱신=${result.updated} 변경없음=${result.unchanged} 실패=${result.failed} 차단=${result.blocked}`);
-    console.log(`direct 검증: ${result.directVerification.classification} (${result.directVerification.diagnostic.code})`);
-    console.log(`source console errors: ${result.consoleErrors.length}`);
-    for (const detail of result.details) console.log(`- ${detail.sourcePostingId ?? "unknown"} result=${detail.result} diagnostics=${detail.diagnosticCodes.join(",") || "none"}`);
-    console.log(`Run ID: ${result.runId ?? "dry-run (DB 기록 없음)"}`);
-    console.log(`Elapsed: ${result.elapsedMs}ms / ${result.internalBudgetMs}ms`);
-    if (options.diagnostic) {
-      console.log("Lifecycle diagnostics:");
-      if (!result.lifecycleDiagnostics.length) console.log("- browser lifecycle not started");
-      for (const entry of result.lifecycleDiagnostics) {
-        console.log(`- phase=${entry.phase} status=${entry.status} elapsed_ms=${entry.elapsedMs} code=${entry.code ?? "none"} message=${entry.message ?? "none"}`);
-      }
-      for (const message of result.consoleErrors.slice(0, 5)) console.log(`- source_error=${message.replace(/\s+/g, " ").slice(0, 500)}`);
-    }
+    console.log("");
+    for (const line of formatJobKoreaSearchResult(result, options)) console.log(line);
     if (result.status === "failed" || result.status === "blocked") process.exitCode = 1;
   } finally { database.close(); }
 }

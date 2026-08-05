@@ -113,6 +113,7 @@ npm.cmd run transport:jobkorea:search:once -- `
 - 매 명령은 robots.txt를 최대 1회 별도 확인한다. robots 허용은 법적 허가를 의미하지 않는다.
 - page-1/listing-only 진단 명령은 40초 내부 예산을 가진다. robots 사전확인, 브라우저 시작·연결, navigation, DOM readiness, snapshot, page close, browser close/kill에 각각 더 작은 상한이 적용되며 `--diagnostic`은 각 단계의 상태와 소요 시간을 출력한다. DOM readiness는 ordinary 상세 링크, 명시적 no-result, login/verification/block 신호 중 하나를 기다린 뒤 0.4초 안정화 지연을 사용한다.
 - Playwright는 강제 종료 가능한 임시 `BrowserServer`로 실행된다. 정상 close가 제한 안에 끝나지 않으면 해당 run의 server process만 kill하고, 어느 단계가 멈춰도 timeout 또는 unexpected-page 구조화 결과를 반환한다.
+- page snapshot 실패는 evaluation, execution-context destruction, unsupported browser-native value, serialization, runtime validation, size 초과를 구분한 진단 코드로 반환한다. 정상 CLI 출력에는 raw browser stack이나 snapshot payload를 출력하지 않는다.
 - 일반 공고는 `tr.devloopArea[data-gno]` 또는 검색 결과 문맥 안의 `/Recruit/GI_Read/{숫자 ID}` 링크만 후보로 삼는다. `AD`, sponsored, 추천·최근·주목 영역은 별도 집계하고 제외한다.
 - 페이지의 `validEmptyPage`는 source가 명시적으로 no-result를 표시할 때만 true다. `uniqueNewCount=0`, duplicate-only, login, block, timeout, parser failure는 empty가 아니다.
 - raw HTML은 메모리에서만 읽고 저장하지 않는다. sanitizer는 최소 JobPosting·목록 anchor만 남기며 설명 본문·연락처·지원자·script·분석/광고 필드를 제외한다.
@@ -125,6 +126,12 @@ npm.cmd run transport:jobkorea:search:once -- `
 이후 lifecycle 진단 보강은 위 실패의 원인이 될 수 있던 직렬 15초 navigation + 15초 readiness와 무상한 cleanup을 제거했다. 이 변경은 source 접근 결과를 미리 성공으로 간주하지 않으며, 동일한 page-1/max-details-0 dry-run을 한 번만 다시 실행해 구조화된 분류를 얻기 위한 것이다.
 
 보강 후 단일 page-1/max-details-0 실제 dry-run은 4.282초에 구조화 결과를 반환했다. robots, browser launch/connect/context, navigation, readiness, page close, browser close/kill은 모두 내부 상한 안에서 종료됐다. 현재 확인된 실패 지점은 `page-1-snapshot`이며 결과는 `unexpected_page`다. 이는 로그인·CAPTCHA·접근 차단 판정이 아니며 후보 수를 0으로 확정하는 근거도 아니다. 요청을 반복하지 않았고 상세 navigation, direct 요청, DB write는 없었다.
+
+후속 오프라인 재현에서 snapshot 계약의 구체적인 결함을 확인했다. TypeScript의 `querySelectorAll<HTMLAnchorElement>` 타입 인수는 런타임 검사가 아니므로 SVG `<a>`도 통과할 수 있었고, 이 경우 `anchor.href`는 문자열이 아니라 browser-native `SVGAnimatedString` 객체였다. 이제 page context는 `HTMLAnchorElement`만 명시적으로 허용하고 모든 값을 schema version 1의 plain object로 복사한다. snapshot은 후보 배열을 최대 200개로 제한하고 JSON round-trip과 runtime shape validation을 거치며, 직렬화 크기는 256 KiB를 넘을 수 없다. DOM node, native object, raw `Error`, raw HTML 및 전체 본문은 경계를 넘거나 저장되지 않는다.
+
+synthetic JobKorea형 DOM 테스트는 일반 결과, 일반+광고·추천, 중복·tracking URL, 명시적 빈 결과, 로그인, CAPTCHA, verification, access denied, malformed 결과, recommendation-only, SVG anchor를 외부 네트워크 없이 검증한다. snapshot이 완성되지 않은 경우 후보 수는 0으로 바뀌지 않고 `null`/`unknown`으로 유지된다.
+
+이 변경 뒤 허용된 실제 page-1/max-details-0 dry-run은 정확히 한 번 실행됐고 4.377초에 구조화 종료됐다. navigation과 readiness는 완료됐지만 snapshot은 15ms 후 `ReferenceError: __name is not defined`로 실패해 최종 분류는 `unexpected_page`였다. 이는 TypeScript/tsx가 `page.evaluate` callback에 삽입한 이름 보존 helper가 browser page realm에는 없었던 별도의 실행 경계 결함이다. 최종 구현은 callback 전달 대신 self-contained JavaScript literal을 평가하여 helper 주입을 제거했고, lifecycle 진단은 구조화 오류 code를 보존하며 외부 stack 줄을 제거한다. 실제 실행은 승인된 1회 제한 때문에 반복하지 않았다. 따라서 final URL, title, ordinary/promoted/rejected/duplicate 수는 여전히 `null`이며 로그인·CAPTCHA·verification·access denial도 관찰되지 않았다. robots 1회, search navigation 1회, detail/direct/DB write 0회였다.
 
 원샷 관찰 데이터를 로컬에서 모두 제거하려면 서버를 중지하고 전체 로컬 DB reset 후 fixture/demo를 다시 준비한다. 이 작업은 사용자 상태 localStorage를 지우지 않는다.
 
@@ -183,8 +190,8 @@ npm run db:status
 - 연봉 단일값·범위·인센티브 표시는 source fixture로 확인했지만, 복수 근무지와 근무지 미정의 실제 상세 구조는 이번 소스별 3건 제한에서 찾지 못해 여전히 미검증이다.
 - 알바몬의 관찰된 내부 BFF는 공식 API가 아니며 live 코드가 호출하거나 의존하지 않는다.
 - 잡코리아 browser transport의 기술적 접근 가능성·robots 결과는 이용허가가 아니다. 현행 계약·저작권·재가공·보관 범위는 미확인이다.
-- bounded search는 최대 2페이지만 검증하며 전체 pagination, 최신성 보장, 삭제 동기화, 자동 refresh가 없다. page-1 lifecycle은 구조화 종료가 확인됐지만 현재 DOM snapshot 단계는 `unexpected_page`로 미확정이고 direct `_GI_List` 익명 계약도 미확정이다.
+- bounded search는 최대 2페이지만 검증하며 전체 pagination, 최신성 보장, 삭제 동기화, 자동 refresh가 없다. page-1 lifecycle과 합성 snapshot 계약은 검증됐지만 self-contained evaluator의 실제 source-page 재검증은 이번 1회 제한 이후로 남아 있고 direct `_GI_List` 익명 계약도 미확정이다.
 
 ## 다음 개발 단계
 
-다음 정확한 작업은 **네트워크 호출 없이 synthetic JobKorea형 DOM으로 `page-1-snapshot` 브라우저-context 직렬화 실패를 재현·수정하고, 그 수정 검토 후 별도 승인된 page-1/max-details-0 실제 dry-run을 단 한 번 수행하는 것**이다. 그 전에는 page 2, 상세, direct 요청을 열지 않고, 성공하더라도 full pagination은 별도 승인 전 시작하지 않는다.
+다음 정확한 작업은 **이번 self-contained evaluator 수정 검토 후 page-1/max-details-0 Playwright dry-run을 별도 승인으로 단 한 번 재검증하여 snapshot completion과 ordinary candidate extraction을 측정하는 것**이다. 그 결과가 `valid_search_results`로 확인되기 전에는 page 2, 상세, direct 요청을 열지 않고, 성공하더라도 full pagination은 별도 승인 전 시작하지 않는다.

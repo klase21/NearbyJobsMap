@@ -4,9 +4,10 @@ import type { ParseDiagnostic } from "../../../domain/source-contract";
 import { JobKoreaTransportError } from "./jobkorea-error";
 import { JobKoreaLifecycleTimeoutError, runBoundedLifecyclePhase, type JobKoreaLifecycleDiagnostic } from "./jobkorea-lifecycle";
 import { buildJobKoreaListingPageResult } from "./jobkorea-listing-page";
+import { captureJobKoreaPageSnapshot, JobKoreaSnapshotError } from "./jobkorea-page-snapshot";
 import { classifyJobKoreaResponse } from "./jobkorea-response-classifier";
 import { jobKoreaSearchPageUrl, normalizeJobKoreaUrl } from "./jobkorea-url-policy";
-import type { JobKoreaDirectContractObservation, JobKoreaDirectVerificationResult, JobKoreaListingPageResult, JobKoreaRenderedPageSnapshot, JobKoreaSearchExecution, JobKoreaSearchOptions } from "./jobkorea-search-types";
+import type { JobKoreaDirectContractObservation, JobKoreaDirectVerificationResult, JobKoreaListingPageResult, JobKoreaSearchExecution, JobKoreaSearchOptions } from "./jobkorea-search-types";
 
 const BROWSER_LAUNCH_TIMEOUT_MS = 5_000;
 const BROWSER_CONNECT_TIMEOUT_MS = 1_500;
@@ -65,33 +66,9 @@ function observeDirectRequest(request: Request): JobKoreaDirectContractObservati
   };
 }
 
-async function renderedSnapshot(page: Page, directObservation: JobKoreaDirectContractObservation | null): Promise<JobKoreaRenderedPageSnapshot> {
-  return page.evaluate(({ direct }) => {
-    const compact = (value: string | null | undefined) => (value ?? "").replace(/\s+/g, " ").trim();
-    const selectors = ".list-default, .recruit-info, .recruit-list, .search-list, .list-post, [class*='recruit-list'], [class*='search-list']";
-    const anchors = [...document.querySelectorAll<HTMLAnchorElement>('a[href*="/Recruit/GI_Read"]')].map((anchor) => {
-      const row = anchor.closest<HTMLElement>("tr.devloopArea[data-gno]");
-      const container = row ?? anchor.closest<HTMLElement>("li, article, [data-gno], .item, .post, .list-item");
-      const contextualRoot = anchor.closest<HTMLElement>(selectors);
-      const excludedRoot = anchor.closest<HTMLElement>("header, footer, aside, nav, [class*='recommend'], [class*='attention'], [class*='recent']");
-      const containerText = compact((container ?? anchor.parentElement)?.textContent);
-      const recommendationEvidence = Boolean(excludedRoot) || /지금\s*주목할\s*만한\s*공고|추천\s*공고|최근\s*본\s*공고/.test(containerText);
-      const promotedEvidence = /(?:^|\s)AD(?:\s|$)|스폰서|sponsored/i.test(containerText)
-        || Boolean((container ?? anchor).querySelector("[class*='ad'], [class*='sponsor']"));
-      const ordinaryContainer = Boolean(row || contextualRoot || (anchor.closest("main") && container && !excludedRoot));
-      const company = (container ?? anchor.parentElement)?.querySelector<HTMLElement>(".name, .company, [class*='company'], [class*='corp']");
-      return { href: anchor.href, title: compact(anchor.textContent), companyName: compact(company?.textContent), containerText,
-        dataGno: row?.dataset.gno ?? container?.dataset.gno ?? null, ordinaryContainer, promotedEvidence, recommendationEvidence };
-    });
-    const bodyText = compact(document.body?.innerText);
-    return { finalUrl: location.href, title: document.title, bodyText: bodyText.slice(0, 100_000), anchors,
-      sourceReportsNoResults: /검색\s*결과가\s*없|채용정보가\s*없|조건에\s*맞는\s*공고가\s*없/.test(bodyText), directObservation: direct };
-  }, { direct: directObservation });
-}
-
 export function failedSearchPageResult(pageNumber: number, classification: "timeout" | "unexpected_page" | "direct_endpoint_unavailable" | "direct_endpoint_session_required", code: string): JobKoreaListingPageResult {
-  return { pageNumber, classification, extractedCount: 0, ordinaryPostingCount: 0, promotedPostingCount: 0, rejectedCandidateCount: 0,
-    duplicateWithinPageCount: 0, uniqueNewCount: 0, sourceReportsNoResults: false, validEmptyPage: false,
+  return { pageNumber, snapshotSchemaVersion: null, finalUrl: null, pageTitle: null, classification, extractedCount: null, ordinaryPostingCount: null, promotedPostingCount: null, rejectedCandidateCount: null,
+    duplicateWithinPageCount: null, uniqueNewCount: null, sourceReportsNoResults: null, validEmptyPage: false,
     blocked: false, parserFailure: classification === "timeout" || classification === "unexpected_page", diagnostics: [diagnostic(code, `잡코리아 검색 페이지 분류: ${classification}`, "error")], candidates: [] };
 }
 
@@ -149,14 +126,15 @@ export class JobKoreaPlaywrightSearchExecution implements JobKoreaSearchExecutio
         }, undefined, { timeout: READINESS_TIMEOUT_MS }).then(() => undefined), this.lifecycleDiagnostics);
         await page.waitForTimeout(STABILITY_DELAY_MS);
         const snapshot = await runBoundedLifecyclePhase(`page-${pageNumber}-snapshot`, SNAPSHOT_TIMEOUT_MS,
-          () => renderedSnapshot(page!, observedDirect), this.lifecycleDiagnostics);
+          () => captureJobKoreaPageSnapshot(page!), this.lifecycleDiagnostics);
         const result = buildJobKoreaListingPageResult(snapshot, pageNumber, globalSeen);
         this.pages.push(result);
         if (result.blocked || result.parserFailure) break;
       } catch (error) {
         const timeout = error instanceof JobKoreaLifecycleTimeoutError || (error instanceof Error && /Timeout/i.test(error.name + error.message));
+        const snapshotCode = error instanceof JobKoreaSnapshotError ? error.code : null;
         this.pages.push(failedSearchPageResult(pageNumber, timeout ? "timeout" : "unexpected_page",
-          timeout ? "JOBKOREA_PLAYWRIGHT_TIMEOUT" : "JOBKOREA_PLAYWRIGHT_NAVIGATION_FAILED"));
+          timeout ? "JOBKOREA_PLAYWRIGHT_TIMEOUT" : snapshotCode ?? "JOBKOREA_PLAYWRIGHT_NAVIGATION_FAILED"));
         if (!timeout) this.consoleErrors.push(error instanceof Error ? error.message.slice(0, 500) : "검색 페이지 처리 실패");
       } finally {
         if (page) await closePage(page, this.lifecycleDiagnostics, `page-${pageNumber}-close`);

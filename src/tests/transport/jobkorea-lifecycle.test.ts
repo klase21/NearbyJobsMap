@@ -24,4 +24,17 @@ describe("잡코리아 Playwright lifecycle deadline", () => {
     expect(JOBKOREA_PAGE1_COMMAND_BUDGET_MS).toBe(40_000);
     expect(JOBKOREA_PAGE1_COMMAND_BUDGET_MS).toBeLessThan(60_000);
   });
+
+  it("구조화 오류 code를 보존하고 외부 stack 줄은 출력하지 않는다", async () => {
+    const diagnostics: JobKoreaLifecycleDiagnostic[] = [];
+    const error = Object.assign(new Error("snapshot failed\n    at browser-native-code"), {
+      code: "JOBKOREA_SNAPSHOT_VALIDATION_FAILED",
+    });
+    await expect(runBoundedLifecyclePhase("page-1-snapshot", 100, async () => { throw error; }, diagnostics)).rejects.toBe(error);
+    expect(diagnostics[0]).toMatchObject({
+      phase: "page-1-snapshot",
+      code: "JOBKOREA_SNAPSHOT_VALIDATION_FAILED",
+      message: "snapshot failed",
+    });
+  });
 });

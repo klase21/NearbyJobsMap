@@ -35,12 +35,17 @@ export async function runBoundedLifecyclePhase<T>(
     return result;
   } catch (error) {
     const timeout = error instanceof JobKoreaLifecycleTimeoutError;
+    const specificCode = !timeout && error instanceof Error && "code" in error && typeof error.code === "string"
+      ? error.code : null;
+    const message = error instanceof Error
+      ? error.message.split(/\r?\n/, 1)[0]!.slice(0, 500)
+      : "알 수 없는 lifecycle 실패";
     diagnostics.push({
       phase,
       status: timeout ? "timeout" : "failed",
       elapsedMs: Math.round(performance.now() - startedAt),
-      code: timeout ? "JOBKOREA_LIFECYCLE_PHASE_TIMEOUT" : "JOBKOREA_LIFECYCLE_PHASE_FAILED",
-      message: error instanceof Error ? error.message.slice(0, 500) : "알 수 없는 lifecycle 실패",
+      code: timeout ? "JOBKOREA_LIFECYCLE_PHASE_TIMEOUT" : specificCode ?? "JOBKOREA_LIFECYCLE_PHASE_FAILED",
+      message,
     });
     throw error;
   } finally {

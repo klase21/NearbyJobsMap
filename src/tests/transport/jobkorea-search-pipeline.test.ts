@@ -3,7 +3,8 @@ import { JobRepository } from "../../db/repositories/job-repository";
 import { JobKoreaHttpClient } from "../../sources/jobkorea/transport/jobkorea-http-client";
 import { buildJobKoreaListingPageResult } from "../../sources/jobkorea/transport/jobkorea-listing-page";
 import { runJobKoreaSearchOneShot } from "../../sources/jobkorea/transport/jobkorea-search-one-shot";
-import type { JobKoreaListingPageResult, JobKoreaRenderedPageSnapshot, JobKoreaSearchExecution, JobKoreaSearchOptions } from "../../sources/jobkorea/transport/jobkorea-search-types";
+import { formatJobKoreaSearchResult } from "../../sources/jobkorea/transport/jobkorea-search-output";
+import type { JobKoreaListingPageResult, JobKoreaPageSnapshot, JobKoreaSearchExecution, JobKoreaSearchOptions } from "../../sources/jobkorea/transport/jobkorea-search-types";
 import { createTestDatabase, type TestDatabase } from "../db/test-database";
 import { detailHtml, robotsAllow } from "./jobkorea-test-responses";
 
@@ -16,9 +17,14 @@ const directVerification = { classification: "direct_endpoint_unavailable" as co
   diagnostic: { severity: "warning" as const, code: "JOBKOREA_DIRECT_ENDPOINT_UNAVAILABLE", field: null, message: "미관찰" } };
 
 function page(ids: string[], pageNumber = 1, globalSeen = new Set<string>()): JobKoreaListingPageResult {
-  const snapshot: JobKoreaRenderedPageSnapshot = { finalUrl: `${searchUrl.replace("Page_No=1", `Page_No=${pageNumber}`)}`, title: "검색", bodyText: "검색 결과",
-    sourceReportsNoResults: false, directObservation: null, anchors: ids.map((id) => ({ href: `/Recruit/GI_Read/${id}`, title: `공고 ${id}`,
-      companyName: `회사 ${id}`, containerText: `공고 ${id}`, dataGno: id, ordinaryContainer: true, promotedEvidence: false, recommendationEvidence: false })) };
+  const snapshot: JobKoreaPageSnapshot = { schemaVersion: 1, finalUrl: `${searchUrl.replace("Page_No=1", `Page_No=${pageNumber}`)}`,
+    pageTitle: "검색", readyState: "complete", extractionCompleted: true,
+    evidence: { ordinaryContainerCount: ids.length, ordinaryDetailLinkCount: ids.length, allNumericDetailLinkCount: ids.length,
+      promotedContainerCount: 0, promotedDetailLinkCount: 0, rejectedDetailLinkCount: 0, noResultMarkerCount: 0,
+      loginMarkerCount: 0, captchaMarkerCount: 0, verificationMarkerCount: 0, accessDeniedMarkerCount: 0 },
+    ordinaryCandidates: ids.map((id, index) => ({ postingId: id, href: `https://www.jobkorea.co.kr/Recruit/GI_Read/${id}`,
+      title: `공고 ${id}`, companyName: `회사 ${id}`, position: index + 1, rowId: id, sourceSelector: "tr.devloopArea[data-gno]" })),
+    promotedCandidates: [], rejectedCandidates: [], diagnostics: [] };
   return buildJobKoreaListingPageResult(snapshot, pageNumber, globalSeen);
 }
 
@@ -120,5 +126,8 @@ describe("잡코리아 browser search → parser → SQLite pipeline", () => {
     expect(result).toMatchObject({ status: "failed", dryRun: true, selectedCandidates: 0, detailNavigations: 0, internalBudgetMs: 40_000 });
     expect(result.pageResults[0]).toMatchObject({ classification: "unexpected_page", validEmptyPage: false });
     expect(result.consoleErrors[0]).toContain("JOBKOREA_SEARCH_COMMAND_FAILED");
+    const output = formatJobKoreaSearchResult(result, options({ maxDetails: 0, dryRun: true, diagnostic: true }));
+    expect(output.filter((line) => line === "잡코리아 bounded 검색 전송 결과")).toHaveLength(1);
+    expect(output.find((line) => line.startsWith("page=1"))).toContain("ordinary=unknown");
   });
 });
