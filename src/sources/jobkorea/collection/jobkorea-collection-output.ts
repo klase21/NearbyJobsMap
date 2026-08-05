@@ -10,6 +10,10 @@ export function formatJobKoreaCollectionResult(result: JobKoreaCollectionResult)
     `예상 insert/update/unchanged: ${result.predictedInserts}/${result.predictedUpdates}/${result.predictedUnchanged}`,
     `실제 insert/update/unchanged: ${result.actualInserts}/${result.actualUpdates}/${result.actualUnchanged}`,
     `SQLite 총 공고: ${result.totalSqliteJobs}`, `경과: ${result.elapsedMs}ms`, `Run ID: ${result.runId ?? "dry-run (기록 없음)"}`, "", "상세 결과"];
-  for (const item of result.details) lines.push(`- ${item.sourcePostingId}: ${item.status} · ${item.parserResult} · ${item.databaseAction}${item.diagnosticCodes.length ? ` · ${item.diagnosticCodes.join(",")}` : ""}`);
+  for (const item of result.details) {
+    const redirectPath = item.redirectChain.length ? ` · redirects ${item.redirectChain.map(({ status, host, path }) => `${status}:${host}${path}`).join(" → ")}` : "";
+    lines.push(`- ${item.sourcePostingId}: ${item.status} · transport=${item.transport} · HTTP=${item.httpStatus ?? "n/a"} · redirect=${item.redirectClassification}/${item.redirectCount ?? "n/a"} · parser=${item.parserResult} · canonical=${item.canonicalValidation} · DB=${item.databaseAction}`);
+    lines.push(`  requested=${item.requestedUrl} · final=${item.finalUrl ?? "unknown"}${redirectPath}${item.diagnosticCodes.length ? ` · diagnostics=${item.diagnosticCodes.join(",")}` : ""}`);
+  }
   return lines;
 }

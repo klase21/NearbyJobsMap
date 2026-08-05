@@ -184,7 +184,9 @@ export class JobKoreaPlaywrightSearchExecution implements JobKoreaSearchExecutio
       await page.waitForTimeout(STABILITY_DELAY_MS);
       const html = await page.content();
       const finalUrl = page.url();
-      classifyJobKoreaResponse({ finalUrl, status: response?.status() ?? 0, contentType: response?.headers()["content-type"] ?? "", body: html, redirectCount: 0 }, "detail");
+      classifyJobKoreaResponse({ requestedUrl: candidate, finalUrl, status: response?.status() ?? 0,
+        contentType: response?.headers()["content-type"] ?? "", body: html, redirectCount: 0,
+        redirectClassification: "none", redirectChain: [] }, "detail");
       normalizeJobKoreaUrl(finalUrl, "detail");
       return { finalUrl, html, explicitClosed: /마감되었습니다|채용이\s*마감/.test(html) };
     } catch (error) {

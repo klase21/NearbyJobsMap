@@ -55,6 +55,9 @@
 - dry-run은 SQLite에 어떤 run, item, provenance, job도 쓰지 않는다.
 - write 수집은 `--write`와 `--confirm`을 모두 요구한다.
 - fixture, fictional demo, bounded manual collection provenance를 UI와 저장소에서 구분한다.
+- JobKorea bounded manual collection의 상세는 cookie·authorization·referer 없이 안정적인 browser-like 식별자와 공개 페이지용 `Accept`·`Accept-Language`·`Cache-Control`만 사용하는 plain HTTP를 우선한다.
+- 상세 redirect는 HTTPS allowlist와 동일 numeric posting ID를 유지해야 하며 login·root·cross-host·ID 변경을 구분한다. 진단에는 query를 제거한 host/path, status, hop 수만 남긴다.
+- 수동 상세 요청 예산은 후보 수와 redirect hop을 각각 제한한다. redirect는 retry가 아니며 후보 하나당 최대 3 hop, 전체 후보는 계속 최대 30개다.
 - 복수 근무지는 `workplaces[]` 구조를 유지하고 쉼표 문자열 하나로 축소하지 않는다.
 - 근무지 미정은 지오코딩하거나 본사 주소로 대체하지 않는다.
 - 본사 주소를 실제 근무지로 취급하지 않는다.

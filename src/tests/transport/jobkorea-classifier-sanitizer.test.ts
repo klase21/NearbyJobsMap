@@ -3,7 +3,10 @@ import { classifyJobKoreaResponse } from "../../sources/jobkorea/transport/jobko
 import { sanitizeJobKoreaDetail, sanitizeJobKoreaListing } from "../../sources/jobkorea/transport/jobkorea-sanitizer";
 import { detailHtml, listingHtml, syntheticEmail, syntheticPhone } from "./jobkorea-test-responses";
 
-const response = (body: string, finalUrl = "https://www.jobkorea.co.kr/Search/", status = 200, contentType = "text/html") => ({ finalUrl, status, contentType, body, redirectCount: 0 });
+const response = (body: string, finalUrl = "https://www.jobkorea.co.kr/Search/", status = 200, contentType = "text/html") => ({
+  requestedUrl: finalUrl, finalUrl, status, contentType, body, redirectCount: 0 as const,
+  redirectClassification: "none" as const, redirectChain: [],
+});
 
 describe("잡코리아 response classifier", () => {
   it("유효 listing·detail·마감 detail을 구분한다", () => {

@@ -49,11 +49,14 @@ export interface JobKoreaOneShotResult {
 }
 
 export interface JobKoreaHttpResponse {
+  requestedUrl: string;
   finalUrl: string;
   status: number;
   contentType: string;
   body: string;
   redirectCount: number;
+  redirectClassification: "none" | "valid_detail_redirect" | "mobile_desktop_canonical_redirect";
+  redirectChain: Array<{ status: number; host: string; path: string }>;
 }
 
 export type JobKoreaFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;

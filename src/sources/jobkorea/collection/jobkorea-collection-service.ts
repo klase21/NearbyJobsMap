@@ -9,12 +9,13 @@ import { normalizeJobKorea } from "../normalize";
 import type { JobKoreaListing } from "../types";
 import { JobKoreaTransportError } from "../transport/jobkorea-error";
 import { JobKoreaHttpClient } from "../transport/jobkorea-http-client";
-import { JobKoreaRequestBudget } from "../transport/jobkorea-request-budget";
+import { JOBKOREA_MANUAL_DETAIL_REDIRECT_HOPS, JobKoreaRequestBudget } from "../transport/jobkorea-request-budget";
 import { classifyJobKoreaResponse } from "../transport/jobkorea-response-classifier";
 import { createJobKoreaSearchExecution } from "../transport/jobkorea-search-execution";
 import type { JobKoreaSearchOptions } from "../transport/jobkorea-search-types";
 import { JOBKOREA_PARSER_CONTRACT_VERSION, JOBKOREA_SANITIZER_VERSION, sanitizeJobKoreaDetail } from "../transport/jobkorea-sanitizer";
 import { normalizeJobKoreaUrl, sourcePostingIdFromUrl } from "../transport/jobkorea-url-policy";
+import type { JobKoreaHttpResponse } from "../transport/types";
 import type { JobKoreaCollectedDetailOutcome, JobKoreaCollectionCandidate, JobKoreaCollectionDependencies, JobKoreaCollectionOptions, JobKoreaCollectionResult } from "./jobkorea-collection-types";
 
 export const JOBKOREA_COLLECTION_DETAIL_CONCURRENCY = 2;
@@ -70,7 +71,7 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
   const now = dependencies.now ?? (() => new Date()); let runId: string | null = null;
   if (options.mode === "write") runId = runs.begin("jobkorea", "jobkorea_one_shot_transport", options.maxDetails, {
     permissionStatus: "unverified", listingUrl: options.searchUrl, maxDetails: options.maxDetails,
-    contentRequestLimit: options.pages + options.maxDetails, preflightRequestLimit: 0, dryRun: false,
+    contentRequestLimit: options.pages + options.maxDetails * (JOBKOREA_MANUAL_DETAIL_REDIRECT_HOPS + 1), preflightRequestLimit: 0, dryRun: false,
     selectedTransport: "playwright", searchPageCount: options.pages,
   });
   const executionOptions: JobKoreaSearchOptions = { searchUrl: options.searchUrl, pages: options.pages, maxDetails: options.maxDetails,
@@ -81,10 +82,14 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
     const blockedPages = execution.pages.filter((page) => page.blocked).length;
     const selection = selectJobKoreaCollectionCandidates(execution.pages, options.maxDetails);
     const records: IngestionRecord[] = []; const outcomes = await concurrentMap(selection.candidates, JOBKOREA_COLLECTION_DETAIL_CONCURRENCY, async (candidate) => {
-      if (performance.now() - started >= deadline) return { sourcePostingId: candidate.sourcePostingId, status: "transport_failed", parserResult: "failed", databaseAction: "not_stored", diagnosticCodes: ["JOBKOREA_COLLECTION_DEADLINE_EXCEEDED"], transport: "playwright" } satisfies JobKoreaCollectedDetailOutcome;
+      if (performance.now() - started >= deadline) return { sourcePostingId: candidate.sourcePostingId, requestedUrl: candidate.sourceUrl,
+        finalUrl: null, httpStatus: null, redirectCount: null, redirectClassification: "not_observed", redirectChain: [],
+        status: "transport_failed", parserResult: "failed", canonicalValidation: "not_reached", databaseAction: "not_stored",
+        diagnosticCodes: ["JOBKOREA_COLLECTION_DEADLINE_EXCEEDED"], transport: "http" } satisfies JobKoreaCollectedDetailOutcome;
+      let httpResponse: JobKoreaHttpResponse | null = null;
       try {
         const observedAt = now().toISOString();
-        const httpResponse = await httpClient.request(candidate.sourceUrl, "detail", httpBudget);
+        httpResponse = await httpClient.request(candidate.sourceUrl, "detail", httpBudget);
         const responseClassification = classifyJobKoreaResponse(httpResponse, "detail");
         const response = { finalUrl: httpResponse.finalUrl, html: httpResponse.body, explicitClosed: responseClassification === "closed_detail" };
         const finalId = sourcePostingIdFromUrl(normalizeJobKoreaUrl(response.finalUrl, "detail"));
@@ -96,20 +101,30 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
         const job = { ...normalizeJobKorea(listing(candidate, observedAt), parsed.value), sourceUrl: response.finalUrl,
           canonicalUrl: response.finalUrl, collectedAt: observedAt, lastVerifiedAt: observedAt, rawPayloadReference: null };
         const issues = validateCanonicalJob(job); if (issues.length) throw new JobKoreaTransportError("JOBKOREA_CANONICAL_VALIDATION_FAILED", issues.map((item) => item.code).join(", "), response.finalUrl);
-        const sourceReference = `bounded_manual_collection:${candidate.pageNumber}:${candidate.sourcePosition}:${candidate.listingClassification}:${candidate.observedLinkCount}:${candidate.sourcePostingId}`;
+        const sourceReference = `bounded_manual_collection:detail_http:${candidate.pageNumber}:${candidate.sourcePosition}:${candidate.listingClassification}:${candidate.observedLinkCount}:${candidate.sourcePostingId}`;
         const record: IngestionRecord = { job, metadata: { recordKind: "live_one_shot_observation", evidenceType: "public_page_observation",
           sourceFixtureReference: sourceReference, mapPosition: null, permissionStatus: "unverified", listingUrl: options.searchUrl,
           detailUrl: response.finalUrl, observedAt, sanitizerVersion: JOBKOREA_SANITIZER_VERSION, parserVersion: JOBKOREA_PARSER_CONTRACT_VERSION,
           observationKind: "bounded_manual_collection", observationTransport: "playwright", pageNumber: candidate.pageNumber,
           listingPosition: candidate.sourcePosition } };
         records.push(record); const preview = jobs.previewUpsert(job, record.metadata);
-        return { sourcePostingId: candidate.sourcePostingId, status: detailStatus(job.postingStatus), parserResult: "parsed",
+        return { sourcePostingId: candidate.sourcePostingId, requestedUrl: httpResponse.requestedUrl, finalUrl: httpResponse.finalUrl,
+          httpStatus: httpResponse.status, redirectCount: httpResponse.redirectCount, redirectClassification: httpResponse.redirectClassification,
+          redirectChain: httpResponse.redirectChain, status: detailStatus(job.postingStatus), parserResult: "parsed", canonicalValidation: "passed",
           databaseAction: preview.action, diagnosticCodes: parsed.diagnostics.map((item) => item.code), transport: "http" } satisfies JobKoreaCollectedDetailOutcome;
       } catch (error) {
         const code = error instanceof JobKoreaTransportError ? error.code : "JOBKOREA_DETAIL_PROCESSING_FAILED";
+        const errorContext = error instanceof JobKoreaTransportError ? error.context : null;
+        const redirectClassification = code === "JOBKOREA_ACCESS_BLOCKED" ? "access_denied"
+          : errorContext?.redirectClassification ?? httpResponse?.redirectClassification ?? "not_observed";
         if (runId) runs.recordItem({ runId, source: "jobkorea", sourcePostingId: candidate.sourcePostingId,
           canonicalJobId: `jobkorea:${candidate.sourcePostingId}`, result: "failed", diagnosticCodes: [code], contentHash: null });
-        return { sourcePostingId: candidate.sourcePostingId, status: failureStatus(code), parserResult: "failed",
+        return { sourcePostingId: candidate.sourcePostingId, requestedUrl: errorContext?.requestedUrl ?? httpResponse?.requestedUrl ?? candidate.sourceUrl,
+          finalUrl: errorContext?.finalUrl ?? httpResponse?.finalUrl ?? (error instanceof JobKoreaTransportError ? error.url : null),
+          httpStatus: errorContext?.httpStatus ?? httpResponse?.status ?? null,
+          redirectCount: errorContext?.redirectCount ?? httpResponse?.redirectCount ?? null,
+          redirectClassification, redirectChain: errorContext?.redirectChain ?? httpResponse?.redirectChain ?? [],
+          status: failureStatus(code), parserResult: "failed", canonicalValidation: code === "JOBKOREA_CANONICAL_VALIDATION_FAILED" ? "failed" : "not_reached",
           databaseAction: "not_stored", diagnosticCodes: [code], transport: "http" } satisfies JobKoreaCollectedDetailOutcome;
       }
     });

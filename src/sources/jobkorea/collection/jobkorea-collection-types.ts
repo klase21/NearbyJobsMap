@@ -24,8 +24,15 @@ export type JobKoreaCollectedDetailStatus = "active" | "expired" | "closed" | "d
 
 export interface JobKoreaCollectedDetailOutcome {
   sourcePostingId: string;
+  requestedUrl: string;
+  finalUrl: string | null;
+  httpStatus: number | null;
+  redirectCount: number | null;
+  redirectClassification: "none" | "valid_detail_redirect" | "mobile_desktop_canonical_redirect" | "login_redirect" | "root_redirect" | "malformed_redirect" | "access_denied" | "not_observed";
+  redirectChain: Array<{ status: number; host: string; path: string }>;
   status: JobKoreaCollectedDetailStatus;
   parserResult: "parsed" | "failed";
+  canonicalValidation: "passed" | "failed" | "not_reached";
   databaseAction: UpsertAction | "not_stored";
   diagnosticCodes: string[];
   transport: "http" | "playwright";

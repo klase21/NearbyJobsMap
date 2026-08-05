@@ -4,6 +4,8 @@ import { JobKoreaTransportError } from "./jobkorea-error";
 export const JOBKOREA_HARD_CONTENT_REQUEST_LIMIT = 4;
 export const JOBKOREA_HARD_DETAIL_REQUEST_LIMIT = 3;
 export const JOBKOREA_PREFLIGHT_REQUEST_LIMIT = 1;
+export const JOBKOREA_MANUAL_DETAIL_REDIRECT_HOPS = 3;
+export const JOBKOREA_MANUAL_DETAIL_HTTP_REQUEST_LIMIT = 30 * (JOBKOREA_MANUAL_DETAIL_REDIRECT_HOPS + 1);
 
 export function getJobKoreaContentRequestLimit(maxDetails: number): number {
   return Math.min(JOBKOREA_HARD_CONTENT_REQUEST_LIMIT, 1 + maxDetails);
@@ -20,7 +22,7 @@ export class JobKoreaRequestBudget {
     if (!Number.isInteger(detailRequestLimit) || detailRequestLimit < 1 || detailRequestLimit > limits.details) {
       throw new JobKoreaTransportError("JOBKOREA_REQUEST_BUDGET_INVALID", `상세 요청 한도는 1~${limits.details} 정수여야 합니다.`);
     }
-    this.contentRequestLimit = limits.details === JOBKOREA_HARD_DETAIL_REQUEST_LIMIT ? getJobKoreaContentRequestLimit(detailRequestLimit) : Math.min(limits.content, detailRequestLimit);
+    this.contentRequestLimit = limits.details === JOBKOREA_HARD_DETAIL_REQUEST_LIMIT ? getJobKoreaContentRequestLimit(detailRequestLimit) : limits.content;
   }
 
   startPage(kind: Exclude<JobKoreaPageKind, "robots">): void {
@@ -44,6 +46,7 @@ export class JobKoreaRequestBudget {
   }
 
   static forManualDetailCollection(maxDetails: number): JobKoreaRequestBudget {
-    return new JobKoreaRequestBudget(maxDetails, { details: 30, listings: 0, content: 30 });
+    return new JobKoreaRequestBudget(maxDetails, { details: 30, listings: 0,
+      content: Math.min(JOBKOREA_MANUAL_DETAIL_HTTP_REQUEST_LIMIT, maxDetails * (JOBKOREA_MANUAL_DETAIL_REDIRECT_HOPS + 1)) });
   }
 }

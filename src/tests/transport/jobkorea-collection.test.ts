@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { parseJobKoreaCollectionArgs } from "../../sources/jobkorea/collection/jobkorea-collection-cli";
+import { formatJobKoreaCollectionResult } from "../../sources/jobkorea/collection/jobkorea-collection-output";
 import { collectJobKoreaOnce, JOBKOREA_COLLECTION_DETAIL_CONCURRENCY, selectJobKoreaCollectionCandidates } from "../../sources/jobkorea/collection/jobkorea-collection-service";
 import type { JobKoreaCollectionCandidate as SnapshotCandidate, JobKoreaSearchExecution } from "../../sources/jobkorea/transport/jobkorea-search-types";
 import { buildJobKoreaListingPageResult } from "../../sources/jobkorea/transport/jobkorea-listing-page";
@@ -103,7 +104,7 @@ describe("JobKorea bounded collection pipeline", () => {
     expect(testDb.database.prepare("SELECT COUNT(*) count FROM ingestion_runs").get()).toEqual({ count: 2 });
     expect(testDb.database.prepare("SELECT COUNT(*) count FROM ingestion_items").get()).toEqual({ count: 2 });
     const row = testDb.database.prepare("SELECT observation_kind, source_fixture_reference FROM jobs WHERE source_posting_id='50002001'").get() as Record<string, string>;
-    expect(row.observation_kind).toBe("bounded_manual_collection"); expect(row.source_fixture_reference).toContain("structurally_provisional:3:50002001");
+    expect(row.observation_kind).toBe("bounded_manual_collection"); expect(row.source_fixture_reference).toContain("detail_http:1:1:structurally_provisional:3:50002001");
   });
 
   it("records a failed detail without replacement or job insertion", async () => {
@@ -121,6 +122,24 @@ describe("JobKorea bounded collection pipeline", () => {
     const mock = execution([page(1, [candidate])]);
     const result = await collectJobKoreaOnce({ searchUrl: "https://www.jobkorea.co.kr/Search?stext=AI", pages: 1, maxDetails: 1, mode: "dry-run", confirm: true }, { database: testDb.database, createExecution: async () => mock, httpClient: http({ "50004001": html("50004002") }).client });
     expect(result.details[0]).toMatchObject({ status: "invalid_detail", parserResult: "failed", databaseAction: "not_stored" });
+  });
+
+  it("retains sanitized redirect diagnostics in the per-detail product result", async () => {
+    const testDb = createTestDatabase(); databases.push(testDb);
+    const candidate = collectionCandidate("50004003", 1);
+    const mock = execution([page(1, [candidate])]);
+    const transport = new JobKoreaHttpClient(async () => new Response(null, { status: 302,
+      headers: { location: "https://www.jobkorea.co.kr/Login/Login_Tot.asp?returnUrl=sensitive" } }));
+    const result = await collectJobKoreaOnce({ searchUrl: "https://www.jobkorea.co.kr/Search?stext=AI", pages: 1, maxDetails: 1, mode: "dry-run", confirm: true },
+      { database: testDb.database, createExecution: async () => mock, httpClient: transport });
+    expect(result.details[0]).toMatchObject({ requestedUrl: candidate.canonicalUrl,
+      finalUrl: "https://www.jobkorea.co.kr/Login/Login_Tot.asp", httpStatus: 302, redirectCount: 1,
+      redirectClassification: "login_redirect", canonicalValidation: "not_reached", status: "access_blocked" });
+    expect(JSON.stringify(result.details[0])).not.toContain("returnUrl");
+    const output = formatJobKoreaCollectionResult(result).join("\n");
+    expect(output).toContain("HTTP=302 · redirect=login_redirect/1");
+    expect(output).toContain("302:www.jobkorea.co.kr/Login/Login_Tot.asp");
+    expect(output).not.toContain("returnUrl");
   });
 
   it("retains expired and explicitly closed valid postings as storable detail outcomes", async () => {
