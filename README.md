@@ -200,7 +200,7 @@ npm run db:status
 - 연봉 단일값·범위·인센티브 표시는 source fixture로 확인했지만, 복수 근무지와 근무지 미정의 실제 상세 구조는 이번 소스별 3건 제한에서 찾지 못해 여전히 미검증이다.
 - 알바몬의 관찰된 내부 BFF는 공식 API가 아니며 live 코드가 호출하거나 의존하지 않는다.
 - 잡코리아 browser transport의 기술적 접근 가능성·robots 결과는 이용허가가 아니다. 현행 계약·저작권·재가공·보관 범위는 미확인이다.
-- bounded search는 최대 2페이지만 검증하며 전체 pagination, 최신성 보장, 삭제 동기화, 자동 refresh가 없다. page-1 lifecycle과 실제 schema 1 snapshot은 검증됐지만 현재 ordinary-result container는 인식되지 않아 `malformed_results`이며 direct `_GI_List` 익명 계약도 미확정이다. schema 2 진단은 오프라인에서만 검증됐고 아직 실제 page-1 결과로 container signature를 측정하지 않았다.
+- bounded search는 최대 2페이지만 검증하며 전체 pagination, 최신성 보장, 삭제 동기화, 자동 refresh가 없다. page-1 lifecycle과 실제 schema 2 snapshot은 검증됐지만 현재 ordinary-result container는 인식되지 않아 `malformed_results`이며 direct `_GI_List` 익명 계약도 미확정이다.
 
 ## 다음 개발 단계
 
@@ -208,4 +208,8 @@ npm run db:status
 
 이 수정 과정에서는 실제 잡코리아 요청을 실행하지 않았다. production ordinary selector도 넓히지 않았다. 실제 측정에서 보인 utility signature는 아직 ordinary container의 충분한 근거가 아니므로, 광고 근거가 없는 미확인 numeric link는 계속 rejected로 남고 페이지는 `JOBKOREA_ORDINARY_CONTAINER_CONTRACT_MISMATCH`가 있는 `malformed_results`로 유지된다. 같은 production evaluator를 실행하는 synthetic acceptance test는 88 numeric / 28 explicit promoted / 60 unknown rejected / 0 ordinary를 확인하며 snapshot은 256 KiB 상한 아래에 있다.
 
-다음 정확한 작업은 **별도 승인된 page-1, `max-details=0`, schema-v2 Playwright dry-run을 정확히 한 번 실행해 수정된 promoted-region 판정을 재측정하는 것**이다. 상세 navigation, page 2, direct 요청, retry, SQLite write, scheduling, production crawling은 승인 범위가 아니다.
+별도 승인된 post-fix 실제 검증은 2026-08-05에 page 1, `max-details=0`, Playwright dry-run으로 정확히 한 번 실행됐다. 명령은 4,438ms 안에 종료됐고 schema 2 snapshot은 `complete` 상태에서 70,441 bytes로 정상 검증됐다. readiness와 snapshot 모두 numeric detail link 88개와 ordinary container 0개를 측정해 DOM 변화는 없었다. result root 1개 안의 88개 링크는 ordinary 0, promoted 0, rejected 88로 상호 배타적으로 분류됐고 duplicate는 0이었다. 전체 rejection aggregate는 `ANCESTOR_SIGNATURE_UNRECOGNIZED: 88`, promotion-signal aggregate는 비어 있어 합계가 각각 후보 수와 일치했다. 로그인·CAPTCHA·verification·access-denied·명시적 empty marker는 모두 0이었다.
+
+이 실측은 broad promoted 과포착이 실제 페이지에서도 제거됐음을 확인한다. 동시에 ordinary contract는 아직 해결되지 않았다. dominant rejected container signature는 `div.mb-0.5@1` 30개, `div.w-full@1` 30개, `div.flex.gap-5.p-7.w-full@1` 28개였으며 모두 generic utility class뿐이라 production ordinary selector로 채택하기에는 충분하지 않다. failed resource는 image 68개와 font 8개로 총 76개였지만 readiness와 extraction을 막지 않았다. 상세 navigation, page 2, direct 요청, retry, SQLite write는 모두 0이었고 로컬 DB hash와 레코드 수는 변하지 않았다.
+
+다음 정확한 작업은 **이 실측 signature만을 근거로 하는 별도 오프라인 ordinary-result selector-contract 평가**다. `mb-0.5`, `w-full`, `flex`, `gap-5`, `p-7` 같은 utility class 자체를 ordinary selector로 추가하지 말고, 기존 bounded ancestor diagnostics에서 source-specific한 안정적 상위 marker가 있는지 검토한 뒤 근거가 있을 때만 최소 계약 변경과 synthetic regression test를 제안해야 한다. 상세 navigation, page 2, direct 요청, retry, SQLite write, scheduling, production crawling은 승인 범위가 아니다.
