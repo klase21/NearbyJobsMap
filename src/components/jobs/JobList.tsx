@@ -20,7 +20,12 @@ interface JobListProps {
 
 export function JobList(props: JobListProps) {
   const refs = useRef(new Map<string, HTMLElement>());
+  const mounted = useRef(false);
   useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
     if (props.selectedJobId) refs.current.get(props.selectedJobId)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [props.selectedJobId]);
 

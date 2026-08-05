@@ -2,7 +2,7 @@
 
 import type { UserJobStatus, UiJobRecord, UserOrigin } from "../../domain/ui-job";
 import { haversineDistanceKm } from "../../services/distance";
-import { formatDate, formatWon, LOCATION_LABELS, POSTING_STATUS_LABELS, SOURCE_LABELS, USER_STATUS_LABELS } from "../../services/job-display";
+import { formatDate, formatWon, LOCATION_LABELS, POSTING_STATUS_LABELS, SALARY_CONFIDENCE_LABELS, SOURCE_LABELS, USER_STATUS_LABELS } from "../../services/job-display";
 import { getJobDataLabel } from "../../services/job-search";
 
 interface JobCardProps {
@@ -24,6 +24,7 @@ export function JobCard({ record, rank, selected, origin, userStatus, onSelect, 
   const distance = record.mapPosition ? haversineDistanceKm(origin, record.mapPosition) : null;
   const hours = job.workStartTime && job.workEndTime ? `${job.workStartTime}~${job.workEndTime}` : "시간 미확인";
   const monthly = job.salary.normalizedMonthlyMinimum;
+  const administrativeArea = [job.city, job.district].filter(Boolean).join(" · ");
   return (
     <article ref={cardRef} className={`job-card ${selected ? "selected" : ""} ${userStatus === "excluded" ? "excluded" : ""}`} aria-current={selected ? "true" : undefined}>
       <div className="job-card-top">
@@ -46,13 +47,14 @@ export function JobCard({ record, rank, selected, origin, userStatus, onSelect, 
       <div className="job-primary">
         <div>
           <div className="salary">{job.salary.originalText || "급여 미확인"}
-            {monthly !== null && <span className="normalized">월 환산 예상 {formatWon(monthly)} · {job.salary.normalizationConfidence ?? "신뢰도 미정"}</span>}
+            {monthly !== null && <span className="normalized">월 환산 예상 {formatWon(monthly)} · 신뢰도 {job.salary.normalizationConfidence ? SALARY_CONFIDENCE_LABELS[job.salary.normalizationConfidence] : "미정"}</span>}
           </div>
           <div className="detail-line"><strong>근무</strong> {job.workDaysOriginalText ?? "요일 미확인"} · {hours}</div>
           <div className="detail-line"><strong>조건</strong> {job.experienceRequirement ?? "경력 미확인"} · {job.educationRequirement ?? "학력 미확인"}</div>
         </div>
         <div>
           <div className="detail-line"><strong>위치</strong> {job.addressOriginalText ?? "위치정보 없음"}</div>
+          {administrativeArea && <div className="detail-line"><strong>행정구역</strong> {administrativeArea}</div>}
           {job.nearestStation && <div className="detail-line"><strong>인근역</strong> {job.nearestStation}</div>}
           <div className="detail-line"><strong>거리</strong> {distance === null ? "좌표 없음" : `${distance.toFixed(1)}km`} · 직선거리</div>
           <div className="detail-line"><strong>등록</strong> {formatDate(job.postedAt)} · <strong>마감</strong> {formatDate(job.expiresAt)}</div>

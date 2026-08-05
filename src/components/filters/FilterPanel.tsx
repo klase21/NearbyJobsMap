@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { JobFilterState, UiJobRecord } from "../../domain/ui-job";
 import { LOCATION_LABELS, POSTING_STATUS_LABELS, SALARY_TYPE_LABELS } from "../../services/job-display";
 import { DEFAULT_FILTERS } from "../../services/job-search";
@@ -16,12 +16,32 @@ const unique = (values: Array<string | null>): string[] => [...new Set(values.fi
 
 export function FilterPanel({ filters, jobs, onChange, onClose }: FilterPanelProps) {
   const firstControlRef = useRef<HTMLSelectElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const [isMobileDrawer, setIsMobileDrawer] = useState(false);
   useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     firstControlRef.current?.focus();
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { onClose(); return; }
+      if (event.key !== "Tab") return;
+      const focusable = panelRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])');
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => { window.removeEventListener("keydown", onKeyDown); previouslyFocused?.focus(); };
   }, [onClose]);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia("(max-width: 760px)");
+    const update = () => setIsMobileDrawer(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   const cities = unique(jobs.map(({ job }) => job.city));
   const districts = unique(jobs.filter(({ job }) => !filters.city || job.city === filters.city).map(({ job }) => job.district));
@@ -39,7 +59,7 @@ export function FilterPanel({ filters, jobs, onChange, onClose }: FilterPanelPro
   return (
     <>
       <button className="filter-backdrop" aria-label="필터 닫기" type="button" onClick={onClose} />
-      <section className="filter-panel" role="dialog" aria-modal="false" aria-labelledby="filter-title">
+      <section ref={panelRef} className="filter-panel" role="dialog" aria-modal={isMobileDrawer} aria-labelledby="filter-title">
         <div className="filter-heading"><h2 id="filter-title">상세 필터</h2><button className="button compact" type="button" onClick={onClose}>닫기</button></div>
         <div className="filter-grid">
           <SelectField ref={firstControlRef} label="서울·경기" value={filters.region} onChange={(value) => update("region", value as JobFilterState["region"])} options={[["all","전체"],["서울","서울"],["경기","경기"]]} />

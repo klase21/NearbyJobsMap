@@ -26,4 +26,11 @@ describe("공고 카드", () => {
     fireEvent.change(screen.getByLabelText("사용자 상태"), { target: { value: "saved" } });
     expect(onChange).toHaveBeenCalledWith("saved");
   });
+  it("월 환산 신뢰도와 행정구역을 한국어로 표시", () => {
+    const record: UiJobRecord = { ...demo, job: { ...demo.job, city: "서울", district: "강남구", salary: { ...demo.job.salary, normalizedMonthlyMinimum: 2_800_000, normalizationConfidence: "high" } } };
+    render(<JobCard record={record} rank={1} selected={false} origin={DEFAULT_ORIGIN} userStatus="reviewing" onSelect={() => undefined}
+      onMapFocus={() => undefined} onUserStatusChange={() => undefined} cardRef={() => undefined} />);
+    expect(screen.getByText(/월 환산 예상 2,800,000원 · 신뢰도 높음/)).toBeInTheDocument();
+    expect(screen.getByText(/서울 · 강남구/)).toBeInTheDocument();
+  });
 });

@@ -23,6 +23,11 @@ export const SORT_LABELS: Record<SortOption, string> = {
 export const USER_STATUS_LABELS: Record<UserJobStatus, string> = {
   reviewing: "검토 중", saved: "관심", planned: "지원 예정", applied: "지원 완료", excluded: "제외",
 };
+export const SALARY_CONFIDENCE_LABELS = {
+  high: "높음",
+  medium: "보통",
+  low: "낮음",
+} as const;
 
 export function formatWon(value: number): string {
   return `${new Intl.NumberFormat("ko-KR").format(Math.round(value))}원`;

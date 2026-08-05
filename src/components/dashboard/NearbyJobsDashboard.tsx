@@ -44,10 +44,7 @@ export function NearbyJobsDashboard({ initialJobs, dataError }: NearbyJobsDashbo
   const visibleIds = useMemo(() => sorted.map(({ job }) => job.id), [sorted]);
   useEffect(() => { setSelectedJobId((current) => reconcileSelectedJobId(current, visibleIds)); }, [visibleIds]);
 
-  const closeFilters = useCallback(() => {
-    setFiltersOpen(false);
-    requestAnimationFrame(() => (document.querySelector('[aria-haspopup="dialog"]') as HTMLElement | null)?.focus());
-  }, []);
+  const closeFilters = useCallback(() => setFiltersOpen(false), []);
   const focusMapJob = (jobId: string) => { setSelectedJobId(jobId); setMapVisible(true); setMobileView("map"); };
   const setUserStatus = (jobId: string, status: UserJobStatus) => setUserStatuses((current) => ({ ...current, [jobId]: status }));
   const summary = useMemo(() => ({
@@ -85,7 +82,7 @@ export function NearbyJobsDashboard({ initialJobs, dataError }: NearbyJobsDashbo
               onResetFilters={() => setFilters(DEFAULT_FILTERS)} />
           </section>
           {mapVisible && <div className={mobileView === "list" ? "map-slot mobile-hidden" : "map-slot"}>
-            <MapPanel records={sorted} selectedJobId={selectedJobId} origin={origin} onSelect={(jobId) => { setSelectedJobId(jobId); setMobileView("list"); }} onOriginChange={setOrigin} />
+            <MapPanel records={sorted} selectedJobId={selectedJobId} origin={origin} onSelect={setSelectedJobId} onOriginChange={setOrigin} />
           </div>}
         </div>}
     </main>
