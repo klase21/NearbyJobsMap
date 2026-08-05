@@ -4,7 +4,13 @@ import { calculateJobContentHash } from "../content-hash";
 import { validateCanonicalJob } from "../job-validation";
 import { IngestionRunRepository } from "../repositories/ingestion-run-repository";
 import { JobRepository, JobRepositoryError } from "../repositories/job-repository";
-import type { IngestionRecord, IngestionResult, IngestionSource, IngestionType } from "../schema";
+import type { IngestionDiagnostic, IngestionRecord, IngestionResult, IngestionSource, IngestionType, TransportRunCompletion } from "../schema";
+
+export interface IngestionExecutionOptions {
+  runId?: string;
+  initial?: { inserted?: number; updated?: number; unchanged?: number; skipped?: number; failed?: number; diagnostics?: IngestionDiagnostic[] };
+  transportCompletion?: TransportRunCompletion;
+}
 
 const identityKey = ({ job }: IngestionRecord): string => job.sourcePostingId.trim()
   ? `${job.source}:id:${job.sourcePostingId}`
@@ -23,9 +29,11 @@ export class IngestionService {
     this.runs = new IngestionRunRepository(database);
   }
 
-  ingest(records: IngestionRecord[], input: { source: IngestionSource; ingestionType: IngestionType }): IngestionResult {
-    const runId = this.runs.begin(input.source, input.ingestionType, records.length);
-    const result: IngestionResult = { runId, inserted: 0, updated: 0, unchanged: 0, skipped: 0, failed: 0, diagnostics: [] };
+  ingest(records: IngestionRecord[], input: { source: IngestionSource; ingestionType: IngestionType }, options: IngestionExecutionOptions = {}): IngestionResult {
+    const runId = options.runId ?? this.runs.begin(input.source, input.ingestionType, records.length);
+    const result: IngestionResult = { runId, inserted: options.initial?.inserted ?? 0, updated: options.initial?.updated ?? 0,
+      unchanged: options.initial?.unchanged ?? 0, skipped: options.initial?.skipped ?? 0, failed: options.initial?.failed ?? 0,
+      diagnostics: [...(options.initial?.diagnostics ?? [])] };
     const seen = new Set<string>();
     try {
       for (const record of records) {
@@ -68,11 +76,11 @@ export class IngestionService {
           this.runs.recordItem({ runId, source, sourcePostingId, canonicalJobId: record.job.id, result: "failed", diagnosticCodes: [code], contentHash: calculateJobContentHash(record.job, record.metadata.mapPosition) });
         }
       }
-      this.runs.complete(runId, result);
+      this.runs.complete(runId, result, options.transportCompletion);
       return result;
     } catch (error) {
       const summary = error instanceof Error ? error.message : "ingestion run 실패";
-      try { this.runs.fail(runId, summary); } catch { /* The original failure remains authoritative. */ }
+      try { this.runs.fail(runId, summary, options.transportCompletion); } catch { /* The original failure remains authoritative. */ }
       throw error;
     }
   }

@@ -124,6 +124,7 @@ export function reconcileSelectedJobId(selectedJobId: string | null, visibleIds:
   return visibleIds[0] ?? null;
 }
 
-export function getJobDataLabel(record: UiJobRecord): "기능 검증용 가상 공고" | "정제된 공개 fixture" {
+export function getJobDataLabel(record: UiJobRecord): "기능 검증용 가상 공고" | "정제된 공개 fixture" | "원샷 전송 검증 데이터" {
+  if (record.provenanceKind === "live_one_shot_observation") return "원샷 전송 검증 데이터";
   return record.isFictional ? "기능 검증용 가상 공고" : "정제된 공개 fixture";
 }

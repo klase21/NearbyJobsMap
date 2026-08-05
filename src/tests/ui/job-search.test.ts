@@ -55,6 +55,7 @@ describe("거리와 선택 동기화", () => {
   it("선택 공고가 남아 있으면 유지", () => expect(reconcileSelectedJobId("far", ["near", "far"])).toBe("far"));
   it("선택 공고가 사라지면 첫 공고", () => expect(reconcileSelectedJobId("gone", ["near", "far"])).toBe("near"));
   it("가상 공고 배지 로직", () => expect(getJobDataLabel(near)).toBe("기능 검증용 가상 공고"));
+  it("원샷 관찰 배지 로직", () => expect(getJobDataLabel({ ...near, isFictional: false, provenanceKind: "live_one_shot_observation" })).toBe("원샷 전송 검증 데이터"));
   it("미정·복수 위치는 좌표가 섞여도 지도 대상이 아니다", () => {
     expect(isMapEligible(record({ locationAccuracy: "location_undecided" }, true, [37.5, 127]))).toBe(false);
     expect(isMapEligible(record({ locationAccuracy: "multiple_locations" }, true, [37.5, 127]))).toBe(false);

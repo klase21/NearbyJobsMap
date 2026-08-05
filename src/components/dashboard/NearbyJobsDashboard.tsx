@@ -27,6 +27,7 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
   const [corruptedSettings, setCorruptedSettings] = useState(false);
   const [storageFailed, setStorageFailed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const hasOneShotObservation = initialJobs.some(({ provenanceKind }) => provenanceKind === "live_one_shot_observation");
   const listPanelRef = useRef<HTMLElement>(null);
   const mapSlotRef = useRef<HTMLDivElement>(null);
 
@@ -104,7 +105,7 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
       <AppHeader filters={filters} mapVisible={mapVisible} onFiltersChange={setFilters} onToggleFilters={() => setFiltersOpen(true)}
         onToggleMap={toggleMap} />
       <div className="notice-strip">
-        <span><strong>fixture/demo 모드</strong> · 실시간 수집 없이 정제 fixture와 가상 공고만 표시합니다.</span>
+        <span><strong>{hasOneShotObservation ? "로컬 검증 데이터" : "fixture/demo 모드"}</strong> · {hasOneShotObservation ? "공개 페이지를 제한적으로 1회 확인한 데이터가 포함됩니다. 공식 제휴나 지속적인 실시간 연동이 아니며 원문을 최종 기준으로 확인하세요." : "실시간 수집 없이 정제 fixture와 가상 공고만 표시합니다."}</span>
         <span className="privacy-note">입력한 출발지와 화면 설정은 기본적으로 이 브라우저에만 저장됩니다. 브라우저 저장공간을 지우면 설정이 삭제될 수 있습니다.</span>
       </div>
       {corruptedSettings && <div className="warning-banner" role="alert">저장된 설정을 읽을 수 없어 안전한 기본값으로 초기화했습니다.</div>}

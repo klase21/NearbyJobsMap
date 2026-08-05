@@ -52,6 +52,7 @@ input:disabled { cursor: not-allowed; background: #f4f6f8; color: #8a94a3; }
 .notice-strip strong { color: var(--ink); }
 .privacy-note { text-align: right; }
 .warning-banner { margin: 12px 24px 0; border: 1px solid #f0c997; border-radius: 10px; background: #fff9ee; padding: 10px 14px; color: #7b4d11; font-size: 13px; }
+.observation-note { margin: 8px 0 0; color: #76531a; font-size: 12px; line-height: 1.5; }
 .database-setup-shell { display: grid; min-height: 100vh; place-items: center; padding: 24px; }
 .database-setup-panel { width: min(560px, 100%); border: 1px solid var(--line); border-radius: 16px; background: white; padding: 32px; box-shadow: 0 10px 30px rgba(20,27,39,.07); }
 .database-setup-kicker { margin: 0 0 10px; color: var(--blue); font-size: 12px; font-weight: 750; }

@@ -46,6 +46,7 @@ export function JobCard({ record, rank, selected, origin, userStatus, onSelect, 
         {job.categories.map((category) => <span className="badge" key={category}>{category}</span>)}
         {job.employmentTypes.map((type) => <span className="badge" key={type}>{type}</span>)}
       </div>
+      {record.provenanceKind === "live_one_shot_observation" && <p className="observation-note">제한적 공개 페이지 관찰 · {record.observedAt ? `${formatDate(record.observedAt)} 확인` : "확인 시각 미상"}</p>}
       <div className="job-primary">
         <div>
           <div className="salary">{job.salary.originalText || "급여 미확인"}

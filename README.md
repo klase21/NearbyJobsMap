@@ -4,6 +4,8 @@
 
 > 이 프로젝트는 잡코리아·알바몬의 공식 파트너 연동이 아니다. production crawler와 실시간 수집 기능은 포함하지 않는다. 공개 페이지의 기술적 접근 가능성은 수집·재사용 허가를 뜻하지 않으므로 실제 연동 전 각 소스의 약관과 권한을 별도로 확인해야 한다. 원본 소스 페이지가 항상 권위 있는 기준이다.
 
+잡코리아에는 별도 승인된 수동 명령으로만 실행되는 **원샷 공개 페이지 전송 prototype**이 있다. 이는 공식 제휴나 지속적인 실시간 연동이 아니며, robots 사전확인과 명시적 확인을 거쳐 목록 1페이지·상세 최대 3건만 한 번 처리한다. 알바몬은 계속 fixture-only다.
+
 ## 현재 지원 범위
 
 - 활성 소스: 잡코리아, 알바몬
@@ -17,11 +19,12 @@
 - 기존 소스별 fixture parser, 손실 없는 `CanonicalJob`, 급여·위치·중복 판별 서비스
 - 버전형 SQLite migration, exact source identity, 콘텐츠 해시와 ingestion run 추적
 - sanitized fixture 6건과 명시적 가상 공고 10건의 멱등 local ingestion
+- 수동 `--confirm` 전용 잡코리아 원샷 전송: 목록 1회, 상세 최대 3회, 콘텐츠 HTTP 최대 4회
 - 관찰된 잡코리아 연봉 범위와 알바몬 연봉·별도 인센티브 fixture 계약
 - 후방 호환 `workplaces[]` 구조와 근무지 미정·본사 주소 분리 규칙
 - 고용24: 공식 API 검토 후 별도 승인이 필요한 roadmap 소스이며 현재 adapter·fixture·UI 선택 항목이 없다.
 
-포함하지 않는 범위는 실시간 네트워크 수집, production crawler, 원격·클라우드 데이터베이스, 인증, 계정, 클라우드 저장, geocoding·교통 API, GPS, 분석·광고·배포다.
+포함하지 않는 범위는 지속적 실시간 수집, production crawler, pagination, retry loop, scheduler, background worker, 알바몬 live transport, 원격·클라우드 데이터베이스, 인증, 계정, 클라우드 저장, geocoding·교통 API, GPS, 분석·광고·배포다.
 
 ## 실행
 
@@ -71,11 +74,54 @@ DB가 없거나 migration이 빠졌으면 UI는 raw SQLite 오류 대신 `로컬
 
 SQLite 파일은 자동 백업되지 않는다. 로컬 데이터를 보존해야 한다면 서버를 중지한 상태에서 DB 파일을 별도로 복사한다. 현재 데이터는 모두 재생성 가능한 fixture/demo이지만 향후 로컬 메타데이터가 늘어나면 명시적인 백업·복원 정책이 필요하다.
 
+## 잡코리아 원샷 전송 prototype
+
+명령은 사용자가 제공한 절대 HTTPS 잡코리아 공개 목록 URL만 받는다. 허용 호스트는 `www.jobkorea.co.kr`과 `m.jobkorea.co.kr`, 허용 목록 경로는 `/Search/`와 `/recruit/joblist`뿐이다. 실행에는 `--confirm`이 필수이며 `--max-details`는 1·2·3만 허용한다.
+
+첫 확인은 DB를 전혀 변경하지 않는 dry-run을 권장한다.
+
+```powershell
+Set-Location C:\NearbyJobsMap
+
+npm.cmd run transport:jobkorea:once -- `
+  --listing-url "PUBLIC_JOBKOREA_LISTING_URL" `
+  --max-details 1 `
+  --dry-run `
+  --confirm
+```
+
+쓰기 실행:
+
+```powershell
+npm.cmd run transport:jobkorea:once -- `
+  --listing-url "PUBLIC_JOBKOREA_LISTING_URL" `
+  --max-details 1 `
+  --confirm
+```
+
+- 매 명령은 robots.txt를 최대 1회 별도 사전확인한다. robots가 경로를 명시적으로 차단하면 목록·상세 요청은 0회다. robots 허용은 법적 허가를 의미하지 않는다.
+- 콘텐츠 HTTP 요청은 redirect hop을 포함해 `1 + --max-details`회로 제한되며 절대 hard cap은 4회다. 예를 들어 `--max-details 1`은 콘텐츠 요청도 최대 2회다. 논리적 목록은 최대 1회, 상세는 최대 3회이며 실패한 상세를 다음 후보로 대체하지 않는다.
+- timeout 기본값은 12초·hard cap은 15초다. HTML 응답은 기본·hard cap 모두 2MiB이며 환경 변수 `JOBKOREA_TRANSPORT_TIMEOUT_MS`, `JOBKOREA_TRANSPORT_MAX_RESPONSE_BYTES`는 cap을 높일 수 없다.
+- 쿠키·인증 헤더·세션·저장 browser profile을 사용하지 않는다. retry, pagination, scheduling, polling, concurrency, browser automation, CAPTCHA/WAF 우회가 없다.
+- raw HTML은 메모리에서만 읽고 저장하지 않는다. sanitizer는 최소 JobPosting·목록 anchor만 남기며 설명 본문·연락처·지원자·script·분석/광고 필드를 제외한다.
+- dry-run은 jobs, child collection, provenance, ingestion run을 포함해 DB에 아무것도 쓰지 않고 예상 inserted/updated/unchanged/rejected만 출력한다.
+- 쓰기 실행은 exact source identity와 content hash를 재사용한다. 새 공고는 insert, 변경 공고는 update, 동일 내용은 unchanged다.
+- 현재 이용·재가공 권한은 `unverified`다. 원샷 결과는 `원샷 전송 검증 데이터`와 관찰 시각으로 표시하며 원문 페이지를 최종 기준으로 확인해야 한다.
+
+원샷 관찰 데이터를 로컬에서 모두 제거하려면 서버를 중지하고 전체 로컬 DB reset 후 fixture/demo를 다시 준비한다. 이 작업은 사용자 상태 localStorage를 지우지 않는다.
+
+```powershell
+npm.cmd run db:reset -- --confirm
+npm.cmd run setup:local
+```
+
+원샷만 선택 삭제하는 관리 UI나 명령은 아직 없다. `db:status`는 현재 one-shot 관찰 공고 수와 최근 one-shot run 상태를 표시한다.
+
 ## UI와 데이터 구조
 
 `src/app`은 Next.js App Router 진입점, `src/components`는 표현 계층이다. `src/db`는 server-only SQLite 연결·migration·repository·ingestion 경계이며, `src/data/sqlite-job-provider.ts`만 request-time DB 결과를 compact `UiJobRecord` DTO로 바꿔 client dashboard에 전달한다. UI는 별도 공고 모델을 만들지 않고 `CanonicalJob`을 감싼 최소 파생 타입만 사용한다. 기존 `src/sources` parser는 네트워크와 분리되어 있고 fixture import 때만 실행되며 UI 렌더 중 재실행하지 않는다.
 
-기존 fixture에서 만들기 어려운 급여·지역·상태 조합은 `src/data/demo-jobs.ts`의 가상 공고로 보완한다. fixture-derived와 fictional provenance, fixture/seed reference, evidence 유형, content hash, ingestion item 결과를 SQLite에 별도로 보존한다. 가상 공고는 화면에서 `기능 검증용 가상 공고`로 표시되고 가짜 원문 링크를 제공하지 않는다. 원본 fixture 내용은 DB나 client bundle에 저장하지 않으며 `dangerouslySetInnerHTML`도 사용하지 않는다.
+기존 fixture에서 만들기 어려운 급여·지역·상태 조합은 `src/data/demo-jobs.ts`의 가상 공고로 보완한다. fixture-derived, fictional, one-shot observation provenance와 reference, evidence 유형, content hash, ingestion item 결과를 SQLite에 별도로 보존한다. `job_provenance_history`는 exact identity가 겹쳐도 기존 fixture 증거를 지우지 않는다. 가상 공고는 화면에서 `기능 검증용 가상 공고`로 표시되고 가짜 원문 링크를 제공하지 않는다. 원본 fixture나 transport HTML은 DB나 client bundle에 저장하지 않으며 `dangerouslySetInnerHTML`도 사용하지 않는다.
 
 `jobs`의 `(source, source_posting_id)`가 exact identity다. ID가 없는 미래 입력은 같은 source의 canonical HTTPS URL만 fallback으로 쓸 수 있다. probable duplicate와 교차 source 유사 공고는 고유성 제약이나 자동 병합에 사용하지 않는다. 카테고리, 고용형태, `workplaces[]`는 순서가 있는 자식 테이블로 저장하며 한 좌표를 복수 근무지 전체에 복제하지 않는다.
 
@@ -118,7 +164,9 @@ npm run db:status
 - 좌표가 없는 실제 fixture에는 지도를 위해 좌표를 만들지 않아 지도에서 제외된다.
 - 연봉 단일값·범위·인센티브 표시는 source fixture로 확인했지만, 복수 근무지와 근무지 미정의 실제 상세 구조는 이번 소스별 3건 제한에서 찾지 못해 여전히 미검증이다.
 - 알바몬의 관찰된 내부 BFF는 공식 API가 아니며 live 코드가 호출하거나 의존하지 않는다.
+- 잡코리아 원샷 transport의 기술적 접근 가능성·robots 결과는 이용허가가 아니다. 현행 계약·저작권·재가공·보관 범위는 미확인이다.
+- 원샷은 사용자가 명시한 공개 목록 한 페이지만 처리하며 페이지네이션, 최신성 보장, 삭제 동기화, 자동 refresh가 없다.
 
 ## 다음 개발 단계
 
-다음 정확한 작업은 **별도 승인된 한 소스·한 공개 목록 페이지·최대 3개 상세만 대상으로 하는 one-shot source transport prototype**이다. 저장 payload는 기존 sanitizer를 통과한 최소 fixture 후보에 한정하고, pagination·schedule·retry loop·production crawler는 포함하지 않는다. 이 단계는 사용자가 transport 범위와 source를 별도로 승인한 뒤에만 시작한다.
+다음 정확한 작업은 **사용자가 원샷 dry-run/쓰기 결과와 진단을 검토한 뒤 잡코리아에 공개 페이지 관찰·정규화·로컬 보관 허용 범위를 문의하는 것**이다. 알바몬 feasibility study나 어떤 요청 예산 확대도 별도 명시적 승인이 필요하며 production crawler는 다음 단계가 아니다.

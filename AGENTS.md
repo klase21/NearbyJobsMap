@@ -60,6 +60,15 @@
 - production build 중 migration, fixture import, demo seed 등 DB write를 실행하지 않는다.
 - SQLite·WAL·SHM·임시 테스트 DB 파일을 커밋하지 않는다.
 - DB reset은 확인 플래그와 안전한 대상 경로 검증 없이 실행하지 않는다.
+- 잡코리아 live transport는 `transport:jobkorea:once` 수동 명령으로만 실행하며 앱·build·migration·seed·test에서 자동 실행하지 않는다.
+- 잡코리아 원샷은 목록 1회, 상세 최대 3회, redirect hop을 포함한 콘텐츠 HTTP 최대 4회와 robots 사전확인 최대 1회를 넘기지 않는다.
+- 원샷 request cap을 명시적 승인 없이 완화하지 않으며 retry loop, pagination, scheduler, polling, background worker를 추가하지 않는다.
+- transport는 cookie·session·browser profile·authorization을 사용하거나 보존하지 않고 CAPTCHA·WAF·로그인·검증 절차를 우회하지 않는다.
+- 접근 제한 우회를 위한 browser automation을 추가하지 않는다.
+- one-shot provenance·권한 미확인 경고·관찰 시각을 DB와 UI에서 유지하고 기존 fixture provenance history를 지우지 않는다.
+- transport 테스트는 주입된 mock HTTP만 사용하며 자동화된 테스트에서 live source 요청을 만들지 않는다.
+- `--dry-run`은 jobs, child collection, provenance, ingestion run을 포함한 모든 DB write를 금지한다.
+- 알바몬 live transport와 production crawler는 각각 별도의 명시적 승인이 필요하다.
 
 ## Product and UX Guidance
 

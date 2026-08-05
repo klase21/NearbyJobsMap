@@ -13,6 +13,7 @@
     "db:status": "tsx scripts/db-status.ts",
     "db:reset": "tsx scripts/db-reset.ts",
     "setup:local": "tsx scripts/setup-local.ts",
+    "transport:jobkorea:once": "tsx scripts/jobkorea-one-shot.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run"

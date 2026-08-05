@@ -27,6 +27,7 @@ const JOB_COLUMNS = [
   "location_accuracy", "workplace_count", "work_days_original_text", "work_start_time", "work_end_time", "shift_type", "posted_at", "modified_at",
   "expires_at", "posting_status", "promoted", "remote", "collected_at", "last_verified_at", "raw_payload_reference", "record_kind", "is_fictional",
   "evidence_type", "source_fixture_reference", "display_map_latitude", "display_map_longitude", "display_map_kind", "display_map_provenance",
+  "provenance_kind", "permission_status", "provenance_evidence_type", "provenance_listing_url", "provenance_detail_url", "observed_at", "sanitizer_version", "parser_version",
   "content_hash", "created_at", "updated_at",
 ] as const;
 
@@ -35,6 +36,8 @@ const UPDATE_COLUMNS = JOB_COLUMNS.filter((column) => !["id", "created_at"].incl
 const UPDATE_JOB_SQL = `UPDATE jobs SET ${UPDATE_COLUMNS.map((column) => `${column} = @${column}`).join(", ")} WHERE id = @persisted_id`;
 
 const booleanToSql = (value: boolean | null): 0 | 1 | null => value === null ? null : value ? 1 : 0;
+const legacyRecordKind = (value: IngestionMetadata["recordKind"]): "fixture_derived" | "fictional_demo" => value === "fictional_demo" ? "fictional_demo" : "fixture_derived";
+const legacyEvidenceType = (value: IngestionMetadata["evidenceType"]): Exclude<IngestionMetadata["evidenceType"], "public_page_observation"> => value === "public_page_observation" ? "observed_html" : value;
 
 function parameters(job: CanonicalJob, metadata: IngestionMetadata, contentHash: string, createdAt: string, updatedAt: string): SqlRow {
   return {
@@ -51,10 +54,13 @@ function parameters(job: CanonicalJob, metadata: IngestionMetadata, contentHash:
     work_days_original_text: job.workDaysOriginalText, work_start_time: job.workStartTime, work_end_time: job.workEndTime, shift_type: job.shiftType,
     posted_at: job.postedAt, modified_at: job.modifiedAt, expires_at: job.expiresAt, posting_status: job.postingStatus,
     promoted: booleanToSql(job.promoted), remote: booleanToSql(job.remote), collected_at: job.collectedAt, last_verified_at: job.lastVerifiedAt,
-    raw_payload_reference: job.rawPayloadReference, record_kind: metadata.recordKind, is_fictional: metadata.recordKind === "fictional_demo" ? 1 : 0,
-    evidence_type: metadata.evidenceType, source_fixture_reference: metadata.sourceFixtureReference,
+    raw_payload_reference: job.rawPayloadReference, record_kind: legacyRecordKind(metadata.recordKind), is_fictional: metadata.recordKind === "fictional_demo" ? 1 : 0,
+    evidence_type: legacyEvidenceType(metadata.evidenceType), source_fixture_reference: metadata.sourceFixtureReference,
     display_map_latitude: metadata.mapPosition?.latitude ?? null, display_map_longitude: metadata.mapPosition?.longitude ?? null,
     display_map_kind: metadata.mapPosition?.kind ?? null, display_map_provenance: metadata.mapPosition?.provenance ?? null,
+    provenance_kind: metadata.recordKind, permission_status: metadata.permissionStatus ?? null, provenance_evidence_type: metadata.evidenceType,
+    provenance_listing_url: metadata.listingUrl ?? null, provenance_detail_url: metadata.detailUrl ?? null,
+    observed_at: metadata.observedAt ?? null, sanitizer_version: metadata.sanitizerVersion ?? null, parser_version: metadata.parserVersion ?? null,
     content_hash: contentHash, created_at: createdAt, updated_at: updatedAt,
   };
 }
@@ -139,33 +145,67 @@ export class JobRepository {
       workplace.isHeadquartersOnly ? 1 : 0, now, now));
   }
 
+  private recordProvenance(jobId: string, metadata: IngestionMetadata, now: string): void {
+    this.database.prepare(`INSERT INTO job_provenance_history
+      (job_id, provenance_kind, evidence_type, source_reference, permission_status, listing_url, detail_url, observed_at, sanitizer_version, parser_version, first_seen_at, last_seen_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(job_id, provenance_kind, source_reference) DO UPDATE SET
+        permission_status = excluded.permission_status, listing_url = excluded.listing_url, detail_url = excluded.detail_url,
+        observed_at = excluded.observed_at, sanitizer_version = excluded.sanitizer_version, parser_version = excluded.parser_version,
+        last_seen_at = excluded.last_seen_at`)
+      .run(jobId, metadata.recordKind, metadata.evidenceType, metadata.sourceFixtureReference, metadata.permissionStatus ?? null,
+        metadata.listingUrl ?? null, metadata.detailUrl ?? null, metadata.observedAt ?? null, metadata.sanitizerVersion ?? null,
+        metadata.parserVersion ?? null, now, now);
+  }
+
+  previewUpsert(job: CanonicalJob, metadata: IngestionMetadata): UpsertResult {
+    const issues = validateCanonicalJob(job);
+    if (issues.length) throw new JobRepositoryError("INGESTION_VALIDATION_FAILED", issues.map(({ code, message }) => `${code}: ${message}`).join(" "));
+    const contentHash = calculateJobContentHash(job, metadata.mapPosition);
+    const existing = this.findIdentityRow(job);
+    if (!existing) return { action: "inserted", jobId: job.id, contentHash };
+    const existingKind = requiredString(existing, "provenance_kind");
+    if (existingKind === "live_one_shot_observation" && metadata.recordKind === "fixture_derived") {
+      return { action: "unchanged", jobId: requiredString(existing, "id"), contentHash: requiredString(existing, "content_hash") };
+    }
+    return { action: existing.content_hash === contentHash ? "unchanged" : "updated", jobId: requiredString(existing, "id"), contentHash };
+  }
+
   upsert(job: CanonicalJob, metadata: IngestionMetadata): UpsertResult {
     const issues = validateCanonicalJob(job);
     if (issues.length) throw new JobRepositoryError("INGESTION_VALIDATION_FAILED", issues.map(({ code, message }) => `${code}: ${message}`).join(" "));
     const contentHash = calculateJobContentHash(job, metadata.mapPosition);
     const existing = this.findIdentityRow(job);
-    const provenanceUnchanged = existing
-      && existing.record_kind === metadata.recordKind
-      && existing.evidence_type === metadata.evidenceType
-      && existing.source_fixture_reference === metadata.sourceFixtureReference;
-    if (existing?.content_hash === contentHash && provenanceUnchanged) {
-      return { action: "unchanged", jobId: requiredString(existing, "id"), contentHash };
-    }
     const now = new Date().toISOString();
     const persistedId = existing ? requiredString(existing, "id") : job.id;
+    const existingKind = existing ? requiredString(existing, "provenance_kind") : null;
+    if (existing && existingKind === "live_one_shot_observation" && metadata.recordKind === "fixture_derived") {
+      this.recordProvenance(persistedId, metadata, now);
+      return { action: "unchanged", jobId: persistedId, contentHash: requiredString(existing, "content_hash") };
+    }
     try {
       this.database.transaction(() => {
+        if (existing?.content_hash === contentHash) {
+          this.recordProvenance(persistedId, metadata, now);
+          this.database.prepare(`UPDATE jobs SET provenance_kind = ?, permission_status = ?, provenance_evidence_type = ?, provenance_listing_url = ?, provenance_detail_url = ?,
+            observed_at = ?, sanitizer_version = ?, parser_version = ?, evidence_type = ?, source_fixture_reference = ?, last_verified_at = ? WHERE id = ?`)
+            .run(metadata.recordKind, metadata.permissionStatus ?? null, metadata.evidenceType, metadata.listingUrl ?? null, metadata.detailUrl ?? null,
+              metadata.observedAt ?? null, metadata.sanitizerVersion ?? null, metadata.parserVersion ?? null, legacyEvidenceType(metadata.evidenceType),
+              metadata.sourceFixtureReference, job.lastVerifiedAt, persistedId);
+          return;
+        }
         const values = parameters(job, metadata, contentHash, existing ? requiredString(existing, "created_at") : now, now);
         if (existing) this.database.prepare(UPDATE_JOB_SQL).run({ ...values, persisted_id: persistedId });
         else this.database.prepare(INSERT_JOB_SQL).run(values);
         this.replaceChildren(persistedId, job, now);
+        this.recordProvenance(persistedId, metadata, now);
       })();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const code = /UNIQUE constraint failed/.test(message) ? "UNIQUE_IDENTITY_CONFLICT" : /workplaces|job_categories|job_employment_types/.test(message) ? "CHILD_COLLECTION_WRITE_FAILED" : "JOB_WRITE_FAILED";
       throw new JobRepositoryError(code, "canonical job 저장에 실패했습니다.", { cause: error });
     }
-    return { action: existing ? "updated" : "inserted", jobId: persistedId, contentHash };
+    return { action: existing ? existing.content_hash === contentHash ? "unchanged" : "updated" : "inserted", jobId: persistedId, contentHash };
   }
 
   private hydrateRow(row: SqlRow): PersistedJobRecord {
@@ -179,10 +219,12 @@ export class JobRepository {
     const categories = (this.database.prepare("SELECT category FROM job_categories WHERE job_id = ? ORDER BY position").all(id) as SqlRow[]).map((item) => requiredString(item, "category"));
     const employmentTypes = (this.database.prepare("SELECT employment_type FROM job_employment_types WHERE job_id = ? ORDER BY position").all(id) as SqlRow[]).map((item) => requiredString(item, "employment_type"));
     const workplaces = (this.database.prepare("SELECT * FROM workplaces WHERE job_id = ? ORDER BY position").all(id) as SqlRow[]).map(readWorkplace);
-    const recordKind = requiredString(row, "record_kind");
-    if (recordKind !== "fixture_derived" && recordKind !== "fictional_demo") throw new JobRepositoryError("INVALID_ENUM_ROW", `유효하지 않은 record_kind: ${recordKind}`);
-    const evidenceType = requiredString(row, "evidence_type");
-    if (evidenceType !== "observed_html" && evidenceType !== "observed_json_ld" && evidenceType !== "observed_internal_json" && evidenceType !== "fictional_demo") throw new JobRepositoryError("INVALID_ENUM_ROW", `유효하지 않은 evidence_type: ${evidenceType}`);
+    const recordKind = requiredString(row, "provenance_kind");
+    if (recordKind !== "fixture_derived" && recordKind !== "fictional_demo" && recordKind !== "live_one_shot_observation") throw new JobRepositoryError("INVALID_ENUM_ROW", `유효하지 않은 provenance_kind: ${recordKind}`);
+    const evidenceType = requiredString(row, "provenance_evidence_type");
+    if (evidenceType !== "observed_html" && evidenceType !== "observed_json_ld" && evidenceType !== "observed_internal_json" && evidenceType !== "fictional_demo" && evidenceType !== "public_page_observation") throw new JobRepositoryError("INVALID_ENUM_ROW", `유효하지 않은 evidence_type: ${evidenceType}`);
+    const permissionStatus = nullableString(row, "permission_status");
+    if (permissionStatus !== null && permissionStatus !== "unverified" && permissionStatus !== "blocked") throw new JobRepositoryError("INVALID_ENUM_ROW", `유효하지 않은 permission_status: ${permissionStatus}`);
     const mapLatitude = nullableNumber(row, "display_map_latitude");
     const mapLongitude = nullableNumber(row, "display_map_longitude");
     const mapKind = nullableString(row, "display_map_kind");
@@ -209,7 +251,10 @@ export class JobRepository {
     if (issues.length) throw new JobRepositoryError("INVALID_DATABASE_ROW", issues.map(({ code }) => code).join(", "));
     return {
       job,
-      metadata: { recordKind, evidenceType, sourceFixtureReference: requiredString(row, "source_fixture_reference"), mapPosition },
+      metadata: { recordKind, evidenceType, sourceFixtureReference: requiredString(row, "source_fixture_reference"), mapPosition,
+        permissionStatus,
+        listingUrl: nullableString(row, "provenance_listing_url"), detailUrl: nullableString(row, "provenance_detail_url"),
+        observedAt: nullableString(row, "observed_at"), sanitizerVersion: nullableString(row, "sanitizer_version"), parserVersion: nullableString(row, "parser_version") },
       contentHash: requiredString(row, "content_hash"), createdAt: requiredString(row, "created_at"), updatedAt: requiredString(row, "updated_at"),
     };
   }
@@ -234,7 +279,7 @@ export class JobRepository {
       records: result.records.map(({ job, metadata }) => ({
         job, isFictional: metadata.recordKind === "fictional_demo",
         safeSourceUrl: metadata.recordKind === "fictional_demo" || job.source === "work24" ? null : getSafeSourceUrl(job.source, job.canonicalUrl ?? job.sourceUrl),
-        mapPosition: metadata.mapPosition,
+        mapPosition: metadata.mapPosition, provenanceKind: metadata.recordKind, observedAt: metadata.observedAt ?? null,
       })),
       diagnostics: result.diagnostics,
     };

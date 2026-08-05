@@ -2,6 +2,7 @@ import type { CanonicalJob } from "./canonical-job";
 import type { LocationAccuracy } from "./location";
 import type { PostingStatus } from "./posting-status";
 import type { SalaryType } from "./salary";
+import type { DataProvenanceKind } from "./data-provenance";
 
 export type ActiveJobSource = "jobkorea" | "albamon";
 export type RegionGroup = "서울" | "경기";
@@ -16,6 +17,8 @@ export interface UiJobRecord {
   isFictional: boolean;
   safeSourceUrl: string | null;
   mapPosition: MapPosition | null;
+  provenanceKind?: DataProvenanceKind;
+  observedAt?: string | null;
 }
 
 export interface SalaryThresholds { hourly: number; daily: number; monthly: number; annual: number; normalizedMonthly: number }

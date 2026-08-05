@@ -1,12 +1,13 @@
 import type { MapPosition } from "../domain/ui-job";
 import type { CanonicalJob } from "../domain/canonical-job";
 import type { JobSource } from "../domain/job-source";
+import type { DataProvenanceKind, PermissionStatus } from "../domain/data-provenance";
 
-export const REQUIRED_MIGRATION_VERSION = "0001";
+export const REQUIRED_MIGRATION_VERSION = "0002";
 
-export type RecordKind = "fixture_derived" | "fictional_demo";
-export type EvidenceType = "observed_html" | "observed_json_ld" | "observed_internal_json" | "fictional_demo";
-export type IngestionType = "sanitized_fixture" | "fictional_demo_seed";
+export type RecordKind = DataProvenanceKind;
+export type EvidenceType = "observed_html" | "observed_json_ld" | "observed_internal_json" | "fictional_demo" | "public_page_observation";
+export type IngestionType = "sanitized_fixture" | "fictional_demo_seed" | "jobkorea_one_shot_transport";
 export type IngestionSource = "jobkorea" | "albamon" | "mixed" | "local_demo";
 export type IngestionItemResult = "inserted" | "updated" | "unchanged" | "skipped" | "failed";
 
@@ -15,6 +16,28 @@ export interface IngestionMetadata {
   evidenceType: EvidenceType;
   sourceFixtureReference: string;
   mapPosition: MapPosition | null;
+  permissionStatus?: PermissionStatus;
+  listingUrl?: string | null;
+  detailUrl?: string | null;
+  observedAt?: string | null;
+  sanitizerVersion?: string | null;
+  parserVersion?: string | null;
+}
+
+export interface TransportRunMetadata {
+  permissionStatus: Exclude<PermissionStatus, null>;
+  listingUrl: string;
+  maxDetails: number;
+  contentRequestLimit: number;
+  preflightRequestLimit: number;
+  dryRun: boolean;
+}
+
+export interface TransportRunCompletion {
+  preflightRequests: number;
+  contentRequests: number;
+  selectedDetailCount: number;
+  blockedCount: number;
 }
 
 export interface IngestionRecord {
@@ -63,6 +86,7 @@ export interface DatabaseStatus {
   totalJobs: number;
   fixtureDerived: number;
   fictional: number;
+  oneShotObserved: number;
   jobKorea: number;
   albamon: number;
   withCoordinates: number;
@@ -76,5 +100,12 @@ export interface DatabaseStatus {
     updated: number;
     unchanged: number;
     failed: number;
+    permissionStatus: PermissionStatus;
   }>;
+  latestOneShotRun: {
+    id: string;
+    status: string;
+    startedAt: string;
+    permissionStatus: PermissionStatus;
+  } | null;
 }

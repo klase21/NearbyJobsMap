@@ -8,18 +8,22 @@ const scalar = (database: Database.Database, sql: string): number => (database.p
 export function getDatabaseStatus(database: Database.Database, path = getDatabasePath()): DatabaseStatus {
   const appliedMigrations = listAppliedMigrations(database);
   const available = loadMigrations().map(({ version }) => version);
-  const latestRuns = database.prepare(`SELECT id, ingestion_type, status, started_at, inserted_count, updated_count, unchanged_count, failed_count
+  const latestRuns = database.prepare(`SELECT id, ingestion_type, status, started_at, inserted_count, updated_count, unchanged_count, failed_count, permission_status
     FROM ingestion_runs ORDER BY started_at DESC LIMIT 5`).all() as Array<{
       id: string; ingestion_type: IngestionType; status: string; started_at: string;
-      inserted_count: number; updated_count: number; unchanged_count: number; failed_count: number;
+      inserted_count: number; updated_count: number; unchanged_count: number; failed_count: number; permission_status: "unverified" | "blocked" | null;
     }>;
+  const latestOneShot = database.prepare(`SELECT id, status, started_at, permission_status FROM ingestion_runs
+    WHERE ingestion_type = 'jobkorea_one_shot_transport' ORDER BY started_at DESC LIMIT 1`).get() as
+    { id: string; status: string; started_at: string; permission_status: "unverified" | "blocked" | null } | undefined;
   return {
     path,
     appliedMigrations,
     pendingMigrations: available.filter((version) => !appliedMigrations.includes(version)),
     totalJobs: scalar(database, "SELECT COUNT(*) AS count FROM jobs"),
-    fixtureDerived: scalar(database, "SELECT COUNT(*) AS count FROM jobs WHERE record_kind = 'fixture_derived'"),
-    fictional: scalar(database, "SELECT COUNT(*) AS count FROM jobs WHERE record_kind = 'fictional_demo'"),
+    fixtureDerived: scalar(database, "SELECT COUNT(*) AS count FROM jobs WHERE provenance_kind = 'fixture_derived'"),
+    fictional: scalar(database, "SELECT COUNT(*) AS count FROM jobs WHERE provenance_kind = 'fictional_demo'"),
+    oneShotObserved: scalar(database, "SELECT COUNT(*) AS count FROM jobs WHERE provenance_kind = 'live_one_shot_observation'"),
     jobKorea: scalar(database, "SELECT COUNT(*) AS count FROM jobs WHERE source = 'jobkorea'"),
     albamon: scalar(database, "SELECT COUNT(*) AS count FROM jobs WHERE source = 'albamon'"),
     withCoordinates: scalar(database, `SELECT COUNT(*) AS count FROM jobs j WHERE
@@ -29,6 +33,9 @@ export function getDatabaseStatus(database: Database.Database, path = getDatabas
       (j.display_map_latitude IS NOT NULL AND j.display_map_longitude IS NOT NULL)
       OR EXISTS (SELECT 1 FROM workplaces w WHERE w.job_id = j.id AND w.latitude IS NOT NULL AND w.longitude IS NOT NULL AND w.is_headquarters_only = 0))`),
     latestRuns: latestRuns.map((run) => ({ id: run.id, ingestionType: run.ingestion_type, status: run.status, startedAt: run.started_at,
-      inserted: run.inserted_count, updated: run.updated_count, unchanged: run.unchanged_count, failed: run.failed_count })),
+      inserted: run.inserted_count, updated: run.updated_count, unchanged: run.unchanged_count, failed: run.failed_count,
+      permissionStatus: run.permission_status })),
+    latestOneShotRun: latestOneShot ? { id: latestOneShot.id, status: latestOneShot.status, startedAt: latestOneShot.started_at,
+      permissionStatus: latestOneShot.permission_status } : null,
   };
 }
