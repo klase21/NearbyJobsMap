@@ -33,8 +33,8 @@ export function AppHeader({ filters, mapVisible, onFiltersChange, onToggleFilter
           <span className="roadmap-tab" aria-label="고용24는 추후 지원 예정">고용24 · 추후 지원</span>
         </nav>
         <div className="header-actions">
-          <button type="button" className="button" onClick={onToggleFilters} aria-haspopup="dialog">필터</button>
-          <button type="button" className={`button ${mapVisible ? "primary" : "soft"}`} onClick={onToggleMap} aria-pressed={mapVisible}>
+          <button type="button" className="button" onClick={onToggleFilters} aria-haspopup="dialog" aria-controls="filter-panel">필터</button>
+          <button type="button" className={`button ${mapVisible ? "primary" : "soft"}`} onClick={onToggleMap} aria-pressed={mapVisible} aria-controls="dashboard-map">
             {mapVisible ? "지도 접기" : "지도 보기"}
           </button>
         </div>

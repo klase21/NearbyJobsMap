@@ -16,6 +16,7 @@ interface MapPanelProps {
   records: UiJobRecord[];
   selectedJobId: string | null;
   origin: UserOrigin;
+  focusRequest: number;
   onSelect(jobId: string): void;
   onOriginChange(origin: UserOrigin): void;
 }
@@ -32,7 +33,7 @@ export function MapPanel(props: MapPanelProps) {
       <div className="map-wrap" role="region" aria-label={`좌표가 있는 공고 ${mappedCount}건 지도`}>
         {mappedCount === 0 ? <div className="state-panel"><h2>지도에 표시할 좌표가 없습니다</h2><p>현재 조건의 공고는 목록에서 확인해 주세요. 주소를 좌표로 변환하지 않았습니다.</p></div>
           : <MapErrorBoundary><JobMapClient records={props.records} selectedJobId={props.selectedJobId} origin={props.origin} selectingOrigin={selectingOrigin}
-              fitRequest={fitRequest} onSelect={props.onSelect} onOriginChange={updateOrigin} onTileError={() => setTileErrors((value) => value + 1)} /></MapErrorBoundary>}
+              fitRequest={fitRequest} focusRequest={props.focusRequest} onSelect={props.onSelect} onOriginChange={updateOrigin} onTileError={() => setTileErrors((value) => value + 1)} /></MapErrorBoundary>}
         {mappedCount > 0 && <div className="map-legend" aria-label="지도 범례">
           <span className="legend-row"><span className="legend-dot" />정확 좌표</span><span className="legend-row"><span className="legend-dot estimated" />추정 위치</span>
           <span className="legend-row"><span className="legend-dot selected" />선택 공고</span><span className="legend-row"><span className="legend-dot origin" />출발지</span>

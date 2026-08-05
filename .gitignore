@@ -13,5 +13,6 @@ exports/
 cookies.json
 session.json
 playwright/.auth/
+artifacts/visual-qa/
 *.db
 *.sqlite

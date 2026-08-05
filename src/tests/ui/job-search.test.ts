@@ -42,6 +42,7 @@ describe("급여 단위 필터와 정렬", () => {
   it("일급 임계값", () => expect(filterJobs(salaries, filters({ salaryThresholds: { ...DEFAULT_FILTERS.salaryThresholds, daily: 140_000 } }), now).map((item) => item.job.id)).toEqual(["daily"]));
   it("월급 임계값", () => expect(filterJobs(salaries, filters({ salaryThresholds: { ...DEFAULT_FILTERS.salaryThresholds, monthly: 2_800_000 } }), now).map((item) => item.job.id)).toEqual(["monthly"]));
   it("연봉 임계값", () => expect(filterJobs(salaries, filters({ salaryThresholds: { ...DEFAULT_FILTERS.salaryThresholds, annual: 40_000_000 } }), now).map((item) => item.job.id)).toEqual(["annual"]));
+  it("선택하지 않은 급여 단위의 남은 임계값은 결과를 막지 않는다", () => expect(filterJobs(salaries, filters({ salaryType: "annual", salaryThresholds: { ...DEFAULT_FILTERS.salaryThresholds, hourly: 13_000 } }), now).map((item) => item.job.id)).toEqual(["annual"]));
   it("월 환산 예상금액 내림차순", () => expect(sortJobs(salaries, "normalized_monthly", DEFAULT_ORIGIN).at(-1)?.job.id).toBe("missing"));
   it("해당 단위가 없는 급여는 단위 정렬 끝", () => expect(sortJobs(salaries, "hourly", DEFAULT_ORIGIN)[0]?.job.id).toBe("hourly"));
 });
@@ -64,5 +65,13 @@ describe("거리와 선택 동기화", () => {
       { originalText: "경기 안양시", roadAddress: null, parcelAddress: null, city: "경기", district: "안양시", neighborhood: null, nearestStation: null, latitude: null, longitude: null, accuracy: "district", isHeadquartersOnly: false },
     ] });
     expect(isMapEligible(multiple)).toBe(true);
+  });
+  it("복수 근무지 거리 정렬은 가장 가까운 개별 좌표를 사용한다", () => {
+    const multiple = record({ id: "multiple-nearest", locationAccuracy: "multiple_locations", workplaceCount: 2, workplaces: [
+      { originalText: "먼 지점", roadAddress: null, parcelAddress: null, city: "서울", district: null, neighborhood: null, nearestStation: null, latitude: 37.7, longitude: 127.2, accuracy: "exact_coordinate", isHeadquartersOnly: false },
+      { originalText: "가까운 지점", roadAddress: null, parcelAddress: null, city: "경기", district: null, neighborhood: null, nearestStation: null, latitude: 37.3897, longitude: 126.9506, accuracy: "exact_coordinate", isHeadquartersOnly: false },
+    ] });
+    const medium = record({ id: "medium" }, true, [37.45, 127]);
+    expect(sortJobs([medium, multiple], "distance", DEFAULT_ORIGIN)[0]?.job.id).toBe("multiple-nearest");
   });
 });

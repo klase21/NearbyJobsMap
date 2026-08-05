@@ -34,9 +34,7 @@ export function JobCard({ record, rank, selected, origin, userStatus, onSelect, 
       <div className="job-card-top">
         <span className="rank" aria-label={`${rank}번째 공고`}>{rank}</span>
         <div>
-          <button type="button" className="action-button" onClick={onSelect} style={{ color: "inherit", padding: 0, textAlign: "left" }}>
-            <h2 className="job-title">{job.title}</h2>
-          </button>
+          <h3 className="job-title"><button type="button" className="job-title-button" onClick={onSelect}>{job.title}</button></h3>
           <p className="company">{job.companyName}</p>
         </div>
         <span className={`source-badge source-${job.source}`}>{SOURCE_LABELS[job.source as keyof typeof SOURCE_LABELS]}</span>
@@ -61,7 +59,7 @@ export function JobCard({ record, rank, selected, origin, userStatus, onSelect, 
           {job.locationAccuracy === "multiple_locations" && <div className="detail-line"><strong>복수 근무지</strong> {job.workplaceCount !== null ? `${job.workplaceCount}곳` : "개수 미확인"}{workplacePreview ? ` · ${workplacePreview}` : ""}</div>}
           {administrativeArea && <div className="detail-line"><strong>행정구역</strong> {administrativeArea}</div>}
           {job.nearestStation && <div className="detail-line"><strong>인근역</strong> {job.nearestStation}</div>}
-          <div className="detail-line"><strong>거리</strong> {distance === null ? "좌표 없음" : `${distance.toFixed(1)}km`} · 직선거리</div>
+          {distance !== null && <div className="detail-line"><strong>거리</strong> {distance.toFixed(1)}km · 직선거리</div>}
           <div className="detail-line"><strong>등록</strong> {formatDate(job.postedAt)} · <strong>마감</strong> {formatDate(job.expiresAt)}</div>
         </div>
       </div>

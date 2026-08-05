@@ -42,11 +42,15 @@ export function getRegionGroup(record: UiJobRecord): RegionGroup | null {
 function salaryThresholdMatches(record: UiJobRecord, filters: JobFilterState): boolean {
   const thresholds = filters.salaryThresholds;
   if (thresholds.normalizedMonthly > 0 && (record.job.salary.normalizedMonthlyMinimum ?? -1) < thresholds.normalizedMonthly) return false;
-  const originalActive = thresholds.hourly > 0 || thresholds.daily > 0 || thresholds.monthly > 0 || thresholds.annual > 0;
-  if (!originalActive) return true;
   const thresholdByType: Partial<Record<SalaryType, number>> = {
     hourly: thresholds.hourly, daily: thresholds.daily, monthly: thresholds.monthly, annual: thresholds.annual,
   };
+  if (filters.salaryType !== "all") {
+    const selectedThreshold = thresholdByType[filters.salaryType] ?? 0;
+    return selectedThreshold <= 0 || (record.job.salary.minimumAmount !== null && record.job.salary.minimumAmount >= selectedThreshold);
+  }
+  const originalActive = thresholds.hourly > 0 || thresholds.daily > 0 || thresholds.monthly > 0 || thresholds.annual > 0;
+  if (!originalActive) return true;
   const threshold = thresholdByType[record.job.salary.type];
   return Boolean(threshold && record.job.salary.minimumAmount !== null && record.job.salary.minimumAmount >= threshold);
 }
