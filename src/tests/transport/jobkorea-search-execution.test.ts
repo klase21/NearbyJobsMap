@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { JobKoreaDirectSearchClient } from "../../sources/jobkorea/transport/jobkorea-direct-search";
+import { emptyJobKoreaFailedResourceSummary } from "../../sources/jobkorea/transport/jobkorea-resource-diagnostics";
 import { createJobKoreaSearchExecution } from "../../sources/jobkorea/transport/jobkorea-search-execution";
 import type { JobKoreaDirectContractObservation, JobKoreaSearchExecution, JobKoreaSearchOptions } from "../../sources/jobkorea/transport/jobkorea-search-types";
 
@@ -10,7 +11,7 @@ const directObservation: JobKoreaDirectContractObservation = { endpoint: "https:
   ordinaryResultSelector: "tr.devloopArea[data-gno]", hasCookieHeader: false, hasAuthorizationHeader: false, hasTokenField: false };
 
 function fakeBrowser(available: boolean): JobKoreaSearchExecution {
-  return { transportUsed: "playwright", pages: [], consoleErrors: [], lifecycleDiagnostics: [], searchNavigationCount: 1, detailNavigationCount: 0, directRequestCount: 0,
+  return { transportUsed: "playwright", pages: [], consoleErrors: [], failedResources: emptyJobKoreaFailedResourceSummary(), lifecycleDiagnostics: [], searchNavigationCount: 1, detailNavigationCount: 0, directRequestCount: 0,
     directVerification: available ? { classification: "available", observation: directObservation,
       diagnostic: { severity: "info", code: "AVAILABLE", field: null, message: "available" } }
       : { classification: "direct_endpoint_unavailable", observation: null,

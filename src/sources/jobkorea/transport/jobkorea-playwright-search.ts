@@ -4,7 +4,8 @@ import type { ParseDiagnostic } from "../../../domain/source-contract";
 import { JobKoreaTransportError } from "./jobkorea-error";
 import { JobKoreaLifecycleTimeoutError, runBoundedLifecyclePhase, type JobKoreaLifecycleDiagnostic } from "./jobkorea-lifecycle";
 import { buildJobKoreaListingPageResult } from "./jobkorea-listing-page";
-import { captureJobKoreaPageSnapshot, JobKoreaSnapshotError } from "./jobkorea-page-snapshot";
+import { captureJobKoreaPageSnapshot, captureJobKoreaReadinessEvidence, JobKoreaSnapshotError } from "./jobkorea-page-snapshot";
+import { emptyJobKoreaFailedResourceSummary, failedResourceInputFromRequest, summarizeJobKoreaFailedResources, type JobKoreaFailedResourceInput } from "./jobkorea-resource-diagnostics";
 import { classifyJobKoreaResponse } from "./jobkorea-response-classifier";
 import { jobKoreaSearchPageUrl, normalizeJobKoreaUrl } from "./jobkorea-url-policy";
 import type { JobKoreaDirectContractObservation, JobKoreaDirectVerificationResult, JobKoreaListingPageResult, JobKoreaSearchExecution, JobKoreaSearchOptions } from "./jobkorea-search-types";
@@ -18,6 +19,7 @@ const READINESS_TIMEOUT_MS = 4_000;
 const SNAPSHOT_TIMEOUT_MS = 1_000;
 const PAGE_CLOSE_TIMEOUT_MS = 750;
 const BROWSER_CLOSE_TIMEOUT_MS = 750;
+const CONTEXT_CLOSE_TIMEOUT_MS = 750;
 const BROWSER_KILL_TIMEOUT_MS = 1_000;
 const STABILITY_DELAY_MS = 400;
 const DIRECT_PATH = "/Recruit/Home/_GI_List/";
@@ -29,6 +31,13 @@ async function closePage(page: Page, diagnostics: JobKoreaLifecycleDiagnostic[],
   } catch {
     // BrowserServer.kill is the final cleanup boundary.
   }
+}
+
+export async function closeJobKoreaBrowserContext(context: BrowserContext, diagnostics: JobKoreaLifecycleDiagnostic[]): Promise<void> {
+  try {
+    await runBoundedLifecyclePhase("browser-context-close", CONTEXT_CLOSE_TIMEOUT_MS,
+      () => context.close({ reason: "bounded JobKorea one-shot completed" }), diagnostics);
+  } catch { /* Browser close and BrowserServer.kill remain authoritative. */ }
 }
 
 function diagnostic(code: string, message: string, severity: ParseDiagnostic["severity"] = "warning"): ParseDiagnostic {
@@ -67,9 +76,14 @@ function observeDirectRequest(request: Request): JobKoreaDirectContractObservati
 }
 
 export function failedSearchPageResult(pageNumber: number, classification: "timeout" | "unexpected_page" | "direct_endpoint_unavailable" | "direct_endpoint_session_required", code: string): JobKoreaListingPageResult {
-  return { pageNumber, snapshotSchemaVersion: null, finalUrl: null, pageTitle: null, classification, extractedCount: null, ordinaryPostingCount: null, promotedPostingCount: null, rejectedCandidateCount: null,
+  return { pageNumber, snapshotSchemaVersion: null, serializedSnapshotBytes: null, finalUrl: null, pageTitle: null,
+    documentReadyState: null, readinessReason: null, readinessNumericDetailLinkCount: null, readinessOrdinaryContainerCount: null,
+    domChangedAfterReadiness: null, classificationDurationMs: null, extractionDurationMs: null,
+    classification, extractedCount: null, ordinaryPostingCount: null, promotedPostingCount: null, rejectedCandidateCount: null,
     duplicateWithinPageCount: null, uniqueNewCount: null, sourceReportsNoResults: null, validEmptyPage: false,
-    blocked: false, parserFailure: classification === "timeout" || classification === "unexpected_page", diagnostics: [diagnostic(code, `잡코리아 검색 페이지 분류: ${classification}`, "error")], candidates: [] };
+    blocked: false, parserFailure: classification === "timeout" || classification === "unexpected_page",
+    evidence: null, rejectionReasonCounts: null, diagnosticSamples: null, containerSignatures: null, containerSignaturesTruncated: null,
+    diagnostics: [diagnostic(code, `잡코리아 검색 페이지 분류: ${classification}`, "error")], candidates: [] };
 }
 
 export class JobKoreaPlaywrightSearchExecution implements JobKoreaSearchExecution {
@@ -77,11 +91,14 @@ export class JobKoreaPlaywrightSearchExecution implements JobKoreaSearchExecutio
   readonly pages: JobKoreaListingPageResult[] = [];
   readonly consoleErrors: string[] = [];
   readonly lifecycleDiagnostics: JobKoreaLifecycleDiagnostic[] = [];
+  failedResources = emptyJobKoreaFailedResourceSummary();
   directVerification: JobKoreaDirectVerificationResult = unavailableDirectVerification();
   private server: BrowserServer | null = null;
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private detailNavigations = 0;
+  private readonly failedResourceInputs: JobKoreaFailedResourceInput[] = [];
+  private snapshotCompleted = false;
 
   get searchNavigationCount(): number { return this.pages.length; }
   get detailNavigationCount(): number { return this.detailNavigations; }
@@ -115,18 +132,23 @@ export class JobKoreaPlaywrightSearchExecution implements JobKoreaSearchExecutio
           () => this.context!.newPage(), this.lifecycleDiagnostics);
         page.on("console", (message) => { if (message.type() === "error") this.consoleErrors.push(message.text().slice(0, 500)); });
         page.on("pageerror", (error) => this.consoleErrors.push(error.message.slice(0, 500)));
+        page.on("requestfailed", (request) => this.failedResourceInputs.push(failedResourceInputFromRequest(request)));
         page.on("request", (request) => { observedDirect ??= observeDirectRequest(request); });
         await runBoundedLifecyclePhase(`page-${pageNumber}-navigation`, NAVIGATION_TIMEOUT_MS + 250,
           () => page!.goto(jobKoreaSearchPageUrl(this.options.searchUrl, pageNumber as 1 | 2), { waitUntil: "commit", timeout: NAVIGATION_TIMEOUT_MS }).then(() => undefined),
           this.lifecycleDiagnostics);
-        await runBoundedLifecyclePhase(`page-${pageNumber}-readiness`, READINESS_TIMEOUT_MS + 250, () => page!.waitForFunction(() => {
+        const readiness = await runBoundedLifecyclePhase(`page-${pageNumber}-readiness`, READINESS_TIMEOUT_MS + 250, async () => {
+          await page!.waitForFunction(() => {
           const text = document.body?.innerText ?? "";
           return Boolean(document.querySelector('a[href*="/Recruit/GI_Read"]'))
             || /검색\s*결과가\s*없|채용정보가\s*없|로그인|CAPTCHA|자동입력\s*방지|Access\s*Denied|접근이\s*차단/.test(text);
-        }, undefined, { timeout: READINESS_TIMEOUT_MS }).then(() => undefined), this.lifecycleDiagnostics);
+          }, undefined, { timeout: READINESS_TIMEOUT_MS });
+          return captureJobKoreaReadinessEvidence(page!);
+        }, this.lifecycleDiagnostics);
         await page.waitForTimeout(STABILITY_DELAY_MS);
         const snapshot = await runBoundedLifecyclePhase(`page-${pageNumber}-snapshot`, SNAPSHOT_TIMEOUT_MS,
-          () => captureJobKoreaPageSnapshot(page!), this.lifecycleDiagnostics);
+          () => captureJobKoreaPageSnapshot(page!, readiness), this.lifecycleDiagnostics);
+        this.snapshotCompleted = snapshot.extractionCompleted;
         const result = buildJobKoreaListingPageResult(snapshot, pageNumber, globalSeen);
         this.pages.push(result);
         if (result.blocked || result.parserFailure) break;
@@ -140,6 +162,7 @@ export class JobKoreaPlaywrightSearchExecution implements JobKoreaSearchExecutio
         if (page) await closePage(page, this.lifecycleDiagnostics, `page-${pageNumber}-close`);
       }
     }
+    this.failedResources = summarizeJobKoreaFailedResources(this.failedResourceInputs, this.snapshotCompleted ? false : null);
     this.directVerification = verifyDirectObservation(observedDirect);
     return this;
   }
@@ -152,6 +175,7 @@ export class JobKoreaPlaywrightSearchExecution implements JobKoreaSearchExecutio
     const page = await this.context.newPage();
     page.on("console", (message) => { if (message.type() === "error") this.consoleErrors.push(message.text().slice(0, 500)); });
     page.on("pageerror", (error) => this.consoleErrors.push(error.message.slice(0, 500)));
+    page.on("requestfailed", (request) => this.failedResourceInputs.push(failedResourceInputFromRequest(request)));
     try {
       const response = await page.goto(url, { waitUntil: "commit", timeout: NAVIGATION_TIMEOUT_MS });
       await page.waitForFunction(() => /"@type"\s*:\s*"JobPosting"|마감되었습니다|로그인|CAPTCHA|Access\s*Denied/.test(document.documentElement.innerHTML), undefined, { timeout: READINESS_TIMEOUT_MS });
@@ -169,6 +193,10 @@ export class JobKoreaPlaywrightSearchExecution implements JobKoreaSearchExecutio
   }
 
   async close(): Promise<void> {
+    if (this.context) {
+      await closeJobKoreaBrowserContext(this.context, this.lifecycleDiagnostics);
+      this.context = null;
+    }
     if (this.browser) {
       try {
         await runBoundedLifecyclePhase("browser-close", BROWSER_CLOSE_TIMEOUT_MS,
@@ -181,7 +209,6 @@ export class JobKoreaPlaywrightSearchExecution implements JobKoreaSearchExecutio
           () => this.server!.kill(), this.lifecycleDiagnostics);
       } catch { /* The internal deadline still returns the structured result. */ }
     }
-    this.context = null;
     this.browser = null;
     this.server = null;
   }

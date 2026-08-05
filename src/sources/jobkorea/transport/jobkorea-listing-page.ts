@@ -23,7 +23,9 @@ export function classifyJobKoreaRenderedPage(snapshot: JobKoreaPageSnapshot): Jo
 }
 
 export function buildJobKoreaListingPageResult(snapshot: JobKoreaPageSnapshot, pageNumber: number, globalSeen = new Set<string>()): JobKoreaListingPageResult {
+  const classificationStartedAt = performance.now();
   const classification = classifyJobKoreaRenderedPage(snapshot);
+  const classificationDurationMs = Math.max(0, performance.now() - classificationStartedAt);
   const diagnostics: ParseDiagnostic[] = snapshot.diagnostics.map(({ code, message }) => diagnostic(code, message,
     code === "JOBKOREA_SNAPSHOT_EVALUATION_FAILED" ? "error" : "warning"));
   const candidates: JobKoreaListingCandidate[] = [];
@@ -58,7 +60,13 @@ export function buildJobKoreaListingPageResult(snapshot: JobKoreaPageSnapshot, p
   }
   const parserFailure = classification === "malformed_results" || classification === "unexpected_page" || (classification === "valid_search_results" && candidates.length === 0);
   return {
-    pageNumber, snapshotSchemaVersion: snapshot.schemaVersion, finalUrl: snapshot.finalUrl, pageTitle: snapshot.pageTitle, classification,
+    pageNumber, snapshotSchemaVersion: snapshot.schemaVersion, serializedSnapshotBytes: snapshot.serializedSnapshotBytes,
+    finalUrl: snapshot.finalUrl, pageTitle: snapshot.pageTitle, documentReadyState: snapshot.documentReadyState,
+    readinessReason: snapshot.readiness?.reason ?? null,
+    readinessNumericDetailLinkCount: snapshot.readiness?.numericDetailLinkCount ?? null,
+    readinessOrdinaryContainerCount: snapshot.readiness?.ordinaryContainerCount ?? null,
+    domChangedAfterReadiness: snapshot.domChangedAfterReadiness, classificationDurationMs,
+    extractionDurationMs: snapshot.extractionDurationMs, classification,
     extractedCount: countsMeasured ? snapshot.evidence.allNumericDetailLinkCount : null,
     ordinaryPostingCount: countsMeasured ? snapshot.evidence.ordinaryDetailLinkCount : null,
     promotedPostingCount: countsMeasured ? snapshot.evidence.promotedDetailLinkCount : null,
@@ -66,6 +74,11 @@ export function buildJobKoreaListingPageResult(snapshot: JobKoreaPageSnapshot, p
     duplicateWithinPageCount, uniqueNewCount,
     sourceReportsNoResults: countsMeasured ? (snapshot.evidence.noResultMarkerCount ?? 0) > 0 : null,
     validEmptyPage: classification === "valid_empty_results", blocked: blockedClassifications.has(classification), parserFailure,
+    evidence: countsMeasured ? snapshot.evidence : null,
+    rejectionReasonCounts: countsMeasured ? snapshot.rejectionReasonCounts : null,
+    diagnosticSamples: countsMeasured ? snapshot.diagnosticSamples : null,
+    containerSignatures: countsMeasured ? snapshot.containerSignatures : null,
+    containerSignaturesTruncated: countsMeasured ? snapshot.containerSignaturesTruncated : null,
     diagnostics, candidates,
   };
 }

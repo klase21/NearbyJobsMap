@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import type { BrowserContext } from "playwright";
 import {
   JOBKOREA_PAGE1_COMMAND_BUDGET_MS,
   JobKoreaLifecycleTimeoutError,
   runBoundedLifecyclePhase,
   type JobKoreaLifecycleDiagnostic,
 } from "../../sources/jobkorea/transport/jobkorea-lifecycle";
+import { closeJobKoreaBrowserContext } from "../../sources/jobkorea/transport/jobkorea-playwright-search";
 
 describe("잡코리아 Playwright lifecycle deadline", () => {
   it("완료 단계의 이름과 시간을 구조화해 기록한다", async () => {
@@ -36,5 +38,13 @@ describe("잡코리아 Playwright lifecycle deadline", () => {
       code: "JOBKOREA_SNAPSHOT_VALIDATION_FAILED",
       message: "snapshot failed",
     });
+  });
+
+  it("context close를 독립 phase timing으로 기록한다", async () => {
+    const diagnostics: JobKoreaLifecycleDiagnostic[] = [];
+    const context = { close: async () => undefined } as unknown as BrowserContext;
+    await closeJobKoreaBrowserContext(context, diagnostics);
+    expect(diagnostics).toEqual([{ phase: "browser-context-close", status: "completed",
+      elapsedMs: expect.any(Number), code: null, message: null }]);
   });
 });

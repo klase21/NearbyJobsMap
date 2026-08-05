@@ -10,16 +10,27 @@ import {
 } from "../../sources/jobkorea/transport/jobkorea-page-snapshot";
 import type { JobKoreaPageSnapshot } from "../../sources/jobkorea/transport/jobkorea-search-types";
 
-const validSnapshot = (): JobKoreaPageSnapshot => ({
-  schemaVersion: 1, finalUrl: "https://www.jobkorea.co.kr/Search?stext=AI&Page_No=1", pageTitle: "가상 검색",
-  readyState: "complete", extractionCompleted: true,
-  evidence: { ordinaryContainerCount: 1, ordinaryDetailLinkCount: 1, allNumericDetailLinkCount: 1,
-    promotedContainerCount: 0, promotedDetailLinkCount: 0, rejectedDetailLinkCount: 0, noResultMarkerCount: 0,
+const rawSnapshot = (): JobKoreaPageSnapshot => ({
+  schemaVersion: 2, serializedSnapshotBytes: 0,
+  finalUrl: "https://www.jobkorea.co.kr/Search?stext=AI&Page_No=1", pageTitle: "가상 검색",
+  documentReadyState: "complete", extractionCompleted: true, extractionDurationMs: 1,
+  readiness: { reason: "numeric_detail_link", numericDetailLinkCount: 1, ordinaryContainerCount: 1 },
+  domChangedAfterReadiness: false,
+  evidence: { ordinaryContainerCount: 1, ordinaryRowCount: 1, resultRootCount: 1, knownTableResultCount: 1,
+    knownListResultCount: 0, knownCardResultCount: 0, numericLinksInsideKnownTableResults: 1,
+    numericLinksInsideKnownListResults: 0, numericLinksInsideKnownCardResults: 0, ordinaryDetailLinkCount: 1, allNumericDetailLinkCount: 1,
+    promotedContainerCount: 0, recommendationContainerCount: 0, recentViewContainerCount: 0,
+    promotedDetailLinkCount: 0, rejectedDetailLinkCount: 0, numericLinksInsideKnownResultRoots: 1,
+    numericLinksOutsideKnownResultRoots: 0, noResultMarkerCount: 0,
     loginMarkerCount: 0, captchaMarkerCount: 0, verificationMarkerCount: 0, accessDeniedMarkerCount: 0 },
+  rejectionReasonCounts: {},
   ordinaryCandidates: [{ postingId: "50000001", href: "https://www.jobkorea.co.kr/Recruit/GI_Read/50000001",
     title: "가상 공고", companyName: "가상회사", position: 1, rowId: "50000001", sourceSelector: "tr.devloopArea[data-gno]" }],
-  promotedCandidates: [], rejectedCandidates: [], diagnostics: [],
+  promotedCandidates: [], rejectedCandidates: [],
+  diagnosticSamples: { ordinary: [], promoted: [], rejected: [], ordinaryTruncated: false, promotedTruncated: false, rejectedTruncated: false },
+  containerSignatures: [], containerSignaturesTruncated: false, diagnostics: [],
 });
+const validSnapshot = (): JobKoreaPageSnapshot => validateAndRoundTripJobKoreaSnapshot(rawSnapshot());
 
 describe("잡코리아 snapshot JSON-safe contract", () => {
   it("page realm evaluator는 tsx helper나 TypeScript 문법이 없는 self-contained JavaScript다", () => {
@@ -32,6 +43,7 @@ describe("잡코리아 snapshot JSON-safe contract", () => {
   it("valid snapshot은 JSON round-trip 후 동일한 plain object다", () => {
     const result = validateAndRoundTripJobKoreaSnapshot(validSnapshot());
     expect(result).toEqual(validSnapshot());
+    expect(result.serializedSnapshotBytes).toBe(Buffer.byteLength(JSON.stringify(result), "utf8"));
     expect(JSON.stringify(result)).not.toContain("undefined");
   });
 
@@ -60,8 +72,27 @@ describe("잡코리아 snapshot JSON-safe contract", () => {
     expect(() => validateAndRoundTripJobKoreaSnapshot(validSnapshot(), 100)).toThrowError(expect.objectContaining({ code: "JOBKOREA_SNAPSHOT_TOO_LARGE" }));
   });
 
+  it("rejection reason aggregate 합계와 deterministic key order를 검증한다", () => {
+    const mismatch = { ...rawSnapshot(), evidence: { ...rawSnapshot().evidence, rejectedDetailLinkCount: 1 } };
+    expect(() => validateAndRoundTripJobKoreaSnapshot(mismatch)).toThrowError(expect.objectContaining({ code: "JOBKOREA_REJECTION_COUNT_MISMATCH" }));
+    const unordered = { ...rawSnapshot(), evidence: { ...rawSnapshot().evidence, rejectedDetailLinkCount: 2 },
+      rejectionReasonCounts: { OUTSIDE_RESULT_ROOT: 1, ANCESTOR_SIGNATURE_UNRECOGNIZED: 1 },
+      rejectedCandidates: [
+        { postingId: "1", href: "https://www.jobkorea.co.kr/Recruit/GI_Read/1", reason: "OUTSIDE_RESULT_ROOT" },
+        { postingId: "2", href: "https://www.jobkorea.co.kr/Recruit/GI_Read/2", reason: "ANCESTOR_SIGNATURE_UNRECOGNIZED" },
+      ] };
+    expect(() => validateAndRoundTripJobKoreaSnapshot(unordered)).toThrowError(expect.objectContaining({ code: "JOBKOREA_SNAPSHOT_V2_VALIDATION_FAILED" }));
+  });
+
+  it("UNKNOWN_REJECTION fallback을 machine-readable reason으로 허용한다", () => {
+    const value = validateAndRoundTripJobKoreaSnapshot({ ...rawSnapshot(), evidence: { ...rawSnapshot().evidence, rejectedDetailLinkCount: 1 },
+      rejectionReasonCounts: { UNKNOWN_REJECTION: 1 },
+      rejectedCandidates: [{ postingId: "9", href: "https://www.jobkorea.co.kr/Recruit/GI_Read/9", reason: "UNKNOWN_REJECTION" }] });
+    expect(value.rejectionReasonCounts).toEqual({ UNKNOWN_REJECTION: 1 });
+  });
+
   it.each([
-    { ...validSnapshot(), schemaVersion: 2 },
+    { ...validSnapshot(), schemaVersion: 1 },
     { ...validSnapshot(), evidence: { ...validSnapshot().evidence, ordinaryDetailLinkCount: -1 } },
     { ...validSnapshot(), ordinaryCandidates: [{ ...validSnapshot().ordinaryCandidates[0]!, postingId: "bad" }] },
   ])("malformed snapshot shape를 runtime validation에서 거부한다", (value) => {
@@ -69,8 +100,9 @@ describe("잡코리아 snapshot JSON-safe contract", () => {
   });
 
   it("완료되지 않은 snapshot의 unknown counts는 null이어야 한다", () => {
-    const incomplete = { ...validSnapshot(), extractionCompleted: false,
-      evidence: Object.fromEntries(Object.keys(validSnapshot().evidence).map((key) => [key, null])), ordinaryCandidates: [] };
+    const incomplete = validateAndRoundTripJobKoreaSnapshot({ ...rawSnapshot(), extractionCompleted: false,
+      extractionDurationMs: null, evidence: Object.fromEntries(Object.keys(rawSnapshot().evidence).map((key) => [key, null])),
+      ordinaryCandidates: [], readiness: null, domChangedAfterReadiness: null });
     expect(validateJobKoreaPageSnapshot(incomplete)).toMatchObject({ extractionCompleted: false,
       evidence: { ordinaryDetailLinkCount: null, promotedDetailLinkCount: null } });
   });
@@ -91,6 +123,6 @@ describe("잡코리아 snapshot JSON-safe contract", () => {
 
   it("page.evaluate가 반환한 malformed shape는 validation diagnostic으로 거부한다", async () => {
     const page = { evaluate: async () => ({ ...validSnapshot(), schemaVersion: 999 }) } as unknown as Page;
-    await expect(captureJobKoreaPageSnapshot(page)).rejects.toMatchObject({ code: "JOBKOREA_SNAPSHOT_RESULT_MALFORMED" });
+    await expect(captureJobKoreaPageSnapshot(page)).rejects.toMatchObject({ code: "JOBKOREA_SNAPSHOT_SCHEMA_VERSION_UNSUPPORTED" });
   });
 });

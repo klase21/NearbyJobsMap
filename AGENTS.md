@@ -83,6 +83,10 @@
 - JobKorea page snapshot은 schema version과 256 KiB 직렬화 상한을 유지하며 raw HTML이나 전체 본문을 포함하지 않는다.
 - snapshot이 완성되지 않은 후보 수는 `0`으로 바꾸지 않고 `null`/unknown으로 유지한다.
 - 추천 영역만의 링크나 전역 numeric detail-link 존재만으로 ordinary search result를 판정하지 않는다.
+- 거절된 numeric detail-link에는 정확히 하나의 기계 판독 가능한 primary reason을 부여하고, sample이 잘려도 사유별 aggregate 합계는 완전하게 유지한다.
+- container·ancestor signature는 JSON-safe 최소 필드만 보존하고 ancestor `textContent`, raw HTML, style, DOM 객체를 포함하지 않는다.
+- synthetic card·list·div 구조는 source 증거가 아니다. production ordinary selector는 실제 관찰 또는 기존 기록 근거 없이 추가하지 않는다.
+- diagnostic sample, ancestor depth, container summary, data-attribute allowlist와 snapshot byte cap을 임의로 확대하지 않는다.
 - JobKorea synthetic browser 테스트는 외부 네트워크 없이 실행한다.
 - 실제 source 검증은 별도 승인된 bounded run 한 번으로 제한하며 자동 재시도하지 않는다.
 - listing snapshot 추출이 실제로 검증되기 전에는 detail navigation을 추가하지 않는다.

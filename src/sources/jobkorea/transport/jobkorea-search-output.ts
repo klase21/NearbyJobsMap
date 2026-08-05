@@ -15,12 +15,27 @@ export function formatJobKoreaSearchResult(result: JobKoreaSearchOneShotResult, 
   ];
   for (const page of result.pageResults) {
     lines.push(`page=${page.pageNumber} classification=${page.classification} extracted=${measured(page.extractedCount)} ordinary=${measured(page.ordinaryPostingCount)} promoted=${measured(page.promotedPostingCount)} rejected=${measured(page.rejectedCandidateCount)} within_page_duplicates=${measured(page.duplicateWithinPageCount)} unique_new=${measured(page.uniqueNewCount)} valid_empty=${page.validEmptyPage}`);
-    lines.push(`  snapshot_schema=${page.snapshotSchemaVersion ?? "unknown"} final_url=${page.finalUrl ?? "unknown"} page_title=${page.pageTitle ?? "unknown"}`);
+    lines.push(`  snapshot_schema=${page.snapshotSchemaVersion ?? "unknown"} bytes=${measured(page.serializedSnapshotBytes)} ready_state=${page.documentReadyState ?? "unknown"} final_url=${page.finalUrl ?? "unknown"} page_title=${page.pageTitle ?? "unknown"}`);
+    lines.push(`  readiness=${page.readinessReason ?? "unknown"} readiness_numeric=${measured(page.readinessNumericDetailLinkCount)} snapshot_numeric=${measured(page.extractedCount)} readiness_ordinary_containers=${measured(page.readinessOrdinaryContainerCount)} dom_changed=${page.domChangedAfterReadiness ?? "unknown"}`);
+    lines.push(`  timing classification_ms=${page.classificationDurationMs ?? "unknown"} extraction_ms=${page.extractionDurationMs ?? "unknown"}`);
+    if (page.evidence) lines.push(`  containers ordinary=${measured(page.evidence.ordinaryContainerCount)} rows=${measured(page.evidence.ordinaryRowCount)} roots=${measured(page.evidence.resultRootCount)} tables=${measured(page.evidence.knownTableResultCount)}/${measured(page.evidence.numericLinksInsideKnownTableResults)} lists=${measured(page.evidence.knownListResultCount)}/${measured(page.evidence.numericLinksInsideKnownListResults)} cards=${measured(page.evidence.knownCardResultCount)}/${measured(page.evidence.numericLinksInsideKnownCardResults)} promoted=${measured(page.evidence.promotedContainerCount)} recommendation=${measured(page.evidence.recommendationContainerCount)} recent=${measured(page.evidence.recentViewContainerCount)} inside_roots=${measured(page.evidence.numericLinksInsideKnownResultRoots)} outside_roots=${measured(page.evidence.numericLinksOutsideKnownResultRoots)}`);
     lines.push(`  first_ids=${page.candidates.length ? page.candidates.slice(0, 3).map(({ sourcePostingId }) => sourcePostingId).join(",") : page.extractedCount === null ? "unknown" : "none"}`);
+    if (options.diagnostic && page.rejectionReasonCounts && Object.keys(page.rejectionReasonCounts).length) {
+      lines.push("  rejected reasons:");
+      for (const [reason, count] of Object.entries(page.rejectionReasonCounts)) lines.push(`  - ${reason}: ${count}`);
+    }
+    if (options.diagnostic && page.containerSignatures?.length) {
+      lines.push("  dominant container signatures:");
+      for (const item of page.containerSignatures.slice(0, 5)) lines.push(`  - ${item.signatureKey}: ${item.count} (ordinary=${item.candidateClassifications.ordinary}, promoted=${item.candidateClassifications.promoted}, rejected=${item.candidateClassifications.rejected})`);
+    }
   }
   lines.push(`선택=${result.selectedCandidates} 전역중복=${result.globalDuplicateCount} 삽입=${result.inserted} 갱신=${result.updated} 변경없음=${result.unchanged} 실패=${result.failed} 차단=${result.blocked}`);
   lines.push(`direct 검증: ${result.directVerification.classification} (${result.directVerification.diagnostic.code})`);
   lines.push(`source console errors: ${result.consoleErrors.length}`);
+  lines.push(`failed resources: ${result.failedResources.totalCount} prevented_readiness_or_extraction=${result.failedResources.preventedReadinessOrExtraction ?? "unknown"}`);
+  if (options.diagnostic && Object.keys(result.failedResources.typeCounts).length) {
+    lines.push(`failed resource types: ${Object.entries(result.failedResources.typeCounts).map(([type, count]) => `${type}=${count}`).join(" ")}`);
+  }
   for (const detail of result.details) lines.push(`- ${detail.sourcePostingId ?? "unknown"} result=${detail.result} diagnostics=${detail.diagnosticCodes.join(",") || "none"}`);
   lines.push(`Run ID: ${result.runId ?? "dry-run (DB 기록 없음)"}`);
   lines.push(`Elapsed: ${result.elapsedMs}ms / ${result.internalBudgetMs}ms`);

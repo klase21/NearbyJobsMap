@@ -25,4 +25,29 @@ export const syntheticJobKoreaPages = {
     <a href="/Recruit/GI_Read/50000004">가상 추천 1</a><a href="/Recruit/GI_Read/50000005">가상 추천 2</a>
     </section></main>`),
   nonHtmlAnchor: document(`<main class="recruit-list"><svg><a href="/Recruit/GI_Read/50000006"><text>가상 SVG 링크</text></a></svg></main>`),
+  newCardBased: document(`<main data-section="recruit-search-results"><div class="results-grid">
+    <article class="recruit-card" data-gno="50001001"><a class="posting-link primary" data-type="job" href="/Recruit/GI_Read/50001001">가상 카드 공고</a></article>
+  </div></main>`),
+  listItemBased: document(`<main data-section="recruit-search-results"><ul class="job-list">
+    <li class="job-item" data-gno="50001002"><a href="/Recruit/GI_Read/50001002">가상 목록 공고</a></li>
+  </ul></main>`),
+  genericNestedDiv: document(`<main data-section="recruit-search-results"><div class="search-shell" data-tab="recruit">
+    <div class="result-group" data-section="jobs"><div class="unknown-card" data-recruit-no="50001003">
+      <a data-type="posting" href="/Recruit/GI_Read/50001003">가상 중첩 공고</a>
+    </div></div></div></main>`),
+  promotedAndUnknownCards: document(`<main data-section="recruit-search-results"><div class="results-grid">
+    <article class="ad-card" data-gno="50001004">AD <a href="/Recruit/GI_Read/50001004">가상 광고</a></article>
+    <article class="unknown-card" data-gno="50001005"><a href="/Recruit/GI_Read/50001005">가상 미확인 카드</a></article>
+  </div></main>`),
+  outsideResultRoot: document(`<div class="detached-widget"><a href="/Recruit/GI_Read/50001006">가상 루트 밖 공고</a></div>`),
+  measuredShape88: document(`<main data-section="synthetic-measured-shape"><div class="synthetic-grid">
+    ${Array.from({ length: 28 }, (_, index) => `<article class="ad-card" data-gno="${51000000 + index}">AD <a href="/Recruit/GI_Read/${51000000 + index}">가상 광고</a></article>`).join("")}
+    ${Array.from({ length: 60 }, (_, index) => `<article class="synthetic-unknown-card" data-gno="${52000000 + index}"><a href="/Recruit/GI_Read/${52000000 + index}">가상 미확인 공고</a></article>`).join("")}
+  </div></main>`),
+  signatureSanitization: document(`<main data-section="recruit-search-results"><article class="zeta alpha beta gamma delta epsilon eta theta iota kappa" data-gno="50002001" data-track="${"x".repeat(150)}" data-secret="must-not-cross">
+    <a class="zeta alpha beta gamma delta epsilon eta theta iota" data-type="posting" data-secret="hidden" href="/Recruit/GI_Read/50002001">민감하지 않은 가상 제목</a>
+  </article></main>`),
+  manyContainerSignatures: document(`<main data-section="recruit-search-results">${Array.from({ length: 25 }, (_, index) =>
+    `<article class="unknown-shape-${index}" data-gno="${53000000 + index}"><a href="/Recruit/GI_Read/${53000000 + index}">가상 공고</a></article>`).join("")}</main>`),
+  deepAncestors: document(`<main data-section="recruit-search-results">${"<div>".repeat(12)}<a href="/Recruit/GI_Read/54000001">가상 공고</a>${"</div>".repeat(12)}</main>`),
 } as const;

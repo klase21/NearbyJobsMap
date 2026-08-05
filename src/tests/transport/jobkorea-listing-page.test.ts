@@ -1,20 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildJobKoreaListingPageResult, classifyJobKoreaRenderedPage } from "../../sources/jobkorea/transport/jobkorea-listing-page";
 import { failedSearchPageResult } from "../../sources/jobkorea/transport/jobkorea-playwright-search";
-import type { JobKoreaPageSnapshot, JobKoreaSnapshotOrdinaryCandidate } from "../../sources/jobkorea/transport/jobkorea-search-types";
-
-const candidate = (id: string, overrides: Partial<JobKoreaSnapshotOrdinaryCandidate> = {}): JobKoreaSnapshotOrdinaryCandidate => ({
-  postingId: id, href: `https://www.jobkorea.co.kr/Recruit/GI_Read/${id}?logpath=x`, title: `공고 ${id}`,
-  companyName: `회사 ${id}`, position: 1, rowId: id, sourceSelector: "tr.devloopArea[data-gno]", ...overrides,
-});
-const snapshot = (ordinaryCandidates: JobKoreaSnapshotOrdinaryCandidate[], overrides: Partial<JobKoreaPageSnapshot> = {}): JobKoreaPageSnapshot => ({
-  schemaVersion: 1, finalUrl: "https://www.jobkorea.co.kr/Search?stext=AI&Page_No=1", pageTitle: "검색", readyState: "complete",
-  extractionCompleted: true, evidence: { ordinaryContainerCount: ordinaryCandidates.length, ordinaryDetailLinkCount: ordinaryCandidates.length,
-    allNumericDetailLinkCount: ordinaryCandidates.length, promotedContainerCount: 0, promotedDetailLinkCount: 0,
-    rejectedDetailLinkCount: 0, noResultMarkerCount: 0, loginMarkerCount: 0, captchaMarkerCount: 0,
-    verificationMarkerCount: 0, accessDeniedMarkerCount: 0 }, ordinaryCandidates,
-  promotedCandidates: [], rejectedCandidates: [], diagnostics: [], ...overrides,
-});
+import type { JobKoreaPageSnapshot } from "../../sources/jobkorea/transport/jobkorea-search-types";
+import { jobKoreaCandidate as candidate, jobKoreaSnapshot as snapshot } from "./jobkorea-snapshot-test-factory";
 
 describe("잡코리아 browser listing classification", () => {
   it("ordinary candidates를 source 순서와 canonical URL로 만든다", () => {
@@ -36,16 +24,16 @@ describe("잡코리아 browser listing classification", () => {
   });
 
   it("explicit no-result만 valid empty로 분류한다", () => {
-    const input = snapshot([], { evidence: { ...snapshot([]).evidence, noResultMarkerCount: 1 } });
+    const input = snapshot([], { evidence: { noResultMarkerCount: 1 } });
     expect(buildJobKoreaListingPageResult(input, 1)).toMatchObject({ classification: "valid_empty_results", validEmptyPage: true, parserFailure: false });
   });
 
   it.each([
-    ["login_redirect", snapshot([], { evidence: { ...snapshot([]).evidence, loginMarkerCount: 1 } })],
-    ["captcha_page", snapshot([], { evidence: { ...snapshot([]).evidence, captchaMarkerCount: 1 } })],
-    ["verification_page", snapshot([], { evidence: { ...snapshot([]).evidence, verificationMarkerCount: 1 } })],
-    ["access_denied", snapshot([], { evidence: { ...snapshot([]).evidence, accessDeniedMarkerCount: 1 } })],
-    ["malformed_results", snapshot([], { evidence: { ...snapshot([]).evidence, ordinaryContainerCount: 1 } })],
+    ["login_redirect", snapshot([], { evidence: { loginMarkerCount: 1 } })],
+    ["captcha_page", snapshot([], { evidence: { captchaMarkerCount: 1 } })],
+    ["verification_page", snapshot([], { evidence: { verificationMarkerCount: 1 } })],
+    ["access_denied", snapshot([], { evidence: { accessDeniedMarkerCount: 1 } })],
+    ["malformed_results", snapshot([], { evidence: { ordinaryContainerCount: 1 } })],
     ["unexpected_page", snapshot([])],
   ] as const)("%s 페이지를 empty로 오인하지 않는다", (classification, input) => {
     expect(classifyJobKoreaRenderedPage(input)).toBe(classification);
@@ -53,7 +41,7 @@ describe("잡코리아 browser listing classification", () => {
   });
 
   it("snapshot 미완료와 timeout의 counts는 unknown null이다", () => {
-    const incomplete = snapshot([], { extractionCompleted: false,
+    const incomplete = snapshot([], { extractionCompleted: false, extractionDurationMs: null, readiness: null, domChangedAfterReadiness: null,
       evidence: Object.fromEntries(Object.keys(snapshot([]).evidence).map((key) => [key, null])) as JobKoreaPageSnapshot["evidence"] });
     expect(buildJobKoreaListingPageResult(incomplete, 1)).toMatchObject({ classification: "malformed_results", extractedCount: null, ordinaryPostingCount: null });
     expect(failedSearchPageResult(1, "timeout", "JOBKOREA_PLAYWRIGHT_TIMEOUT"))

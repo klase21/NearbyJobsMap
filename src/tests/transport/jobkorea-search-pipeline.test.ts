@@ -4,9 +4,11 @@ import { JobKoreaHttpClient } from "../../sources/jobkorea/transport/jobkorea-ht
 import { buildJobKoreaListingPageResult } from "../../sources/jobkorea/transport/jobkorea-listing-page";
 import { runJobKoreaSearchOneShot } from "../../sources/jobkorea/transport/jobkorea-search-one-shot";
 import { formatJobKoreaSearchResult } from "../../sources/jobkorea/transport/jobkorea-search-output";
-import type { JobKoreaListingPageResult, JobKoreaPageSnapshot, JobKoreaSearchExecution, JobKoreaSearchOptions } from "../../sources/jobkorea/transport/jobkorea-search-types";
+import type { JobKoreaListingPageResult, JobKoreaSearchExecution, JobKoreaSearchOptions } from "../../sources/jobkorea/transport/jobkorea-search-types";
 import { createTestDatabase, type TestDatabase } from "../db/test-database";
 import { detailHtml, robotsAllow } from "./jobkorea-test-responses";
+import { emptyJobKoreaFailedResourceSummary } from "../../sources/jobkorea/transport/jobkorea-resource-diagnostics";
+import { jobKoreaCandidate, jobKoreaSnapshot } from "./jobkorea-snapshot-test-factory";
 
 let testDatabase: TestDatabase | null = null;
 afterEach(() => { testDatabase?.cleanup(); testDatabase = null; });
@@ -17,20 +19,16 @@ const directVerification = { classification: "direct_endpoint_unavailable" as co
   diagnostic: { severity: "warning" as const, code: "JOBKOREA_DIRECT_ENDPOINT_UNAVAILABLE", field: null, message: "미관찰" } };
 
 function page(ids: string[], pageNumber = 1, globalSeen = new Set<string>()): JobKoreaListingPageResult {
-  const snapshot: JobKoreaPageSnapshot = { schemaVersion: 1, finalUrl: `${searchUrl.replace("Page_No=1", `Page_No=${pageNumber}`)}`,
-    pageTitle: "검색", readyState: "complete", extractionCompleted: true,
-    evidence: { ordinaryContainerCount: ids.length, ordinaryDetailLinkCount: ids.length, allNumericDetailLinkCount: ids.length,
-      promotedContainerCount: 0, promotedDetailLinkCount: 0, rejectedDetailLinkCount: 0, noResultMarkerCount: 0,
-      loginMarkerCount: 0, captchaMarkerCount: 0, verificationMarkerCount: 0, accessDeniedMarkerCount: 0 },
-    ordinaryCandidates: ids.map((id, index) => ({ postingId: id, href: `https://www.jobkorea.co.kr/Recruit/GI_Read/${id}`,
-      title: `공고 ${id}`, companyName: `회사 ${id}`, position: index + 1, rowId: id, sourceSelector: "tr.devloopArea[data-gno]" })),
-    promotedCandidates: [], rejectedCandidates: [], diagnostics: [] };
+  const snapshot = jobKoreaSnapshot(ids.map((id, index) => jobKoreaCandidate(id, {
+    href: `https://www.jobkorea.co.kr/Recruit/GI_Read/${id}`, position: index + 1,
+  })), { finalUrl: searchUrl.replace("Page_No=1", `Page_No=${pageNumber}`) });
   return buildJobKoreaListingPageResult(snapshot, pageNumber, globalSeen);
 }
 
 class FakeExecution implements JobKoreaSearchExecution {
   readonly transportUsed = "playwright" as const;
   readonly consoleErrors: string[] = [];
+  readonly failedResources = emptyJobKoreaFailedResourceSummary();
   readonly lifecycleDiagnostics = [];
   readonly directVerification = directVerification;
   readonly directRequestCount = 0;
@@ -59,6 +57,10 @@ describe("잡코리아 browser search → parser → SQLite pipeline", () => {
     const result = await runJobKoreaSearchOneShot(options(), { database: testDatabase.database, httpClient: robotsClient(), createExecution: async () => execution,
       now: () => new Date("2026-08-05T00:00:00Z") });
     expect(result).toMatchObject({ status: "completed", searchNavigations: 1, detailNavigations: 3, inserted: 3, failed: 0 });
+    const diagnosticOutput = formatJobKoreaSearchResult(result, options({ diagnostic: true }));
+    expect(diagnosticOutput.find((line) => line.includes("snapshot_schema=2"))).toMatch(/bytes=\d+ ready_state=complete/);
+    expect(diagnosticOutput.find((line) => line.includes("timing classification_ms="))).toContain("extraction_ms=1");
+    expect(diagnosticOutput).toContain("failed resources: 0 prevented_readiness_or_extraction=unknown");
     expect(new JobRepository(testDatabase.database).listAll()).toHaveLength(3);
     expect(execution.closed).toBe(true);
     expect(testDatabase.database.prepare("SELECT observation_kind, observation_transport, observation_page_number, observation_listing_position FROM jobs WHERE source_posting_id = '101'").get())

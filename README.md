@@ -135,6 +135,10 @@ synthetic JobKorea형 DOM 테스트는 일반 결과, 일반+광고·추천, 중
 
 별도 승인된 최종 page-1/max-details-0 dry-run에서 corrected evaluator는 실제 공개 검색 페이지에서도 schema 1 snapshot을 20ms에 정상 반환했고 전체 명령은 4.197초에 종료됐다. `__name` 및 serialization 오류는 재발하지 않았다. 최종 URL은 `https://www.jobkorea.co.kr/Search?stext=AI&tabType=recruit&Page_No=1`, 제목은 `'AI' 관련 📢 채용공고 | 총 13,609건의 검색결과`였다. numeric detail-link evidence 88개 중 ordinary 0, promoted 28, rejected 60으로 측정되어 분류는 `malformed_results`였다. 로그인·CAPTCHA·verification·access-denied·명시적 empty 표시는 관찰되지 않았다. 이 결과는 snapshot lifecycle 성공과 현재 ordinary-container 계약 불일치를 함께 뜻하며 후보가 없다는 뜻은 아니다. 상세, page 2, direct, retry, DB write는 모두 0이었다.
 
+후속 오프라인 진단 보강은 snapshot schema를 version 2로 올렸다. 거절된 numeric link는 기계 판독 가능한 단일 사유로 집계되며, 합계는 sample truncation과 무관하게 완전하게 유지된다. rejected 20개, promoted 10개, ordinary 10개의 bounded sample과 최대 8단계의 최소 ancestor signature, 최대 20개의 반복 container signature 요약만 남긴다. signature는 정렬·제한된 class와 명시적으로 허용된 `data-*` 속성만 포함하고 text content나 raw HTML은 포함하지 않는다. readiness 시점과 최종 snapshot의 numeric-link/container 수, DOM 변화 여부, 정확한 직렬화 byte 수, document ready state, failed-resource 유형 집계, classification·extraction·context-close timing도 구조화 결과에 남는다. 전체 snapshot 상한은 계속 256 KiB다.
+
+이 단계에서는 실제 잡코리아 요청을 한 번도 실행하지 않았다. 88 numeric / 28 promoted / 60 rejected / 0 ordinary 형태는 이전 실제 실행의 **집계값**만 재현한 synthetic 테스트이며, card·list-item·nested-div 구조는 진단 계약 검증용 가상 DOM일 뿐 실제 source container의 증거가 아니다. 따라서 production ordinary selector는 변경하지 않았다. 상세 navigation, page 2, `_GI_List`, retry, SQLite write도 실행하지 않았다.
+
 원샷 관찰 데이터를 로컬에서 모두 제거하려면 서버를 중지하고 전체 로컬 DB reset 후 fixture/demo를 다시 준비한다. 이 작업은 사용자 상태 localStorage를 지우지 않는다.
 
 ```powershell
@@ -192,8 +196,8 @@ npm run db:status
 - 연봉 단일값·범위·인센티브 표시는 source fixture로 확인했지만, 복수 근무지와 근무지 미정의 실제 상세 구조는 이번 소스별 3건 제한에서 찾지 못해 여전히 미검증이다.
 - 알바몬의 관찰된 내부 BFF는 공식 API가 아니며 live 코드가 호출하거나 의존하지 않는다.
 - 잡코리아 browser transport의 기술적 접근 가능성·robots 결과는 이용허가가 아니다. 현행 계약·저작권·재가공·보관 범위는 미확인이다.
-- bounded search는 최대 2페이지만 검증하며 전체 pagination, 최신성 보장, 삭제 동기화, 자동 refresh가 없다. page-1 lifecycle과 실제 schema 1 snapshot은 검증됐지만 현재 ordinary-result container는 인식되지 않아 `malformed_results`이며 direct `_GI_List` 익명 계약도 미확정이다.
+- bounded search는 최대 2페이지만 검증하며 전체 pagination, 최신성 보장, 삭제 동기화, 자동 refresh가 없다. page-1 lifecycle과 실제 schema 1 snapshot은 검증됐지만 현재 ordinary-result container는 인식되지 않아 `malformed_results`이며 direct `_GI_List` 익명 계약도 미확정이다. schema 2 진단은 오프라인에서만 검증됐고 아직 실제 page-1 결과로 container signature를 측정하지 않았다.
 
 ## 다음 개발 단계
 
-다음 정확한 작업은 **외부 요청 없이 현재 `malformed_results`를 설명할 수 있도록 ordinary/promoted/rejected의 집계 사유와 최소 container signature를 JSON-safe snapshot 진단에 추가하고 synthetic DOM 계약으로 검증하는 것**이다. 그 변경이 별도 검토되기 전에는 실제 재실행, page 2, 상세, direct 요청을 열지 않으며 full pagination은 계속 별도 승인 대상이다.
+다음 정확한 작업은 **별도 승인된 page-1, `max-details=0`, Playwright dry-run을 정확히 한 번 실행해 schema 2의 거절 사유와 최소 container signature를 측정하는 것**이다. 그 실행에서도 상세 navigation, page 2, direct 요청, retry, SQLite write를 열지 않으며 full pagination은 계속 별도 승인 대상이다.

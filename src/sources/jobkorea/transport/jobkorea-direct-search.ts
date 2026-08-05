@@ -1,6 +1,8 @@
 import type { ParseDiagnostic } from "../../../domain/source-contract";
 import { JobKoreaTransportError } from "./jobkorea-error";
 import { buildJobKoreaListingPageResult, classifyJobKoreaRenderedPage } from "./jobkorea-listing-page";
+import { validateAndRoundTripJobKoreaSnapshot } from "./jobkorea-page-snapshot";
+import { failedSearchPageResult } from "./jobkorea-playwright-search";
 import { JOBKOREA_HARD_MAX_RESPONSE_BYTES, JOBKOREA_HARD_TIMEOUT_MS, JOBKOREA_USER_AGENT } from "./jobkorea-http-client";
 import type { JobKoreaDirectContractObservation, JobKoreaListingPageResult, JobKoreaPageSnapshot } from "./jobkorea-search-types";
 
@@ -44,36 +46,47 @@ export function directHtmlSnapshot(html: string, finalUrl: string): JobKoreaPage
     const href = new URL(link[1]!, finalUrl).toString();
     const postingId = href.match(/\/Recruit\/GI_Read\/(\d+)/i)?.[1] ?? null;
     const promoted = /(?:^|\s)AD(?:\s|$)|스폰서|sponsored/i.test(containerText);
-    if (promoted) promotedCandidates.push({ postingId, href, reason: "promoted_or_ad" });
+    if (promoted) promotedCandidates.push({ postingId, href, reason: "INSIDE_PROMOTED_REGION" });
     else if (postingId) ordinaryCandidates.push({ postingId, href, title: stripTags(link[2]!), companyName: "상세 페이지 확인 전",
       position: ordinaryCandidates.length + 1, rowId: dataGno, sourceSelector: "tr.devloopArea[data-gno]" });
   }
   const bodyText = stripTags(html);
   const noResult = /검색\s*결과가\s*없|채용정보가\s*없|조건에\s*맞는\s*공고가\s*없/.test(bodyText);
-  return { schemaVersion: 1, finalUrl, pageTitle: "JobKorea _GI_List", readyState: "complete", extractionCompleted: true,
-    evidence: { ordinaryContainerCount: ordinaryCandidates.length, ordinaryDetailLinkCount: ordinaryCandidates.length,
-      allNumericDetailLinkCount: ordinaryCandidates.length + promotedCandidates.length, promotedContainerCount: promotedCandidates.length,
-      promotedDetailLinkCount: promotedCandidates.length, rejectedDetailLinkCount: 0, noResultMarkerCount: noResult ? 1 : 0,
+  return validateAndRoundTripJobKoreaSnapshot({ schemaVersion: 2, serializedSnapshotBytes: 0, finalUrl,
+    pageTitle: "JobKorea _GI_List", documentReadyState: "complete", extractionCompleted: true,
+    extractionDurationMs: 0, readiness: null, domChangedAfterReadiness: null,
+    evidence: { ordinaryContainerCount: ordinaryCandidates.length, ordinaryRowCount: ordinaryCandidates.length,
+      resultRootCount: ordinaryCandidates.length ? 1 : 0, knownTableResultCount: ordinaryCandidates.length ? 1 : 0,
+      knownListResultCount: 0, knownCardResultCount: 0, numericLinksInsideKnownTableResults: ordinaryCandidates.length,
+      numericLinksInsideKnownListResults: 0, numericLinksInsideKnownCardResults: 0, ordinaryDetailLinkCount: ordinaryCandidates.length,
+      allNumericDetailLinkCount: ordinaryCandidates.length + promotedCandidates.length,
+      promotedContainerCount: promotedCandidates.length, recommendationContainerCount: 0, recentViewContainerCount: 0,
+      promotedDetailLinkCount: promotedCandidates.length, rejectedDetailLinkCount: 0,
+      numericLinksInsideKnownResultRoots: ordinaryCandidates.length + promotedCandidates.length,
+      numericLinksOutsideKnownResultRoots: 0, noResultMarkerCount: noResult ? 1 : 0,
       loginMarkerCount: 0, captchaMarkerCount: 0, verificationMarkerCount: 0, accessDeniedMarkerCount: 0 },
-    ordinaryCandidates, promotedCandidates, rejectedCandidates: [], diagnostics: [] };
+    rejectionReasonCounts: {}, ordinaryCandidates, promotedCandidates: promotedCandidates.slice(0, 10), rejectedCandidates: [],
+    diagnosticSamples: { ordinary: [], promoted: [], rejected: [], ordinaryTruncated: false,
+      promotedTruncated: promotedCandidates.length > 10, rejectedTruncated: false },
+    containerSignatures: [], containerSignaturesTruncated: false, diagnostics: [] });
 }
 
 export function classifyDirectContractResponse(input: { status: number; contentType: string; body: string; finalUrl: string }, pageNumber = 1): JobKoreaListingPageResult {
   if (input.status === 401 || input.status === 403 || /로그인|세션|token|csrf/i.test(input.body)) {
-    return { pageNumber, snapshotSchemaVersion: null, finalUrl: input.finalUrl, pageTitle: null, classification: "direct_endpoint_session_required", extractedCount: null, ordinaryPostingCount: null, promotedPostingCount: null,
-      rejectedCandidateCount: null, duplicateWithinPageCount: null, uniqueNewCount: null, sourceReportsNoResults: null, validEmptyPage: false,
-      blocked: false, parserFailure: false, diagnostics: [diagnostic("JOBKOREA_DIRECT_ENDPOINT_SESSION_REQUIRED", "_GI_List 응답이 session 또는 token 의존성을 나타냈습니다.", "error")], candidates: [] };
+    return { ...failedSearchPageResult(pageNumber, "direct_endpoint_session_required", "JOBKOREA_DIRECT_ENDPOINT_SESSION_REQUIRED"),
+      finalUrl: input.finalUrl, parserFailure: false,
+      diagnostics: [diagnostic("JOBKOREA_DIRECT_ENDPOINT_SESSION_REQUIRED", "_GI_List 응답이 session 또는 token 의존성을 나타냈습니다.", "error")] };
   }
   if (input.status < 200 || input.status >= 300 || !/^text\/html\b/i.test(input.contentType)) {
-    return { pageNumber, snapshotSchemaVersion: null, finalUrl: input.finalUrl, pageTitle: null, classification: "direct_endpoint_unavailable", extractedCount: null, ordinaryPostingCount: null, promotedPostingCount: null,
-      rejectedCandidateCount: null, duplicateWithinPageCount: null, uniqueNewCount: null, sourceReportsNoResults: null, validEmptyPage: false,
-      blocked: false, parserFailure: false, diagnostics: [diagnostic("JOBKOREA_DIRECT_ENDPOINT_UNAVAILABLE", "_GI_List 익명 HTML 응답 계약을 확인하지 못했습니다.")], candidates: [] };
+    return { ...failedSearchPageResult(pageNumber, "direct_endpoint_unavailable", "JOBKOREA_DIRECT_ENDPOINT_UNAVAILABLE"),
+      finalUrl: input.finalUrl, parserFailure: false,
+      diagnostics: [diagnostic("JOBKOREA_DIRECT_ENDPOINT_UNAVAILABLE", "_GI_List 익명 HTML 응답 계약을 확인하지 못했습니다.")] };
   }
   const snapshot = directHtmlSnapshot(input.body, input.finalUrl);
   const classification = classifyJobKoreaRenderedPage(snapshot);
   if (classification !== "valid_search_results" && classification !== "valid_empty_results") {
-    return { pageNumber, snapshotSchemaVersion: snapshot.schemaVersion, finalUrl: snapshot.finalUrl, pageTitle: snapshot.pageTitle,
-      classification: "direct_endpoint_unavailable", extractedCount: snapshot.evidence.allNumericDetailLinkCount, ordinaryPostingCount: 0, promotedPostingCount: snapshot.evidence.promotedDetailLinkCount,
+    return { ...buildJobKoreaListingPageResult(snapshot, pageNumber), classification: "direct_endpoint_unavailable",
+      extractedCount: snapshot.evidence.allNumericDetailLinkCount, ordinaryPostingCount: 0, promotedPostingCount: snapshot.evidence.promotedDetailLinkCount,
       rejectedCandidateCount: snapshot.evidence.rejectedDetailLinkCount, duplicateWithinPageCount: 0, uniqueNewCount: 0, sourceReportsNoResults: (snapshot.evidence.noResultMarkerCount ?? 0) > 0,
       validEmptyPage: false, blocked: false, parserFailure: false,
       diagnostics: [diagnostic("JOBKOREA_DIRECT_ENDPOINT_UNAVAILABLE", "_GI_List ordinary row 계약을 확인하지 못했습니다.")], candidates: [] };

@@ -17,7 +17,7 @@ export async function createJobKoreaSearchExecution(options: JobKoreaSearchOptio
       transportUsed: "direct", pages: [failedSearchPageResult(1,
         verification.classification === "direct_endpoint_session_required" ? "direct_endpoint_session_required" : "direct_endpoint_unavailable",
         verification.diagnostic.code)],
-      consoleErrors: browser.consoleErrors, directVerification: verification,
+      consoleErrors: browser.consoleErrors, failedResources: browser.failedResources, directVerification: verification,
       lifecycleDiagnostics: browser.lifecycleDiagnostics,
       searchNavigationCount: browser.searchNavigationCount, detailNavigationCount: browser.detailNavigationCount, directRequestCount: 0,
       close: () => browser.close(), fetchDetail: (url) => browser.fetchDetail(url),
@@ -26,7 +26,8 @@ export async function createJobKoreaSearchExecution(options: JobKoreaSearchOptio
   const directClient = dependencies.directClient ?? new JobKoreaDirectSearchClient();
   const pageResult = await directClient.request(verification.observation);
   return {
-    transportUsed: "direct", pages: [pageResult], consoleErrors: browser.consoleErrors, directVerification: verification,
+    transportUsed: "direct", pages: [pageResult], consoleErrors: browser.consoleErrors,
+    failedResources: browser.failedResources, directVerification: verification,
     lifecycleDiagnostics: browser.lifecycleDiagnostics,
     searchNavigationCount: browser.searchNavigationCount, get detailNavigationCount() { return browser.detailNavigationCount; },
     directRequestCount: directClient.requestCount, close: () => browser.close(), fetchDetail: (url) => browser.fetchDetail(url),

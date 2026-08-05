@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Browser, BrowserContext, Page } from "playwright";
 import { chromium } from "playwright";
 import { buildJobKoreaListingPageResult, classifyJobKoreaRenderedPage } from "../../sources/jobkorea/transport/jobkorea-listing-page";
-import { captureJobKoreaPageSnapshot } from "../../sources/jobkorea/transport/jobkorea-page-snapshot";
+import { captureJobKoreaPageSnapshot, captureJobKoreaReadinessEvidence } from "../../sources/jobkorea/transport/jobkorea-page-snapshot";
 import { syntheticJobKoreaPages } from "./jobkorea-synthetic-pages";
 
 let browser: Browser;
@@ -43,7 +43,7 @@ describe("잡코리아 synthetic page snapshot browser boundary", () => {
   it("ordinary row를 plain snapshot으로 만들고 source 순서를 유지한다", async () => {
     const value = await snapshot(syntheticJobKoreaPages.validSearch);
     expect(JSON.parse(JSON.stringify(value))).toEqual(value);
-    expect(value).toMatchObject({ schemaVersion: 1, extractionCompleted: true,
+    expect(value).toMatchObject({ schemaVersion: 2, extractionCompleted: true, documentReadyState: "complete",
       evidence: { ordinaryDetailLinkCount: 2, allNumericDetailLinkCount: 2 } });
     expect(value.ordinaryCandidates.map(({ postingId }) => postingId)).toEqual(["50000001", "50000002"]);
     expect(value.ordinaryCandidates[0]?.href).toBe("https://www.jobkorea.co.kr/Recruit/GI_Read/50000001");
@@ -100,9 +100,84 @@ describe("잡코리아 synthetic page snapshot browser boundary", () => {
 
   it("SVGAnimatedString href를 반환하지 않고 non-HTML anchor를 명시적으로 제외한다", async () => {
     const value = await snapshot(syntheticJobKoreaPages.nonHtmlAnchor);
-    expect(value.rejectedCandidates).toEqual([{ href: "/Recruit/GI_Read/50000006", reason: "non_html_anchor" }]);
-    expect(value.diagnostics).toContainEqual({ code: "JOBKOREA_SNAPSHOT_UNSUPPORTED_VALUE",
-      message: "HTMLAnchorElement가 아닌 detail-link 모양 요소를 제외했습니다." });
+    expect(value.rejectedCandidates).toEqual([{ postingId: null, href: "/Recruit/GI_Read/50000006", reason: "SVG_ANCHOR_UNSUPPORTED" }]);
+    expect(value.rejectionReasonCounts).toEqual({ SVG_ANCHOR_UNSUPPORTED: 1 });
     expect(JSON.parse(JSON.stringify(value))).toEqual(value);
+  });
+
+  it.each([
+    ["newCardBased", "article", "recruit-card"],
+    ["listItemBased", "li", "job-item"],
+    ["genericNestedDiv", "div", "unknown-card"],
+  ] as const)("%s unknown container를 selector로 승인하지 않고 minimal signature로 설명한다", async (key, tag, className) => {
+    const value = await snapshot(syntheticJobKoreaPages[key]);
+    expect(classifyJobKoreaRenderedPage(value)).toBe("malformed_results");
+    expect(value.rejectionReasonCounts).toEqual({ ANCESTOR_SIGNATURE_UNRECOGNIZED: 1 });
+    expect(value.containerSignatures[0]).toMatchObject({ count: 1, signature: { tag, classes: [className] } });
+    const sample = value.diagnosticSamples.rejected[0]!;
+    expect(sample.ancestors.length).toBeLessThanOrEqual(8);
+    expect(JSON.stringify(sample)).not.toContain("가상");
+    expect(JSON.stringify(sample)).not.toMatch(/innerHTML|outerHTML|textContent/);
+  });
+
+  it("promoted card는 unknown rejection aggregate와 섞지 않는다", async () => {
+    const value = await snapshot(syntheticJobKoreaPages.promotedAndUnknownCards);
+    expect(value.evidence).toMatchObject({ allNumericDetailLinkCount: 2, promotedDetailLinkCount: 1, rejectedDetailLinkCount: 1 });
+    expect(value.rejectionReasonCounts).toEqual({ ANCESTOR_SIGNATURE_UNRECOGNIZED: 1 });
+    expect(value.diagnosticSamples.promoted).toHaveLength(1);
+  });
+
+  it("known result root 밖 numeric link를 OUTSIDE_RESULT_ROOT로 집계한다", async () => {
+    const value = await snapshot(syntheticJobKoreaPages.outsideResultRoot);
+    expect(value.rejectionReasonCounts).toEqual({ OUTSIDE_RESULT_ROOT: 1 });
+    expect(value.evidence.numericLinksOutsideKnownResultRoots).toBe(1);
+  });
+
+  it("88/28/60 measured-shape simulation의 complete aggregate와 bounded samples를 유지한다", async () => {
+    const value = await snapshot(syntheticJobKoreaPages.measuredShape88);
+    expect(value.evidence).toMatchObject({ allNumericDetailLinkCount: 88, ordinaryDetailLinkCount: 0,
+      promotedDetailLinkCount: 28, rejectedDetailLinkCount: 60, numericLinksInsideKnownCardResults: 88 });
+    expect(value.rejectionReasonCounts).toEqual({ ANCESTOR_SIGNATURE_UNRECOGNIZED: 60 });
+    expect(value.promotedCandidates).toHaveLength(10);
+    expect(value.rejectedCandidates).toHaveLength(20);
+    expect(value.diagnosticSamples).toMatchObject({ promotedTruncated: true, rejectedTruncated: true });
+    expect(value.containerSignatures.length).toBeLessThanOrEqual(20);
+    expect(value.containerSignatures.every(({ samplePostingIds }) => samplePostingIds.length <= 3)).toBe(true);
+    expect(value.serializedSnapshotBytes).toBeLessThanOrEqual(256 * 1024);
+    expect(value.diagnostics.map(({ code }) => code)).toContain("JOBKOREA_ORDINARY_CONTAINER_CONTRACT_MISMATCH");
+  });
+
+  it("element signature는 class/data/depth를 제한하고 arbitrary DOM text를 보존하지 않는다", async () => {
+    const value = await snapshot(syntheticJobKoreaPages.signatureSanitization);
+    const sample = value.diagnosticSamples.rejected[0]!;
+    expect(sample.anchor.classes).toEqual([...sample.anchor.classes].sort());
+    expect(sample.anchor.classes).toHaveLength(8);
+    expect(sample.anchor.dataAttributes).toEqual({ "data-type": "posting" });
+    expect(sample.ancestors[0]?.dataAttributes["data-track"]).toHaveLength(100);
+    expect(JSON.stringify(sample)).not.toMatch(/data-secret|must-not-cross|민감하지 않은 가상 제목|innerHTML|outerHTML|textContent/);
+  });
+
+  it("ancestor와 container summary cap을 deterministic truncation diagnostic으로 남긴다", async () => {
+    const deep = await snapshot(syntheticJobKoreaPages.deepAncestors);
+    expect(deep.diagnosticSamples.rejected[0]?.ancestors).toHaveLength(8);
+    const many = await snapshot(syntheticJobKoreaPages.manyContainerSignatures);
+    expect(many.containerSignatures).toHaveLength(20);
+    expect(many.containerSignaturesTruncated).toBe(true);
+    expect(many.diagnostics.map(({ code }) => code)).toContain("JOBKOREA_CONTAINER_SIGNATURES_TRUNCATED");
+  });
+
+  it("readiness와 동일한 DOM은 unchanged이며 numeric/container 변화는 별도 진단한다", async () => {
+    const page = await context.newPage();
+    try {
+      await page.setContent(syntheticJobKoreaPages.newCardBased);
+      const readiness = await captureJobKoreaReadinessEvidence(page);
+      const unchanged = await captureJobKoreaPageSnapshot(page, readiness);
+      expect(unchanged).toMatchObject({ domChangedAfterReadiness: false,
+        readiness: { reason: "numeric_detail_link", numericDetailLinkCount: 1 } });
+      await page.evaluate(`document.querySelector('main').insertAdjacentHTML('beforeend','<article class="another-shape"><a href="/Recruit/GI_Read/50009999">synthetic</a></article>')`);
+      const changed = await captureJobKoreaPageSnapshot(page, readiness);
+      expect(changed.domChangedAfterReadiness).toBe(true);
+      expect(changed.diagnostics.map(({ code }) => code)).toContain("JOBKOREA_READINESS_SNAPSHOT_DOM_CHANGED");
+    } finally { await page.close(); }
   });
 });
