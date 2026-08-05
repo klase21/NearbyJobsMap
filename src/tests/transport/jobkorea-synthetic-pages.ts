@@ -50,4 +50,40 @@ export const syntheticJobKoreaPages = {
   manyContainerSignatures: document(`<main data-section="recruit-search-results">${Array.from({ length: 25 }, (_, index) =>
     `<article class="unknown-shape-${index}" data-gno="${53000000 + index}"><a href="/Recruit/GI_Read/${53000000 + index}">가상 공고</a></article>`).join("")}</main>`),
   deepAncestors: document(`<main data-section="recruit-search-results">${"<div>".repeat(12)}<a href="/Recruit/GI_Read/54000001">가상 공고</a>${"</div>".repeat(12)}</main>`),
+  genericPromotionFalsePositives: document(`<main data-section="recruit-search-results">${[
+    "shadow", "shadow-sm", "leading", "loading", "header", "gradient", "badge",
+    "card", "rounded", "standard", "data-grid", "job-card", "recruit-card",
+  ].map((className, index) => `<div class="${className}"><a href="/Recruit/GI_Read/${55000000 + index}">가상 공고</a></div>`).join("")}</main>`),
+  explicitPromotionSignals: document(`<main data-section="recruit-search-results">
+    <div class="ad"><a href="/Recruit/GI_Read/56000001">가상 광고</a></div>
+    <div class="sponsored"><a href="/Recruit/GI_Read/56000002">가상 광고</a></div>
+    <div class="promoted"><a href="/Recruit/GI_Read/56000003">가상 광고</a></div>
+    <div class="ad-item"><a href="/Recruit/GI_Read/56000004">가상 광고</a></div>
+    <div data-type="job ad"><a href="/Recruit/GI_Read/56000005">가상 광고</a></div>
+    <div data-section="search promoted"><a href="/Recruit/GI_Read/56000006">가상 광고</a></div>
+    <div data-track="ad"><a href="/Recruit/GI_Read/56000007">가상 광고</a></div>
+    <div>AD<a href="/Recruit/GI_Read/56000008">가상 광고</a></div>
+    <div class="PROMOTED"><a href="/Recruit/GI_Read/56000009">가상 광고</a></div>
+  </main>`),
+  nonPromotionDataValues: document(`<main data-section="recruit-search-results">
+    <div data-type="standard"><a href="/Recruit/GI_Read/57000001">가상 공고</a></div>
+    <div data-section="header"><a href="/Recruit/GI_Read/57000002">가상 공고</a></div>
+    <div data-track="load"><a href="/Recruit/GI_Read/57000003">가상 공고</a></div>
+    <div data-track="opaque-analytics-value"><a href="/Recruit/GI_Read/57000004">가상 공고</a></div>
+  </main>`),
+  boundedPromotionScope: document(`<main aria-label="Sponsored" data-section="recruit-search-results">
+    <div class="ad">${"<div>".repeat(6)}<a href="/Recruit/GI_Read/58000001">깊은 가상 공고</a>${"</div>".repeat(6)}</div>
+    <section><div><a href="/Recruit/GI_Read/58000002">페이지 라벨과 무관한 공고</a></div></section>
+  </main>`),
+  mixedPromotionScope: document(`<main data-section="recruit-search-results"><table class="recruit-list">${row("59000001")}</table>
+    <div class="ad-item"><a href="/Recruit/GI_Read/59000002">가상 광고</a></div>
+    <div class="shadow-sm"><a href="/Recruit/GI_Read/59000003">가상 미확인 공고</a></div>
+  </main>`),
+  svgGenericClass: document(`<main data-section="recruit-search-results"><svg class="shadow-sm"><foreignObject>
+    <div xmlns="http://www.w3.org/1999/xhtml"><a href="/Recruit/GI_Read/59000004">Synthetic SVG wrapper posting</a></div>
+  </foreignObject></svg></main>`),
+  recommendationAndRecent: document(`<main data-section="recruit-search-results">
+    <section class="recommend-list"><a href="/Recruit/GI_Read/59000005">Synthetic related posting</a></section>
+    <section class="recent-list"><a href="/Recruit/GI_Read/59000006">Synthetic recent posting</a></section>
+  </main>`),
 } as const;

@@ -65,7 +65,8 @@ export function directHtmlSnapshot(html: string, finalUrl: string): JobKoreaPage
       numericLinksInsideKnownResultRoots: ordinaryCandidates.length + promotedCandidates.length,
       numericLinksOutsideKnownResultRoots: 0, noResultMarkerCount: noResult ? 1 : 0,
       loginMarkerCount: 0, captchaMarkerCount: 0, verificationMarkerCount: 0, accessDeniedMarkerCount: 0 },
-    rejectionReasonCounts: {}, ordinaryCandidates, promotedCandidates: promotedCandidates.slice(0, 10), rejectedCandidates: [],
+    rejectionReasonCounts: {}, promotionSignalCounts: promotedCandidates.length ? { semantic_label: promotedCandidates.length } : {},
+    ordinaryCandidates, promotedCandidates: promotedCandidates.slice(0, 10), rejectedCandidates: [],
     diagnosticSamples: { ordinary: [], promoted: [], rejected: [], ordinaryTruncated: false,
       promotedTruncated: promotedCandidates.length > 10, rejectedTruncated: false },
     containerSignatures: [], containerSignaturesTruncated: false, diagnostics: [] });

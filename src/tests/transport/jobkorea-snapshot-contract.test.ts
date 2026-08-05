@@ -23,7 +23,7 @@ const rawSnapshot = (): JobKoreaPageSnapshot => ({
     promotedDetailLinkCount: 0, rejectedDetailLinkCount: 0, numericLinksInsideKnownResultRoots: 1,
     numericLinksOutsideKnownResultRoots: 0, noResultMarkerCount: 0,
     loginMarkerCount: 0, captchaMarkerCount: 0, verificationMarkerCount: 0, accessDeniedMarkerCount: 0 },
-  rejectionReasonCounts: {},
+  rejectionReasonCounts: {}, promotionSignalCounts: {},
   ordinaryCandidates: [{ postingId: "50000001", href: "https://www.jobkorea.co.kr/Recruit/GI_Read/50000001",
     title: "가상 공고", companyName: "가상회사", position: 1, rowId: "50000001", sourceSelector: "tr.devloopArea[data-gno]" }],
   promotedCandidates: [], rejectedCandidates: [],
@@ -45,6 +45,14 @@ describe("잡코리아 snapshot JSON-safe contract", () => {
     expect(result).toEqual(validSnapshot());
     expect(result.serializedSnapshotBytes).toBe(Buffer.byteLength(JSON.stringify(result), "utf8"));
     expect(JSON.stringify(result)).not.toContain("undefined");
+  });
+
+  it("rejects a promotion-signal aggregate that does not equal the promoted count", () => {
+    const mismatch = { ...rawSnapshot(), evidence: { ...rawSnapshot().evidence, promotedDetailLinkCount: 1 },
+      promotionSignalCounts: {} };
+    expect(() => validateAndRoundTripJobKoreaSnapshot(mismatch)).toThrowError(
+      expect.objectContaining({ code: "JOBKOREA_PROMOTED_SIGNAL_COUNT_MISMATCH" }),
+    );
   });
 
   it.each([

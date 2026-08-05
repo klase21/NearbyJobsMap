@@ -63,6 +63,7 @@ describe("잡코리아 browser search → parser → SQLite pipeline", () => {
         dataAttributes: { "data-gno": "101" }, ariaLabelPresent: false, depthFromAnchor: 1,
         childElementCount: 1, numericDetailLinkCount: 1, hasKnownOrdinaryMarker: false,
         hasPromotedMarker: false, hasRecommendationMarker: false, hasRecentViewMarker: false } }];
+    result.pageResults[0]!.promotionSignalCounts = { exact_class_token: 2 };
     result.failedResources = { totalCount: 1, typeCounts: { image: 1 }, samples: [{ resourceType: "image",
       hostCategory: "third_party", failureCode: "net::ERR_FAILED", navigationCritical: false }],
       samplesTruncated: false, preventedReadinessOrExtraction: false };
@@ -70,6 +71,7 @@ describe("잡코리아 browser search → parser → SQLite pipeline", () => {
     expect(diagnosticOutput.find((line) => line.includes("snapshot_schema=2"))).toMatch(/bytes=\d+ ready_state=complete/);
     expect(diagnosticOutput.find((line) => line.includes("timing classification_ms="))).toContain("extraction_ms=1");
     expect(diagnosticOutput).toContain("failed resources: 1 prevented_readiness_or_extraction=false");
+    expect(diagnosticOutput).toContain("  - exact_class_token: 2");
     expect(diagnosticOutput).toContain("  - article.recruit-card[data-gno]@1: count=2 tag=article classes=recruit-card role=none data=data-gno=101 depth=1 numeric_links=1 ordinary=0 promoted=0 rejected=2 sample_ids=101,102");
     expect(diagnosticOutput).toContain("- type=image host=third_party code=net::ERR_FAILED navigation_critical=false");
     expect(new JobRepository(testDatabase.database).listAll()).toHaveLength(3);

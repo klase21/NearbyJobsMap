@@ -24,6 +24,10 @@ export function formatJobKoreaSearchResult(result: JobKoreaSearchOneShotResult, 
       lines.push("  rejected reasons:");
       for (const [reason, count] of Object.entries(page.rejectionReasonCounts)) lines.push(`  - ${reason}: ${count}`);
     }
+    if (options.diagnostic && page.promotionSignalCounts && Object.keys(page.promotionSignalCounts).length) {
+      lines.push("  promoted signals:");
+      for (const [signal, count] of Object.entries(page.promotionSignalCounts)) lines.push(`  - ${signal}: ${count}`);
+    }
     if (options.diagnostic && page.containerSignatures?.length) {
       lines.push("  dominant container signatures:");
       for (const item of page.containerSignatures) {

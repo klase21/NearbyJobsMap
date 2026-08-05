@@ -127,6 +127,58 @@ describe("잡코리아 synthetic page snapshot browser boundary", () => {
     expect(value.diagnosticSamples.promoted).toHaveLength(1);
   });
 
+  it("legacy class substring matcher의 실제 generic false positive를 재현하고 corrected evaluator는 모두 거부한다", async () => {
+    const page = await context.newPage();
+    try {
+      await page.setContent(syntheticJobKoreaPages.genericPromotionFalsePositives);
+      const legacyCount = await page.evaluate(`document.querySelectorAll("[class*='ad']").length`);
+      expect(legacyCount).toBe(7);
+      const value = await captureJobKoreaPageSnapshot(page);
+      expect(value.evidence).toMatchObject({ allNumericDetailLinkCount: 13, promotedDetailLinkCount: 0,
+        rejectedDetailLinkCount: 13, promotedContainerCount: 0 });
+      expect(value.rejectionReasonCounts).toEqual({ ANCESTOR_SIGNATURE_UNRECOGNIZED: 13 });
+      expect(value.promotionSignalCounts).toEqual({});
+      expect(value.diagnosticSamples.rejected.every(({ insidePromotedRegion }) => !insidePromotedRegion)).toBe(true);
+      expect(value.diagnostics.map(({ code }) => code)).toContain("JOBKOREA_PROMOTED_CLASS_SUBSTRING_OVERMATCH");
+    } finally { await page.close(); }
+  });
+
+  it("exact·bounded class token, explicit data value와 nearest semantic label만 promotion evidence로 인정한다", async () => {
+    const value = await snapshot(syntheticJobKoreaPages.explicitPromotionSignals);
+    expect(value.evidence).toMatchObject({ allNumericDetailLinkCount: 9, promotedDetailLinkCount: 9,
+      rejectedDetailLinkCount: 0, promotedContainerCount: 9 });
+    expect(value.promotedCandidates).toHaveLength(9);
+    expect(value.promotionSignalCounts).toEqual({ data_attribute: 3, exact_class_token: 5, semantic_label: 1 });
+    expect(value.diagnosticSamples.promoted.map(({ promotionSignal }) => promotionSignal)).toEqual([
+      "exact_class_token", "exact_class_token", "exact_class_token", "exact_class_token",
+      "data_attribute", "data_attribute", "data_attribute", "semantic_label", "exact_class_token",
+    ]);
+    expect(value.diagnosticSamples.promoted.every(({ insidePromotedRegion }) => insidePromotedRegion)).toBe(true);
+  });
+
+  it("standard·header·load·opaque analytics data values는 promotion evidence가 아니다", async () => {
+    const value = await snapshot(syntheticJobKoreaPages.nonPromotionDataValues);
+    expect(value.evidence).toMatchObject({ allNumericDetailLinkCount: 4, promotedDetailLinkCount: 0,
+      rejectedDetailLinkCount: 4, promotedContainerCount: 0 });
+    expect(value.rejectionReasonCounts).toEqual({ ANCESTOR_SIGNATURE_UNRECOGNIZED: 4 });
+  });
+
+  it("promotion ancestor는 6단계에서 멈추고 MAIN의 page-level label을 전파하지 않는다", async () => {
+    const value = await snapshot(syntheticJobKoreaPages.boundedPromotionScope);
+    expect(value.evidence).toMatchObject({ allNumericDetailLinkCount: 2, promotedDetailLinkCount: 0,
+      rejectedDetailLinkCount: 2 });
+    expect(value.diagnosticSamples.rejected.every(({ insidePromotedRegion }) => !insidePromotedRegion)).toBe(true);
+  });
+
+  it("mixed root에서 historic ordinary, explicit promotion, generic unknown을 상호 배타적으로 분류한다", async () => {
+    const value = await snapshot(syntheticJobKoreaPages.mixedPromotionScope);
+    expect(value.evidence).toMatchObject({ allNumericDetailLinkCount: 3, ordinaryDetailLinkCount: 1,
+      promotedDetailLinkCount: 1, rejectedDetailLinkCount: 1 });
+    expect(value.rejectionReasonCounts).toEqual({ ANCESTOR_SIGNATURE_UNRECOGNIZED: 1 });
+    expect(value.ordinaryCandidates.map(({ postingId }) => postingId)).toEqual(["59000001"]);
+    expect(value.promotedCandidates.map(({ postingId }) => postingId)).toEqual(["59000002"]);
+  });
+
   it("known result root 밖 numeric link를 OUTSIDE_RESULT_ROOT로 집계한다", async () => {
     const value = await snapshot(syntheticJobKoreaPages.outsideResultRoot);
     expect(value.rejectionReasonCounts).toEqual({ OUTSIDE_RESULT_ROOT: 1 });
@@ -138,6 +190,7 @@ describe("잡코리아 synthetic page snapshot browser boundary", () => {
     expect(value.evidence).toMatchObject({ allNumericDetailLinkCount: 88, ordinaryDetailLinkCount: 0,
       promotedDetailLinkCount: 28, rejectedDetailLinkCount: 60, numericLinksInsideKnownCardResults: 88 });
     expect(value.rejectionReasonCounts).toEqual({ ANCESTOR_SIGNATURE_UNRECOGNIZED: 60 });
+    expect(value.promotionSignalCounts).toEqual({ exact_class_token: 28 });
     expect(value.promotedCandidates).toHaveLength(10);
     expect(value.rejectedCandidates).toHaveLength(20);
     expect(value.diagnosticSamples).toMatchObject({ promotedTruncated: true, rejectedTruncated: true });
@@ -145,6 +198,7 @@ describe("잡코리아 synthetic page snapshot browser boundary", () => {
     expect(value.containerSignatures.every(({ samplePostingIds }) => samplePostingIds.length <= 3)).toBe(true);
     expect(value.serializedSnapshotBytes).toBeLessThanOrEqual(256 * 1024);
     expect(value.diagnostics.map(({ code }) => code)).toContain("JOBKOREA_ORDINARY_CONTAINER_CONTRACT_MISMATCH");
+    expect(value.diagnosticSamples.rejected.every(({ insidePromotedRegion }) => !insidePromotedRegion)).toBe(true);
   });
 
   it("element signature는 class/data/depth를 제한하고 arbitrary DOM text를 보존하지 않는다", async () => {
@@ -179,5 +233,20 @@ describe("잡코리아 synthetic page snapshot browser boundary", () => {
       expect(changed.domChangedAfterReadiness).toBe(true);
       expect(changed.diagnostics.map(({ code }) => code)).toContain("JOBKOREA_READINESS_SNAPSHOT_DOM_CHANGED");
     } finally { await page.close(); }
+  });
+
+  it("handles an SVG ancestor class token without substring promotion or a browser-realm throw", async () => {
+    const value = await snapshot(syntheticJobKoreaPages.svgGenericClass);
+    expect(value.evidence).toMatchObject({ allNumericDetailLinkCount: 1, promotedDetailLinkCount: 0,
+      rejectedDetailLinkCount: 1 });
+    expect(value.promotionSignalCounts).toEqual({});
+  });
+
+  it("keeps recommendation and recent-view exclusions separate from promotion", async () => {
+    const value = await snapshot(syntheticJobKoreaPages.recommendationAndRecent);
+    expect(value.evidence).toMatchObject({ allNumericDetailLinkCount: 2, promotedDetailLinkCount: 0,
+      rejectedDetailLinkCount: 2, recommendationContainerCount: 1, recentViewContainerCount: 1 });
+    expect(value.rejectionReasonCounts).toEqual({ INSIDE_RECENT_VIEW_REGION: 1, INSIDE_RECOMMENDATION_REGION: 1 });
+    expect(value.promotionSignalCounts).toEqual({});
   });
 });

@@ -76,6 +76,7 @@ export function buildJobKoreaListingPageResult(snapshot: JobKoreaPageSnapshot, p
     validEmptyPage: classification === "valid_empty_results", blocked: blockedClassifications.has(classification), parserFailure,
     evidence: countsMeasured ? snapshot.evidence : null,
     rejectionReasonCounts: countsMeasured ? snapshot.rejectionReasonCounts : null,
+    promotionSignalCounts: countsMeasured ? snapshot.promotionSignalCounts : null,
     diagnosticSamples: countsMeasured ? snapshot.diagnosticSamples : null,
     containerSignatures: countsMeasured ? snapshot.containerSignatures : null,
     containerSignaturesTruncated: countsMeasured ? snapshot.containerSignaturesTruncated : null,

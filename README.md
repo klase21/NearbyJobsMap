@@ -204,4 +204,8 @@ npm run db:status
 
 ## 다음 개발 단계
 
-다음 정확한 작업은 **실측된 89/89 promoted 과포착을 synthetic DOM으로 재현하고 promoted ancestor 판정을 class-token 기반으로 좁히는 별도 오프라인 selector-contract 업데이트**다. 이 작업에서도 실제 source 재실행, 상세 navigation, page 2, direct 요청, retry, SQLite write를 열지 않으며 full pagination은 계속 별도 승인 대상이다.
+실측된 89/89 promoted 과포착의 구현 원인은 browser evaluator의 `[class*='ad'], [class*='sponsor']` ancestor selector였다. 짧은 `ad` 부분 문자열 때문에 `shadow`, `header`, `badge`, `gradient`, `leading`, `loading` 같은 일반 utility token도 광고 근거가 될 수 있었다. 오프라인 수정은 광고 class를 완전한 token(`ad`, `ads`, `advertisement`, `sponsor`, `sponsored`, `promoted`) 또는 제한된 `ad-`/`ad_`/`sponsored-`/`promoted-` 계열로만 판정한다. `data-type`·`data-section`·`data-track`도 명시적인 광고 token 값만 인정하고, 직접 자식의 짧은 `AD`·`광고`·`Sponsored` 라벨만 의미 근거로 사용한다. 이 검사는 후보에서 최대 6단계 ancestor까지만 적용하며 `BODY`·`MAIN`에서 중단한다.
+
+이 수정 과정에서는 실제 잡코리아 요청을 실행하지 않았다. production ordinary selector도 넓히지 않았다. 실제 측정에서 보인 utility signature는 아직 ordinary container의 충분한 근거가 아니므로, 광고 근거가 없는 미확인 numeric link는 계속 rejected로 남고 페이지는 `JOBKOREA_ORDINARY_CONTAINER_CONTRACT_MISMATCH`가 있는 `malformed_results`로 유지된다. 같은 production evaluator를 실행하는 synthetic acceptance test는 88 numeric / 28 explicit promoted / 60 unknown rejected / 0 ordinary를 확인하며 snapshot은 256 KiB 상한 아래에 있다.
+
+다음 정확한 작업은 **별도 승인된 page-1, `max-details=0`, schema-v2 Playwright dry-run을 정확히 한 번 실행해 수정된 promoted-region 판정을 재측정하는 것**이다. 상세 navigation, page 2, direct 요청, retry, SQLite write, scheduling, production crawling은 승인 범위가 아니다.

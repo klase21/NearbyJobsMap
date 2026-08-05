@@ -22,6 +22,7 @@ export const JOBKOREA_REJECTION_REASONS = [
 ] as const satisfies readonly JobKoreaRejectionReason[];
 
 const REJECTION_REASON_SET = new Set<string>(JOBKOREA_REJECTION_REASONS);
+const PROMOTION_SIGNAL_SET = new Set(["exact_class_token", "data_attribute", "semantic_label"]);
 const READY_STATES = new Set(["loading", "interactive", "complete", "unknown"]);
 const READINESS_REASONS = new Set(["numeric_detail_link", "ordinary_container", "no_result", "login", "captcha", "verification", "access_denied", "unknown"]);
 const EVIDENCE_KEYS = [
@@ -134,6 +135,8 @@ function diagnosticSample(value: unknown): JobKoreaCandidateDiagnosticSample {
   if (!["ordinary", "promoted", "rejected"].includes(classification)) fail("sample classification이 유효하지 않습니다.");
   const primaryReason = nullableString(value, "primaryReason", 100);
   if (primaryReason !== null && primaryReason !== "INSIDE_PROMOTED_REGION" && !REJECTION_REASON_SET.has(primaryReason)) fail("sample primary reason이 유효하지 않습니다.");
+  const promotionSignal = nullableString(value, "promotionSignal", 30);
+  if (promotionSignal !== null && !PROMOTION_SIGNAL_SET.has(promotionSignal)) fail("sample promotion signal이 유효하지 않습니다.");
   if (!Array.isArray(value.ancestors) || value.ancestors.length > JOBKOREA_ANCESTOR_DEPTH_LIMIT) fail("sample ancestor chain이 유효하지 않습니다.");
   const flags = ["insideKnownResultRoot", "insideKnownOrdinaryRow", "insidePromotedRegion", "insideRecommendationRegion", "insideRecentViewRegion"] as const;
   if (flags.some((key) => typeof value[key] !== "boolean")) fail("sample flag가 유효하지 않습니다.");
@@ -141,7 +144,7 @@ function diagnosticSample(value: unknown): JobKoreaCandidateDiagnosticSample {
   if (!["table", "list", "article", "section", "div", "other"].includes(structureKind)) fail("sample structure kind가 유효하지 않습니다.");
   return {
     postingId, href: nullableString(value, "href", 2_048), classification: classification as JobKoreaCandidateDiagnosticSample["classification"],
-    primaryReason: primaryReason as JobKoreaCandidateDiagnosticSample["primaryReason"], sourcePosition: countField(value, "sourcePosition")!,
+    primaryReason: primaryReason as JobKoreaCandidateDiagnosticSample["primaryReason"], promotionSignal: promotionSignal as JobKoreaCandidateDiagnosticSample["promotionSignal"], sourcePosition: countField(value, "sourcePosition")!,
     anchor: elementSignature(value.anchor), ancestors: value.ancestors.map(elementSignature),
     insideKnownResultRoot: value.insideKnownResultRoot as boolean, insideKnownOrdinaryRow: value.insideKnownOrdinaryRow as boolean,
     insidePromotedRegion: value.insidePromotedRegion as boolean, insideRecommendationRegion: value.insideRecommendationRegion as boolean,
@@ -194,6 +197,16 @@ export function validateJobKoreaPageSnapshot(value: unknown): JobKoreaPageSnapsh
   if (Object.keys(value.rejectionReasonCounts).join("\0") !== Object.keys(value.rejectionReasonCounts).sort().join("\0")) fail("rejection reason keys가 결정적 순서가 아닙니다.");
   const rejectedTotal = Object.values(rejectionReasonCounts).reduce((sum, item) => sum + (item ?? 0), 0);
   if (evidence.rejectedDetailLinkCount !== null && rejectedTotal !== evidence.rejectedDetailLinkCount) fail("rejection reason 합계가 rejected count와 다릅니다.", "JOBKOREA_REJECTION_COUNT_MISMATCH");
+  if (!isPlainRecord(value.promotionSignalCounts)) fail("promotionSignalCounts가 plain object가 아닙니다.");
+  const promotionSignalCounts: JobKoreaPageSnapshot["promotionSignalCounts"] = {};
+  for (const key of Object.keys(value.promotionSignalCounts).sort()) {
+    if (!PROMOTION_SIGNAL_SET.has(key)) fail("알 수 없는 promotion signal입니다.");
+    const count = countField(value.promotionSignalCounts, key)!;
+    if (count > 0) promotionSignalCounts[key as keyof typeof promotionSignalCounts] = count;
+  }
+  if (Object.keys(value.promotionSignalCounts).join("\0") !== Object.keys(value.promotionSignalCounts).sort().join("\0")) fail("promotion signal keys가 결정적 순서가 아닙니다.");
+  const promotedTotal = Object.values(promotionSignalCounts).reduce((sum, item) => sum + (item ?? 0), 0);
+  if (evidence.promotedDetailLinkCount !== null && promotedTotal !== evidence.promotedDetailLinkCount) fail("promotion signal 합계가 promoted count와 다릅니다.", "JOBKOREA_PROMOTED_SIGNAL_COUNT_MISMATCH");
   if (!Array.isArray(value.ordinaryCandidates) || value.ordinaryCandidates.length > JOBKOREA_SNAPSHOT_CANDIDATE_LIMIT) fail("ordinary candidate 배열이 유효하지 않습니다.");
   const ordinaryCandidates = value.ordinaryCandidates.map((item) => {
     if (!isPlainRecord(item)) fail("ordinary candidate가 plain object가 아닙니다.");
@@ -224,7 +237,7 @@ export function validateJobKoreaPageSnapshot(value: unknown): JobKoreaPageSnapsh
     schemaVersion: 2, serializedSnapshotBytes, finalUrl: stringField(value, "finalUrl", 2_048), pageTitle: stringField(value, "pageTitle", 500),
     documentReadyState: readyState as JobKoreaDocumentReadyState, extractionCompleted: value.extractionCompleted,
     extractionDurationMs: value.extractionDurationMs as number | null, readiness, domChangedAfterReadiness: value.domChangedAfterReadiness as boolean | null,
-    evidence, rejectionReasonCounts, ordinaryCandidates, promotedCandidates, rejectedCandidates, diagnosticSamples,
+    evidence, rejectionReasonCounts, promotionSignalCounts, ordinaryCandidates, promotedCandidates, rejectedCandidates, diagnosticSamples,
     containerSignatures, containerSignaturesTruncated: value.containerSignaturesTruncated, diagnostics: diagnosticArray(value.diagnostics),
   };
 }
@@ -270,14 +283,21 @@ export const JOBKOREA_PAGE_READINESS_EVALUATOR_SOURCE = String.raw`(() => {
 // Literal source prevents tsx/esbuild helpers from leaking into the page realm.
 export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
   const schemaVersion = 2;
-  const ordinaryCandidateLimit = 200, ordinarySampleLimit = 10, promotedSampleLimit = 10, rejectedSampleLimit = 20, signatureLimit = 20, ancestorLimit = 8;
+  const ordinaryCandidateLimit = 200, ordinarySampleLimit = 10, promotedSampleLimit = 10, rejectedSampleLimit = 20, signatureLimit = 20, ancestorLimit = 8, promotionAncestorLimit = 6;
   const ordinarySelectors = "tr.devloopArea[data-gno], .list-default, .recruit-info, .recruit-list, .search-list, .list-post, [class*='recruit-list'], [class*='search-list']";
   const resultRootSelectors = "main, [role='main'], .list-default, .recruit-info, .recruit-list, .search-list, .list-post, [class*='recruit-list'], [class*='search-list']";
-  const promotedSelectors = "[class*='ad'], [class*='sponsor']";
   const recommendationSelectors = "[class*='recommend'], [class*='attention']";
   const recentSelectors = "[class*='recent']";
+  const exactPromotionClassTokens = new Set(["ad", "ads", "advertisement", "sponsor", "sponsored", "promoted"]);
+  const promotionDataValues = new Set(["ad", "advertisement", "sponsored", "promoted"]);
+  const promotionDataNames = ["data-type", "data-section", "data-track"];
   const dataAllowlist = ["data-gno", "data-gir-no", "data-recruit-no", "data-job-id", "data-id", "data-type", "data-section", "data-tab", "data-track", "data-sentry-component"];
   const compact = (input, maximum) => String(input ?? "").replace(/\s+/g, " ").trim().slice(0, maximum);
+  const promotionClassToken = (token) => { const value=compact(token,100).toLowerCase(); return exactPromotionClassTokens.has(value)||/^(?:ad|sponsored|promoted)[-_][a-z0-9]/.test(value); };
+  const promotionAttributeValue = (value) => compact(value,200).toLowerCase().split(/[\s,|]+/).filter(Boolean).some((token)=>promotionDataValues.has(token));
+  const directSemanticPromotionLabel = (element) => { if(!(element instanceof Element)) return false; const direct=Array.from(element.childNodes).filter((node)=>node.nodeType===Node.TEXT_NODE).map((node)=>node.textContent??"").join(" "); const labels=[direct,element.getAttribute("aria-label")??""]; return labels.some((value)=>/^(?:ad|광고|sponsored)$/i.test(compact(value,50))); };
+  const explicitPromotionSignal = (element) => { if(!(element instanceof Element)) return null; if(Array.from(element.classList).some(promotionClassToken)) return "exact_class_token"; for(const name of promotionDataNames){const value=element.getAttribute(name);if(value!==null&&promotionAttributeValue(value))return "data_attribute";} if(directSemanticPromotionLabel(element))return "semantic_label"; return null; };
+  const promotionEvidence = (anchor) => { let current=anchor,depth=0; while(current instanceof Element&&depth<=promotionAncestorLimit){ if(current.tagName==="BODY"||current.tagName==="MAIN")break; const signal=explicitPromotionSignal(current); if(signal)return {element:current,signal,depth}; current=current.parentElement; depth+=1; } return null; };
   const emptyEvidence = () => ({ ordinaryContainerCount:null, ordinaryRowCount:null, resultRootCount:null, knownTableResultCount:null, knownListResultCount:null, knownCardResultCount:null,numericLinksInsideKnownTableResults:null,numericLinksInsideKnownListResults:null,numericLinksInsideKnownCardResults:null,ordinaryDetailLinkCount:null, allNumericDetailLinkCount:null, promotedContainerCount:null, recommendationContainerCount:null, recentViewContainerCount:null, promotedDetailLinkCount:null, rejectedDetailLinkCount:null, numericLinksInsideKnownResultRoots:null, numericLinksOutsideKnownResultRoots:null, noResultMarkerCount:null, loginMarkerCount:null, captchaMarkerCount:null, verificationMarkerCount:null, accessDeniedMarkerCount:null });
   const marker = (element, pattern) => element instanceof Element && pattern.test(compact((element.id ?? "") + " " + (element.getAttribute("class") ?? ""), 1000));
   const signature = (element, depth) => {
@@ -290,7 +310,7 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
       childElementCount: element instanceof Element ? element.childElementCount : 0,
       numericDetailLinkCount: element instanceof Element ? Array.from(element.querySelectorAll('a[href*="/Recruit/GI_Read"]')).filter((node) => /\/Recruit\/GI_Read\/\d+(?:[/?#]|$)/i.test(node.getAttribute("href") ?? "")).length : 0,
       hasKnownOrdinaryMarker: element instanceof Element && (element.matches("tr.devloopArea[data-gno]") || element.matches(ordinarySelectors)),
-      hasPromotedMarker: marker(element, /(^|[-_\s])(ad|sponsor|sponsored)([-_\s]|$)/i),
+      hasPromotedMarker: Boolean(explicitPromotionSignal(element)),
       hasRecommendationMarker: marker(element, /recommend|attention/i), hasRecentViewMarker: marker(element, /recent/i) };
   };
   const ancestorChain = (anchor) => { const result=[]; let current=anchor.parentElement; let depth=1; while(current && depth<=ancestorLimit){ result.push(signature(current,depth)); if(current.tagName==="BODY" || current.tagName==="MAIN" || current.matches(resultRootSelectors)) break; current=current.parentElement; depth+=1; } return result; };
@@ -302,13 +322,14 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
     const detailNodes = Array.from(document.querySelectorAll('a[href*="/Recruit/GI_Read"]'));
     const ordinaryCandidates=[], promotedCandidates=[], rejectedCandidates=[], diagnostics=[];
     const diagnosticSamples={ordinary:[],promoted:[],rejected:[],ordinaryTruncated:false,promotedTruncated:false,rejectedTruncated:false};
-    const rejectionCounts={}, signatureAggregates={};
+    const rejectionCounts={}, promotionSignalCounts={}, signatureAggregates={};
+    const explicitPromotedElements=new Set();
     let allNumericDetailLinkCount=0, ordinaryDetailLinkCount=0, promotedDetailLinkCount=0, rejectedDetailLinkCount=0;
     const resultRoots=Array.from(document.querySelectorAll(resultRootSelectors));
     const withinRoot=(node)=>resultRoots.some((root)=>root===node || root.contains(node));
     const addReason=(reason)=>{ rejectionCounts[reason]=(rejectionCounts[reason]??0)+1; };
     const addSummary=(container,classification,postingId)=>{ const item=signature(container,1), key=signatureKey(item); if(!signatureAggregates[key]) signatureAggregates[key]={signatureKey:key,count:0,candidateClassifications:{ordinary:0,promoted:0,rejected:0},samplePostingIds:[],signature:item}; const summary=signatureAggregates[key]; summary.count+=1; summary.candidateClassifications[classification]+=1; if(postingId && summary.samplePostingIds.length<3 && !summary.samplePostingIds.includes(postingId)) summary.samplePostingIds.push(postingId); };
-    const addSample=(classification,anchor,postingId,href,reason,position,flags)=>{ const list=diagnosticSamples[classification], limit=classification==="ordinary"?ordinarySampleLimit:classification==="promoted"?promotedSampleLimit:rejectedSampleLimit; if(list.length>=limit){ diagnosticSamples[classification+"Truncated"]=true; return; } list.push({postingId,href,classification,primaryReason:reason,sourcePosition:position,anchor:signature(anchor,0),ancestors:ancestorChain(anchor),insideKnownResultRoot:flags.resultRoot,insideKnownOrdinaryRow:flags.row,insidePromotedRegion:flags.promoted,insideRecommendationRegion:flags.recommendation,insideRecentViewRegion:flags.recent,structureKind:structureKind(anchor)}); };
+    const addSample=(classification,anchor,postingId,href,reason,promotionSignal,position,flags)=>{ const list=diagnosticSamples[classification], limit=classification==="ordinary"?ordinarySampleLimit:classification==="promoted"?promotedSampleLimit:rejectedSampleLimit; if(list.length>=limit){ diagnosticSamples[classification+"Truncated"]=true; return; } list.push({postingId,href,classification,primaryReason:reason,promotionSignal,sourcePosition:position,anchor:signature(anchor,0),ancestors:ancestorChain(anchor),insideKnownResultRoot:flags.resultRoot,insideKnownOrdinaryRow:flags.row,insidePromotedRegion:flags.promoted,insideRecommendationRegion:flags.recommendation,insideRecentViewRegion:flags.recent,structureKind:structureKind(anchor)}); };
     for(let index=0;index<detailNodes.length;index+=1){
       const node=detailNodes[index], position=index+1, rawHref=node instanceof Element?node.getAttribute("href"):null;
       if(!(node instanceof HTMLAnchorElement)){ rejectedDetailLinkCount+=1; addReason("SVG_ANCHOR_UNSUPPORTED"); if(rejectedCandidates.length<rejectedSampleLimit) rejectedCandidates.push({postingId:null,href:rawHref?compact(rawHref,2048):null,reason:"SVG_ANCHOR_UNSUPPORTED"}); continue; }
@@ -319,12 +340,12 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
       const postingId=pathId??anyId;
       if(postingId) allNumericDetailLinkCount+=1;
       const row=node.closest("tr.devloopArea[data-gno]"), ordinaryRoot=node.closest(ordinarySelectors), resultRoot=withinRoot(node), unrelated=Boolean(node.closest("header,footer,aside,nav"));
-      const recommendationRoot=node.closest(recommendationSelectors), recentRoot=node.closest(recentSelectors), promotedRoot=node.closest(promotedSelectors);
+      const recommendationRoot=node.closest(recommendationSelectors), recentRoot=node.closest(recentSelectors), promotedEvidence=promotionEvidence(node);
       const container=row??node.closest("li,article,section,div,tr")??node.parentElement??node;
       const containerText=compact(container.textContent,1000);
       const recommendation=Boolean(recommendationRoot)||/지금\s*주목할\s*만한\s*공고|추천\s*공고/.test(containerText);
       const recent=Boolean(recentRoot)||/최근\s*본\s*공고/.test(containerText);
-      const promoted=Boolean(promotedRoot)||/(?:^|\s)AD(?:\s|$)|스폰서|sponsored/i.test(containerText);
+      const promoted=Boolean(promotedEvidence); if(promotedEvidence)explicitPromotedElements.add(promotedEvidence.element);
       const flags={resultRoot,row:Boolean(row),promoted,recommendation,recent};
       let rejection=null;
       if(!parsed) rejection="INVALID_DETAIL_PATH";
@@ -333,19 +354,22 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
       else if(!postingId) rejection="INVALID_POSTING_ID";
       else if(recent) rejection="INSIDE_RECENT_VIEW_REGION";
       else if(recommendation) rejection="INSIDE_RECOMMENDATION_REGION";
-      if(rejection){ rejectedDetailLinkCount+=1; addReason(rejection); const href=parsed&&pathId?"https://www.jobkorea.co.kr/Recruit/GI_Read/"+pathId:(parsed?compact(parsed.origin+parsed.pathname,2048):null); if(rejectedCandidates.length<rejectedSampleLimit) rejectedCandidates.push({postingId,href,reason:rejection}); addSample("rejected",node,postingId,href,rejection,position,flags); addSummary(container,"rejected",postingId); continue; }
+      if(rejection){ rejectedDetailLinkCount+=1; addReason(rejection); const href=parsed&&pathId?"https://www.jobkorea.co.kr/Recruit/GI_Read/"+pathId:(parsed?compact(parsed.origin+parsed.pathname,2048):null); if(rejectedCandidates.length<rejectedSampleLimit) rejectedCandidates.push({postingId,href,reason:rejection}); addSample("rejected",node,postingId,href,rejection,null,position,flags); addSummary(container,"rejected",postingId); continue; }
       const href="https://www.jobkorea.co.kr/Recruit/GI_Read/"+postingId;
-      if(promoted){ promotedDetailLinkCount+=1; if(promotedCandidates.length<promotedSampleLimit) promotedCandidates.push({postingId,href,reason:"INSIDE_PROMOTED_REGION"}); addSample("promoted",node,postingId,href,"INSIDE_PROMOTED_REGION",position,flags); addSummary(container,"promoted",postingId); continue; }
+      if(promoted){ promotedDetailLinkCount+=1; promotionSignalCounts[promotedEvidence.signal]=(promotionSignalCounts[promotedEvidence.signal]??0)+1; if(promotedCandidates.length<promotedSampleLimit) promotedCandidates.push({postingId,href,reason:"INSIDE_PROMOTED_REGION"}); addSample("promoted",node,postingId,href,"INSIDE_PROMOTED_REGION",promotedEvidence.signal,position,flags); addSummary(container,"promoted",postingId); continue; }
       if(unrelated) rejection="INSIDE_UNRELATED_WIDGET";
       else if(!(row||(ordinaryRoot&&!recommendationRoot&&!recentRoot))) rejection=resultRoot?"ANCESTOR_SIGNATURE_UNRECOGNIZED":"OUTSIDE_RESULT_ROOT";
-      if(rejection){ rejectedDetailLinkCount+=1; addReason(rejection); if(rejectedCandidates.length<rejectedSampleLimit) rejectedCandidates.push({postingId,href,reason:rejection}); addSample("rejected",node,postingId,href,rejection,position,flags); addSummary(container,"rejected",postingId); continue; }
+      if(rejection){ rejectedDetailLinkCount+=1; addReason(rejection); if(rejectedCandidates.length<rejectedSampleLimit) rejectedCandidates.push({postingId,href,reason:rejection}); addSample("rejected",node,postingId,href,rejection,null,position,flags); addSummary(container,"rejected",postingId); continue; }
       ordinaryDetailLinkCount+=1;
       if(ordinaryCandidates.length<ordinaryCandidateLimit){ const company=container.querySelector(".name,.company,[class*='company'],[class*='corp']"); ordinaryCandidates.push({postingId,href,title:compact(node.textContent,300),companyName:compact(company?.textContent,200),position:ordinaryCandidates.length+1,rowId:row?.getAttribute("data-gno")?compact(row.getAttribute("data-gno"),30):null,sourceSelector:row?"tr.devloopArea[data-gno]":"ordinary_result_container"}); }
-      addSample("ordinary",node,postingId,href,null,position,flags); addSummary(container,"ordinary",postingId);
+      addSample("ordinary",node,postingId,href,null,null,position,flags); addSummary(container,"ordinary",postingId);
     }
     const sortedRejectionCounts={}; for(const key of Object.keys(rejectionCounts).sort()) if(rejectionCounts[key]>0) sortedRejectionCounts[key]=rejectionCounts[key];
+    const sortedPromotionSignalCounts={}; for(const key of Object.keys(promotionSignalCounts).sort()) if(promotionSignalCounts[key]>0) sortedPromotionSignalCounts[key]=promotionSignalCounts[key];
     const allSummaries=Object.values(signatureAggregates).sort((a,b)=>b.count-a.count||a.signatureKey.localeCompare(b.signatureKey));
     const containerSignaturesTruncated=allSummaries.length>signatureLimit, containerSignatures=allSummaries.slice(0,signatureLimit);
+    const legacyBroadPromotedCount=document.querySelectorAll("[class*='ad'], [class*='sponsor']").length;
+    if(legacyBroadPromotedCount>explicitPromotedElements.size) diagnostics.push({code:"JOBKOREA_PROMOTED_CLASS_SUBSTRING_OVERMATCH",message:"legacy broad class matches="+legacyBroadPromotedCount+", explicit promoted containers="+explicitPromotedElements.size});
     if(containerSignaturesTruncated) diagnostics.push({code:"JOBKOREA_CONTAINER_SIGNATURES_TRUNCATED",message:"container signature summaries exceeded limit="+signatureLimit});
     if(diagnosticSamples.rejectedTruncated) diagnostics.push({code:"JOBKOREA_REJECTED_SAMPLES_TRUNCATED",message:"rejected diagnostic samples exceeded limit="+rejectedSampleLimit});
     if(diagnosticSamples.promotedTruncated||diagnosticSamples.ordinaryTruncated) diagnostics.push({code:"JOBKOREA_CANDIDATE_SAMPLES_TRUNCATED",message:"candidate diagnostic samples were truncated"});
@@ -362,9 +386,9 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
     const numericInLists=numericNodes.filter((node)=>Boolean(node.closest("ul,ol"))&&withinRoot(node)).length;
     const numericInCards=numericNodes.filter((node)=>Boolean(node.closest("article"))&&withinRoot(node)).length;
     return {schemaVersion,serializedSnapshotBytes:0,finalUrl:String(location.href),pageTitle:compact(document.title,500),documentReadyState:["loading","interactive","complete"].includes(document.readyState)?document.readyState:"unknown",extractionCompleted:true,extractionDurationMs:Math.max(0,performance.now()-extractionStarted),readiness:null,domChangedAfterReadiness:null,
-      evidence:{ordinaryContainerCount:document.querySelectorAll(ordinarySelectors).length,ordinaryRowCount:document.querySelectorAll("tr.devloopArea[data-gno]").length,resultRootCount:resultRoots.length,knownTableResultCount:tableResults,knownListResultCount:listResults,knownCardResultCount:cardResults,numericLinksInsideKnownTableResults:numericInTables,numericLinksInsideKnownListResults:numericInLists,numericLinksInsideKnownCardResults:numericInCards,ordinaryDetailLinkCount,allNumericDetailLinkCount,promotedContainerCount:document.querySelectorAll(promotedSelectors).length,recommendationContainerCount:document.querySelectorAll(recommendationSelectors).length,recentViewContainerCount:document.querySelectorAll(recentSelectors).length,promotedDetailLinkCount,rejectedDetailLinkCount,numericLinksInsideKnownResultRoots:insideCount,numericLinksOutsideKnownResultRoots:numericNodes.length-insideCount,noResultMarkerCount:noResult,loginMarkerCount:login,captchaMarkerCount:captcha,verificationMarkerCount:verification,accessDeniedMarkerCount:accessDenied},
-      rejectionReasonCounts:sortedRejectionCounts,ordinaryCandidates,promotedCandidates,rejectedCandidates,diagnosticSamples,containerSignatures,containerSignaturesTruncated,diagnostics};
-  }catch(error){const message=error instanceof Error?error.message:String(error);return {schemaVersion,serializedSnapshotBytes:0,finalUrl:String(location.href),pageTitle:compact(document.title,500),documentReadyState:["loading","interactive","complete"].includes(document.readyState)?document.readyState:"unknown",extractionCompleted:false,extractionDurationMs:null,readiness:null,domChangedAfterReadiness:null,evidence:emptyEvidence(),rejectionReasonCounts:{},ordinaryCandidates:[],promotedCandidates:[],rejectedCandidates:[],diagnosticSamples:{ordinary:[],promoted:[],rejected:[],ordinaryTruncated:false,promotedTruncated:false,rejectedTruncated:false},containerSignatures:[],containerSignaturesTruncated:false,diagnostics:[{code:"JOBKOREA_SNAPSHOT_EVALUATION_FAILED",message:compact(message,500)||"page context snapshot extraction failed"}]};}
+      evidence:{ordinaryContainerCount:document.querySelectorAll(ordinarySelectors).length,ordinaryRowCount:document.querySelectorAll("tr.devloopArea[data-gno]").length,resultRootCount:resultRoots.length,knownTableResultCount:tableResults,knownListResultCount:listResults,knownCardResultCount:cardResults,numericLinksInsideKnownTableResults:numericInTables,numericLinksInsideKnownListResults:numericInLists,numericLinksInsideKnownCardResults:numericInCards,ordinaryDetailLinkCount,allNumericDetailLinkCount,promotedContainerCount:explicitPromotedElements.size,recommendationContainerCount:document.querySelectorAll(recommendationSelectors).length,recentViewContainerCount:document.querySelectorAll(recentSelectors).length,promotedDetailLinkCount,rejectedDetailLinkCount,numericLinksInsideKnownResultRoots:insideCount,numericLinksOutsideKnownResultRoots:numericNodes.length-insideCount,noResultMarkerCount:noResult,loginMarkerCount:login,captchaMarkerCount:captcha,verificationMarkerCount:verification,accessDeniedMarkerCount:accessDenied},
+      rejectionReasonCounts:sortedRejectionCounts,promotionSignalCounts:sortedPromotionSignalCounts,ordinaryCandidates,promotedCandidates,rejectedCandidates,diagnosticSamples,containerSignatures,containerSignaturesTruncated,diagnostics};
+  }catch(error){const message=error instanceof Error?error.message:String(error);return {schemaVersion,serializedSnapshotBytes:0,finalUrl:String(location.href),pageTitle:compact(document.title,500),documentReadyState:["loading","interactive","complete"].includes(document.readyState)?document.readyState:"unknown",extractionCompleted:false,extractionDurationMs:null,readiness:null,domChangedAfterReadiness:null,evidence:emptyEvidence(),rejectionReasonCounts:{},promotionSignalCounts:{},ordinaryCandidates:[],promotedCandidates:[],rejectedCandidates:[],diagnosticSamples:{ordinary:[],promoted:[],rejected:[],ordinaryTruncated:false,promotedTruncated:false,rejectedTruncated:false},containerSignatures:[],containerSignaturesTruncated:false,diagnostics:[{code:"JOBKOREA_SNAPSHOT_EVALUATION_FAILED",message:compact(message,500)||"page context snapshot extraction failed"}]};}
 })()`;
 
 export async function captureJobKoreaReadinessEvidence(page: Page): Promise<JobKoreaReadinessEvidence> {

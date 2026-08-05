@@ -94,6 +94,14 @@
 
 ## Product and UX Guidance
 
+- 광고 판정에 `[class*="ad"]`, `className.includes("ad")`, `/ad/`처럼 짧은 부분 문자열을 사용하지 않는다.
+- 광고 class는 완전한 token 또는 근거가 있는 제한적 prefix pattern으로만 판정하며 `shadow`, `badge`, `header`, `gradient` 같은 utility token은 광고 근거가 아니다.
+- 광고 판정은 후보 anchor에서 최대 6단계의 가까운 ancestor로 제한하고 `BODY`·`MAIN`의 페이지 수준 라벨을 하위 후보에 전파하지 않는다.
+- generic utility container는 ordinary 또는 promoted 근거가 아니며 synthetic 구조를 실제 source selector 근거로 사용하지 않는다.
+- production ordinary selector는 실제 관찰 또는 기존 기록 근거 없이 넓히지 않는다.
+- JobKorea evaluator의 synthetic 88/28/60 acceptance 계약과 외부-network 차단을 유지한다.
+- 실제 JobKorea transport run은 매번 별도 명시 승인을 받아야 한다.
+
 - 목록이 주 인터페이스이고 지도는 보조다.
 - 급여와 위치는 빠르게 비교할 수 있어야 한다.
 - 소스와 위치 정확도·환산 신뢰도를 숨기지 않는다.

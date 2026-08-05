@@ -36,6 +36,7 @@ export type JobKoreaRejectionReason =
   | "DETACHED_DURING_EXTRACTION" | "SVG_ANCHOR_UNSUPPORTED" | "UNKNOWN_REJECTION";
 
 export type JobKoreaCandidateClassification = "ordinary" | "promoted" | "rejected";
+export type JobKoreaPromotionSignal = "exact_class_token" | "data_attribute" | "semantic_label";
 export type JobKoreaDocumentReadyState = "loading" | "interactive" | "complete" | "unknown";
 export type JobKoreaReadinessReason = "numeric_detail_link" | "ordinary_container" | "no_result" | "login"
   | "captcha" | "verification" | "access_denied" | "unknown";
@@ -64,6 +65,7 @@ export interface JobKoreaCandidateDiagnosticSample {
   href: string | null;
   classification: JobKoreaCandidateClassification;
   primaryReason: JobKoreaRejectionReason | "INSIDE_PROMOTED_REGION" | null;
+  promotionSignal: JobKoreaPromotionSignal | null;
   sourcePosition: number;
   anchor: JobKoreaElementSignature;
   ancestors: JobKoreaElementSignature[];
@@ -141,6 +143,7 @@ export interface JobKoreaPageSnapshot {
     accessDeniedMarkerCount: number | null;
   };
   rejectionReasonCounts: Partial<Record<JobKoreaRejectionReason, number>>;
+  promotionSignalCounts: Partial<Record<JobKoreaPromotionSignal, number>>;
   ordinaryCandidates: JobKoreaSnapshotOrdinaryCandidate[];
   promotedCandidates: JobKoreaSnapshotExcludedCandidate[];
   rejectedCandidates: JobKoreaSnapshotExcludedCandidate[];
@@ -198,6 +201,7 @@ export interface JobKoreaListingPageResult {
   parserFailure: boolean;
   evidence: JobKoreaPageSnapshot["evidence"] | null;
   rejectionReasonCounts: JobKoreaPageSnapshot["rejectionReasonCounts"] | null;
+  promotionSignalCounts: JobKoreaPageSnapshot["promotionSignalCounts"] | null;
   diagnosticSamples: JobKoreaPageSnapshot["diagnosticSamples"] | null;
   containerSignatures: JobKoreaContainerSignatureSummary[] | null;
   containerSignaturesTruncated: boolean | null;

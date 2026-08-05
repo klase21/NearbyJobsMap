@@ -25,7 +25,7 @@ export function jobKoreaSnapshot(
       rejectedDetailLinkCount: 0, numericLinksInsideKnownResultRoots: count,
       numericLinksOutsideKnownResultRoots: 0, noResultMarkerCount: 0, loginMarkerCount: 0,
       captchaMarkerCount: 0, verificationMarkerCount: 0, accessDeniedMarkerCount: 0 },
-    rejectionReasonCounts: {}, ordinaryCandidates, promotedCandidates: [], rejectedCandidates: [],
+    rejectionReasonCounts: {}, promotionSignalCounts: {}, ordinaryCandidates, promotedCandidates: [], rejectedCandidates: [],
     diagnosticSamples: { ordinary: [], promoted: [], rejected: [], ordinaryTruncated: false,
       promotedTruncated: false, rejectedTruncated: false },
     containerSignatures: [], containerSignaturesTruncated: false, diagnostics: [],
