@@ -113,6 +113,12 @@ export const syntheticJobKoreaPages = {
     <div class="split-card"><a href="/Recruit/GI_Read/65000001">Second</a></div>
     <div class="split-card"><a href="/Recruit/GI_Read/65000002">Peer</a></div>
   </div></main>`),
+  largeSplitPostingGroup: document(`<main data-section="synthetic-large-split"><div class="results-shell">
+    <div class="split-card"><a href="/Recruit/GI_Read/65000101">First</a></div>
+    ${Array.from({ length: 201 }, (_, index) => `<span data-id="padding-${index}"></span>`).join("")}
+    <div class="split-card"><a href="/Recruit/GI_Read/65000101">Second</a></div>
+    <div class="split-card"><a href="/Recruit/GI_Read/65000102">Peer</a></div>
+  </div></main>`),
   mixedStructuralExclusions: document(`<main data-section="synthetic-exclusions"><div class="results-shell">
     ${Array.from({ length: 3 }, (_, index) => structuralCard(66000000 + index, 1)).join("")}
     <div class="ad"><a href="/Recruit/GI_Read/66000100">Promoted</a></div>

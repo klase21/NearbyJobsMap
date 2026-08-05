@@ -109,6 +109,8 @@
 - generic class는 구조 반복을 비교하는 diagnostic shape에만 사용할 수 있고 production ordinary selector 근거가 아니다.
 - synthetic structural DOM은 real-source evidence가 아니며 실제 transport는 별도 명시 승인이 있어야 한다.
 - shadow aggregate는 sample truncation과 무관하게 완전해야 하고 snapshot은 JSON-safe 256 KiB 상한을 유지한다.
+- descendant 한도 초과가 multi-ID 또는 split/duplicate group 진단을 가리면 안 되며, 동시에 참인 structural rejection reason은 함께 집계한다.
+- diagnostic CLI는 provisional unique-ID 수, truncation 상태, 반복 parent summary와 bounded group sample을 보존한다.
 
 - 목록이 주 인터페이스이고 지도는 보조다.
 - 급여와 위치는 빠르게 비교할 수 있어야 한다.

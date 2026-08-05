@@ -66,10 +66,22 @@ describe("잡코리아 browser search → parser → SQLite pipeline", () => {
     result.pageResults[0]!.promotionSignalCounts = { exact_class_token: 2 };
     result.pageResults[0]!.shadowStructure = {
       provisionalPostingGroupCount: 3, structurallyEligibleGroupCount: 3, structurallyRejectedGroupCount: 0,
-      totalGroupedNumericLinkCount: 6, ungroupedNumericLinkCount: 0, provisionalPostingGroups: [],
-      structuralGroupRejectionReasonCounts: {}, repeatedListParentSummaries: [], provisionalUniquePostingIds: ["101", "102", "103"],
+      totalGroupedNumericLinkCount: 6, ungroupedNumericLinkCount: 0,
+      structuralGroupRejectionReasonCounts: {}, repeatedListParentSummaries: [{ signatureKey: "div|classes=results-shell",
+        parentCount: 1, repeatedGroupCount: 3, samplePostingIds: ["101", "102", "103"],
+        signature: { tag: "div", id: null, classes: ["results-shell"], role: null, dataAttributes: {},
+          ariaLabelPresent: false, depthFromAnchor: 3, childElementCount: 3, numericDetailLinkCount: 6,
+          hasKnownOrdinaryMarker: false, hasPromotedMarker: false, hasRecommendationMarker: false, hasRecentViewMarker: false } }],
+      provisionalUniquePostingIds: ["101", "102", "103"],
       provisionalGroupSamplesTruncated: false, structuralSummariesTruncated: false,
       verifiedOrdinaryAlsoStructurallyEligible: 0, structurallyEligibleButUnverified: 3, verifiedOrdinaryStructuralMismatch: 0,
+      provisionalPostingGroups: [{ postingId: "101", canonicalUrl: "https://www.jobkorea.co.kr/Recruit/GI_Read/101",
+        linkCount: 2, sourcePositions: [1, 2], groupAncestor: null, groupAncestorDepth: 2, parentListSignature: null,
+        siblingGroupCount: 3, uniquePostingIdsInsideGroup: ["101"], allLinksSharePostingId: true,
+        insideKnownResultRoot: true, explicitPromotionEvidence: false, explicitRecommendationEvidence: false,
+        explicitRecentViewEvidence: false, repeatedSiblingStructure: true, structurallyEligible: true,
+        verifiedOrdinary: false, rejectionReasons: [], structuralSignatureKey: "div|classes=job-card",
+        parentSignatureKey: "div|classes=results-shell" }],
       structuralGroupSignatureSummaries: [{ signatureKey: "div|classes=job-card", groupCount: 3,
         eligibleGroupCount: 3, rejectedGroupCount: 0, linkCountDistribution: { "2": 3 }, siblingGroupCountMaximum: 3,
         samplePostingIds: ["101", "102", "103"], signature: { tag: "div", id: null, classes: ["job-card"], role: null,
@@ -86,7 +98,10 @@ describe("잡코리아 browser search → parser → SQLite pipeline", () => {
     expect(diagnosticOutput).toContain("  - exact_class_token: 2");
     expect(diagnosticOutput).toContain("  - article.recruit-card[data-gno]@1: count=2 tag=article classes=recruit-card role=none data=data-gno=101 depth=1 numeric_links=1 ordinary=0 promoted=0 rejected=2 sample_ids=101,102");
     expect(diagnosticOutput).toContain("  - provisional_groups=3 eligible=3 rejected=0 grouped_links=6 ungrouped_links=0");
+    expect(diagnosticOutput).toContain("  - provisional_unique_ids=3 group_samples_truncated=false structural_summaries_truncated=false");
     expect(diagnosticOutput).toContain("  - group_signature=div|classes=job-card groups=3 eligible=3 rejected=0 links=2x3 sibling_max=3 sample_ids=101,102,103");
+    expect(diagnosticOutput).toContain("  - parent_signature=div|classes=results-shell parents=1 repeated_groups=3 sample_ids=101,102,103");
+    expect(diagnosticOutput).toContain("  - group_sample=101 links=2 ancestor_depth=2 sibling_groups=3 inside_root=true same_id=true repeated=true eligible=true reasons=none");
     expect(diagnosticOutput).toContain("- type=image host=third_party code=net::ERR_FAILED navigation_critical=false");
     expect(new JobRepository(testDatabase.database).listAll()).toHaveLength(3);
     expect(execution.closed).toBe(true);

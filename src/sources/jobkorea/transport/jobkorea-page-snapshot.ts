@@ -486,8 +486,10 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
       if(!insideKnown)reasons.push("OUTSIDE_KNOWN_RESULT_ROOT");
       if(!selected)reasons.push("GROUP_ANCESTOR_NOT_FOUND");
       else if(pageLevel)reasons.push(entries.length>1?"DUPLICATE_GROUP":"GROUP_ANCESTOR_IS_PAGE_LEVEL");
-      else if(descendantExceeded)reasons.push("GROUP_DESCENDANT_LIMIT_EXCEEDED");
-      else if(uniqueInside.length!==1||uniqueInside[0]!==postingId)reasons.push(entries.length>1?"DUPLICATE_GROUP":"MULTIPLE_POSTING_IDS_IN_GROUP");
+      else {
+        if(descendantExceeded)reasons.push("GROUP_DESCENDANT_LIMIT_EXCEEDED");
+        if(uniqueInside.length!==1||uniqueInside[0]!==postingId)reasons.push(entries.length>1?"DUPLICATE_GROUP":"MULTIPLE_POSTING_IDS_IN_GROUP");
+      }
       if(flags.promoted)reasons.push("GROUP_CONTAINS_PROMOTED_EVIDENCE");
       if(flags.recommendation)reasons.push("GROUP_CONTAINS_RECOMMENDATION_EVIDENCE");
       if(flags.recent)reasons.push("GROUP_CONTAINS_RECENT_VIEW_EVIDENCE");

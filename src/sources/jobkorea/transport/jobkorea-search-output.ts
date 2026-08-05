@@ -43,12 +43,19 @@ export function formatJobKoreaSearchResult(result: JobKoreaSearchOneShotResult, 
       const shadow = page.shadowStructure;
       lines.push("  JobKorea provisional ordinary structure:");
       lines.push(`  - provisional_groups=${shadow.provisionalPostingGroupCount} eligible=${shadow.structurallyEligibleGroupCount} rejected=${shadow.structurallyRejectedGroupCount} grouped_links=${shadow.totalGroupedNumericLinkCount} ungrouped_links=${shadow.ungroupedNumericLinkCount}`);
+      lines.push(`  - provisional_unique_ids=${shadow.provisionalUniquePostingIds.length} group_samples_truncated=${shadow.provisionalGroupSamplesTruncated} structural_summaries_truncated=${shadow.structuralSummariesTruncated}`);
       lines.push(`  - verified_agreement=${shadow.verifiedOrdinaryAlsoStructurallyEligible} eligible_unverified=${shadow.structurallyEligibleButUnverified} verified_mismatch=${shadow.verifiedOrdinaryStructuralMismatch}`);
       if (Object.keys(shadow.structuralGroupRejectionReasonCounts).length) {
         lines.push(`  - structural_rejections=${Object.entries(shadow.structuralGroupRejectionReasonCounts).map(([reason, count]) => `${reason}:${count}`).join(" ")}`);
       }
       for (const item of shadow.structuralGroupSignatureSummaries) {
         lines.push(`  - group_signature=${item.signatureKey} groups=${item.groupCount} eligible=${item.eligibleGroupCount} rejected=${item.rejectedGroupCount} links=${Object.entries(item.linkCountDistribution).map(([count, groups]) => `${count}x${groups}`).join(",")} sibling_max=${item.siblingGroupCountMaximum} sample_ids=${item.samplePostingIds.join(",") || "none"}`);
+      }
+      for (const item of shadow.repeatedListParentSummaries) {
+        lines.push(`  - parent_signature=${item.signatureKey} parents=${item.parentCount} repeated_groups=${item.repeatedGroupCount} sample_ids=${item.samplePostingIds.join(",") || "none"}`);
+      }
+      for (const group of shadow.provisionalPostingGroups.slice(0, 5)) {
+        lines.push(`  - group_sample=${group.postingId} links=${group.linkCount} ancestor_depth=${group.groupAncestorDepth ?? "none"} sibling_groups=${group.siblingGroupCount ?? "none"} inside_root=${group.insideKnownResultRoot} same_id=${group.allLinksSharePostingId} repeated=${group.repeatedSiblingStructure} eligible=${group.structurallyEligible} reasons=${group.rejectionReasons.join(",") || "none"}`);
       }
     }
   }

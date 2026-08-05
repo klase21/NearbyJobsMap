@@ -305,6 +305,13 @@ describe("잡코리아 synthetic page snapshot browser boundary", () => {
     const split = await snapshot(syntheticJobKoreaPages.splitPostingGroup);
     expect(split.shadowStructure.structurallyEligibleGroupCount).toBe(0);
     expect(split.shadowStructure.structuralGroupRejectionReasonCounts.DUPLICATE_GROUP).toBe(1);
+    const largeSplit = await snapshot(syntheticJobKoreaPages.largeSplitPostingGroup);
+    expect(largeSplit.shadowStructure.structuralGroupRejectionReasonCounts).toMatchObject({
+      DUPLICATE_GROUP: 1,
+      GROUP_DESCENDANT_LIMIT_EXCEEDED: 1,
+    });
+    expect(largeSplit.shadowStructure.provisionalPostingGroups.find(({ postingId }) => postingId === "65000101")?.rejectionReasons)
+      .toEqual(expect.arrayContaining(["DUPLICATE_GROUP", "GROUP_DESCENDANT_LIMIT_EXCEEDED"]));
   });
 
   it("promoted·recommendation·recent group을 structural eligibility에서 제외한다", async () => {
