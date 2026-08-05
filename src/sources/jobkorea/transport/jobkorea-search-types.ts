@@ -11,12 +11,24 @@ export type JobKoreaSearchPageClassification =
 
 export interface JobKoreaSearchOptions {
   searchUrl: string;
-  pages: 1 | 2;
-  maxDetails: 0 | 1 | 2 | 3;
+  pages: 1 | 2 | 3;
+  maxDetails: number;
   transport: JobKoreaSearchTransportChoice;
   confirm: true;
   dryRun: boolean;
   diagnostic: boolean;
+}
+
+export type JobKoreaListingClassificationMetadata =
+  | "verified_ordinary" | "explicit_promoted" | "recommendation" | "recent_view"
+  | "structurally_provisional" | "unclassified_result_link";
+
+export interface JobKoreaCollectionCandidate {
+  postingId: string;
+  canonicalUrl: string;
+  firstSourcePosition: number;
+  observedLinkCount: number;
+  listingClassification: JobKoreaListingClassificationMetadata;
 }
 
 export interface JobKoreaListingCandidate {
@@ -224,6 +236,7 @@ export interface JobKoreaPageSnapshot {
   containerSignatures: JobKoreaContainerSignatureSummary[];
   containerSignaturesTruncated: boolean;
   shadowStructure: JobKoreaShadowStructureDiagnostics;
+  collectionCandidates: JobKoreaCollectionCandidate[];
   diagnostics: JobKoreaSnapshotDiagnostic[];
 }
 
@@ -273,6 +286,7 @@ export interface JobKoreaListingPageResult {
   containerSignatures: JobKoreaContainerSignatureSummary[] | null;
   containerSignaturesTruncated: boolean | null;
   shadowStructure: JobKoreaShadowStructureDiagnostics | null;
+  collectionCandidates: JobKoreaCollectionCandidate[] | null;
   diagnostics: ParseDiagnostic[];
   candidates: JobKoreaListingCandidate[];
 }

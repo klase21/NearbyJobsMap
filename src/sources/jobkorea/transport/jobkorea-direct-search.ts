@@ -70,7 +70,7 @@ export function directHtmlSnapshot(html: string, finalUrl: string): JobKoreaPage
     diagnosticSamples: { ordinary: [], promoted: [], rejected: [], ordinaryTruncated: false,
       promotedTruncated: promotedCandidates.length > 10, rejectedTruncated: false },
     containerSignatures: [], containerSignaturesTruncated: false,
-    shadowStructure: emptyJobKoreaShadowStructure(ordinaryCandidates.length + promotedCandidates.length), diagnostics: [] });
+    shadowStructure: emptyJobKoreaShadowStructure(ordinaryCandidates.length + promotedCandidates.length), collectionCandidates: [], diagnostics: [] });
 }
 
 export function classifyDirectContractResponse(input: { status: number; contentType: string; body: string; finalUrl: string }, pageNumber = 1): JobKoreaListingPageResult {

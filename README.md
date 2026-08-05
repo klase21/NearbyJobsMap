@@ -219,3 +219,36 @@ npm run db:status
 별도 승인된 shadow 실측은 2026-08-05에 page 1, `max-details=0`, Playwright dry-run으로 정확히 한 번 실행됐다. 4,543ms 안에 108,830-byte schema-2 snapshot이 완성됐고, result root 1개 안의 numeric link 90개는 production ordinary 0, promoted 0, rejected 90으로 유지됐다. 고유 numeric posting ID와 provisional group은 26개였으며 22개가 반복 sibling 구조로 적격, 4개가 구조적으로 거절됐다. 적격 group은 link 3개짜리 22개였고 최대 sibling count는 25였다. production 분류는 계속 `malformed_results`이며 `JOBKOREA_ORDINARY_CONTAINER_CONTRACT_MISMATCH`와 `JOBKOREA_PROVISIONAL_ORDINARY_STRUCTURE_DETECTED`가 함께 유지된다. 이는 provisional 구조 증거일 뿐 ordinary selector나 실제 공고 승격 근거가 아니다.
 
 같은 실측은 나머지 4개 posting ID가 link 6개씩으로 넓은 공통 ancestor에 걸친 split/duplicate 형태임을 드러냈다. 기존 shadow reason 분기는 descendant 200개 초과를 먼저 기록해 multi-ID ancestor의 `DUPLICATE_GROUP`을 가렸다. 후속 오프라인 수정은 두 사실을 모두 집계하도록 바꾸고 large split synthetic Chromium 회귀 테스트를 추가했다. CLI diagnostic도 고유 ID 수, truncation 상태, 반복 parent summary와 최대 5개의 sanitized group sample을 보존한다. 승인된 실요청은 반복하지 않았으므로 이번 실행의 숨겨졌던 repeated-parent 세부값은 사후에 추정하지 않는다. 상세 navigation, page 2, `_GI_List`, retry, SQLite write는 모두 0이었다. 다음 단계는 이 수정된 진단으로 **별도 승인된 page-1, `max-details=0` dry-run 1회**를 수행해 split-group 및 repeated-parent 값을 직접 재측정하는 것이다.
+
+## 잡코리아 수동 bounded 수집
+
+제품 경계는 이제 `검색 페이지 → result root 안 숫자 posting ID → 상세 페이지 검증 → CanonicalJob → SQLite`로 연결된다. 미해결 ordinary 컨테이너 판정은 목록 provenance metadata일 뿐 상세 방문 gate가 아니다. result root 밖 링크, 비숫자 ID, 비정규 URL은 제외하며 페이지 번호와 최초 source 위치 순서로 posting ID를 중복 제거한다. 상세 페이지의 ID, JobPosting 구조, 제목, 회사명, 기존 parser·normalizer 및 canonical 검증이 저장 여부의 최종 기준이다.
+
+Dry-run은 상세 페이지까지 확인하고 insert/update/unchanged를 예측하지만 ingestion run, item, provenance 또는 job을 쓰지 않는다.
+
+```powershell
+Set-Location C:\NearbyJobsMap
+npm.cmd run collect:jobkorea:once -- `
+  --search-url "https://www.jobkorea.co.kr/Search?stext=AI" `
+  --pages 1 `
+  --max-details 5 `
+  --dry-run `
+  --confirm
+```
+
+Write 모드는 `--write`와 `--confirm`을 모두 요구한다.
+
+```powershell
+npm.cmd run collect:jobkorea:once -- `
+  --search-url "https://www.jobkorea.co.kr/Search?stext=AI" `
+  --pages 3 `
+  --max-details 30 `
+  --write `
+  --confirm
+```
+
+하드 한도는 목록 3페이지, 상세 30건, 상세 동시성 2, retry 0이다. 상세는 기존 bounded plain-HTTP transport를 우선 사용하고, login/root/access-control 응답을 정상 공고로 파싱하지 않는다. 별도 증거 없이 browser fallback으로 요청을 늘리지 않는다. page 4, `_GI_List`, 로그인, 쿠키·프로필 재사용, stealth, 우회, scheduler 및 background crawler는 사용하지 않는다. 실패한 상세는 한도를 소비하며 대체 후보를 요청하지 않는다. write 결과는 exact identity(`jobkorea + sourcePostingId`)와 content hash로 멱등 upsert하고 `bounded_manual_collection` provenance와 listing page·position·classification·관찰 링크 수를 남긴다. UI는 이를 `수동 수집`으로 표시해 fixture와 fictional demo를 구분한다. 좌표가 없는 공고는 목록에는 남지만 지도 marker를 만들지 않는다.
+
+기술적으로 공개 페이지를 읽을 수 있다는 사실은 수집·재사용 허가를 뜻하지 않는다. 이 명령은 명시적으로 실행하는 제한된 로컬 도구이며 공식 API, 제휴 feed 또는 지속적인 실시간 연동이 아니다.
+
+2026-08-05에 최초 product dry-run을 승인된 한 번만 수행했다. listing page 1에서 numeric link 90개와 고유 posting ID 26개를 얻어 앞의 5개를 선택했으나, 당시 browser detail 경계의 5개 요청은 모두 `JOBKOREA_LOGIN_REDIRECT`였고 parser 성공은 0개였다. 따라서 write gate는 실패했고 3페이지/30건 write 명령은 실행하지 않았다. DB hash와 jobs 16, ingestion runs 8, provenance 16, ingestion items 64는 모두 변하지 않았다. 이 측정 뒤 구현은 요구된 bounded HTTP detail 우선 경계로 오프라인 교정했으며 mock test만 수행했다. 실제 HTTP detail 성공 여부는 별도 승인된 다음 dry-run 전까지 미확인이다.

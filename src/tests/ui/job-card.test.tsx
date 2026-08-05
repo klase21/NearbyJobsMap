@@ -64,4 +64,13 @@ describe("공고 카드", () => {
     const link = screen.getByRole("link", { name: /원문 새 창에서 보기/ });
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });
+
+  it("수동 수집 provenance를 fixture와 demo와 구분하고 안전한 원문 링크를 유지한다", () => {
+    const collected: UiJobRecord = { ...demo, isFictional: false, safeSourceUrl: "https://www.jobkorea.co.kr/Recruit/GI_Read/50000001",
+      provenanceKind: "live_one_shot_observation", observationKind: "bounded_manual_collection", observedAt: "2026-08-05T00:00:00Z" };
+    render(<JobCard record={collected} rank={1} selected={false} origin={DEFAULT_ORIGIN} userStatus="reviewing" onSelect={() => undefined} onMapFocus={() => undefined} onUserStatusChange={() => undefined} cardRef={() => undefined} />);
+    expect(screen.getByText("수동 수집")).toBeInTheDocument();
+    expect(screen.getByText(/원문을 최종 기준으로 확인하세요/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /원문 새 창에서 보기/ })).toHaveAttribute("rel", "noopener noreferrer");
+  });
 });

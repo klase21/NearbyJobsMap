@@ -28,7 +28,7 @@ export function jobKoreaSnapshot(
     rejectionReasonCounts: {}, promotionSignalCounts: {}, ordinaryCandidates, promotedCandidates: [], rejectedCandidates: [],
     diagnosticSamples: { ordinary: [], promoted: [], rejected: [], ordinaryTruncated: false,
       promotedTruncated: false, rejectedTruncated: false },
-    containerSignatures: [], containerSignaturesTruncated: false, shadowStructure: emptyJobKoreaShadowStructure(count), diagnostics: [],
+    containerSignatures: [], containerSignaturesTruncated: false, shadowStructure: emptyJobKoreaShadowStructure(count), collectionCandidates: [], diagnostics: [],
   };
   return validateAndRoundTripJobKoreaSnapshot({ ...base, ...overrides, evidence: { ...base.evidence, ...overrides.evidence } });
 }

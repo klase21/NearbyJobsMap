@@ -53,7 +53,7 @@ export function normalizeJobKoreaSearchUrl(candidate: string): string {
   return url.toString();
 }
 
-export function jobKoreaSearchPageUrl(searchUrl: string, pageNumber: 1 | 2): string {
+export function jobKoreaSearchPageUrl(searchUrl: string, pageNumber: 1 | 2 | 3): string {
   const url = new URL(normalizeJobKoreaSearchUrl(searchUrl));
   url.searchParams.set("Page_No", String(pageNumber));
   return url.toString();

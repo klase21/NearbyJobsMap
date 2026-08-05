@@ -29,7 +29,7 @@ const rawSnapshot = (): JobKoreaPageSnapshot => ({
     title: "가상 공고", companyName: "가상회사", position: 1, rowId: "50000001", sourceSelector: "tr.devloopArea[data-gno]" }],
   promotedCandidates: [], rejectedCandidates: [],
   diagnosticSamples: { ordinary: [], promoted: [], rejected: [], ordinaryTruncated: false, promotedTruncated: false, rejectedTruncated: false },
-  containerSignatures: [], containerSignaturesTruncated: false, shadowStructure: emptyJobKoreaShadowStructure(1), diagnostics: [],
+  containerSignatures: [], containerSignaturesTruncated: false, shadowStructure: emptyJobKoreaShadowStructure(1), collectionCandidates: [], diagnostics: [],
 });
 const validSnapshot = (): JobKoreaPageSnapshot => validateAndRoundTripJobKoreaSnapshot(rawSnapshot());
 

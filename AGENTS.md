@@ -44,6 +44,17 @@
 - 지도용 추정 좌표를 정확 좌표로 표현하지 않는다.
 - 명시적 승인 없이 live network collection을 추가하지 않는다.
 - 목록 우선 동작과 지도 보조 동작을 뒤바꾸지 않는다.
+- 제품을 막는 구체적 결함 없이 JobKorea DOM 검증 framework를 더 확장하지 않는다.
+- 알려진 검색 result root 안의 정규화 가능한 숫자 posting ID는 listing classification과 무관하게 상세 검증 후보가 될 수 있다.
+- listing classification은 provenance metadata이며 상세 방문의 필수 gate가 아니다.
+- JobKorea 상세 페이지의 ID·parser·normalizer·canonical 검증이 수동 수집의 최종 저장 경계다.
+- JobKorea 수동 수집은 목록 3페이지·상세 30건·상세 동시성 2를 넘지 않는다.
+- JobKorea 수동 수집은 retry를 수행하지 않으며 실패 후보를 다른 후보로 대체하지 않는다.
+- JobKorea collection은 수동 명령으로만 실행하며 scheduler나 background worker에 연결하지 않는다.
+- 인증, 쿠키·프로필 재사용 또는 접근 제어 우회를 수집 경계에 추가하지 않는다.
+- dry-run은 SQLite에 어떤 run, item, provenance, job도 쓰지 않는다.
+- write 수집은 `--write`와 `--confirm`을 모두 요구한다.
+- fixture, fictional demo, bounded manual collection provenance를 UI와 저장소에서 구분한다.
 - 복수 근무지는 `workplaces[]` 구조를 유지하고 쉼표 문자열 하나로 축소하지 않는다.
 - 근무지 미정은 지오코딩하거나 본사 주소로 대체하지 않는다.
 - 본사 주소를 실제 근무지로 취급하지 않는다.

@@ -292,6 +292,7 @@ export class JobRepository {
         job, isFictional: metadata.recordKind === "fictional_demo",
         safeSourceUrl: metadata.recordKind === "fictional_demo" || job.source === "work24" ? null : getSafeSourceUrl(job.source, job.canonicalUrl ?? job.sourceUrl),
         mapPosition: metadata.mapPosition, provenanceKind: metadata.recordKind, observedAt: metadata.observedAt ?? null,
+        observationKind: metadata.observationKind ?? null,
       })),
       diagnostics: result.diagnostics,
     };

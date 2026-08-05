@@ -83,7 +83,7 @@ export function failedSearchPageResult(pageNumber: number, classification: "time
     duplicateWithinPageCount: null, uniqueNewCount: null, sourceReportsNoResults: null, validEmptyPage: false,
     blocked: false, parserFailure: classification === "timeout" || classification === "unexpected_page",
     evidence: null, rejectionReasonCounts: null, promotionSignalCounts: null, diagnosticSamples: null, containerSignatures: null, containerSignaturesTruncated: null,
-    shadowStructure: null,
+    shadowStructure: null, collectionCandidates: null,
     diagnostics: [diagnostic(code, `잡코리아 검색 페이지 분류: ${classification}`, "error")], candidates: [] };
 }
 
@@ -136,7 +136,7 @@ export class JobKoreaPlaywrightSearchExecution implements JobKoreaSearchExecutio
         page.on("requestfailed", (request) => this.failedResourceInputs.push(failedResourceInputFromRequest(request)));
         page.on("request", (request) => { observedDirect ??= observeDirectRequest(request); });
         await runBoundedLifecyclePhase(`page-${pageNumber}-navigation`, NAVIGATION_TIMEOUT_MS + 250,
-          () => page!.goto(jobKoreaSearchPageUrl(this.options.searchUrl, pageNumber as 1 | 2), { waitUntil: "commit", timeout: NAVIGATION_TIMEOUT_MS }).then(() => undefined),
+          () => page!.goto(jobKoreaSearchPageUrl(this.options.searchUrl, pageNumber as 1 | 2 | 3), { waitUntil: "commit", timeout: NAVIGATION_TIMEOUT_MS }).then(() => undefined),
           this.lifecycleDiagnostics);
         const readiness = await runBoundedLifecyclePhase(`page-${pageNumber}-readiness`, READINESS_TIMEOUT_MS + 250, async () => {
           await page!.waitForFunction(() => {
@@ -153,7 +153,7 @@ export class JobKoreaPlaywrightSearchExecution implements JobKoreaSearchExecutio
         this.snapshotCompleted = snapshot.extractionCompleted;
         const result = buildJobKoreaListingPageResult(snapshot, pageNumber, globalSeen);
         this.pages.push(result);
-        if (result.blocked || result.parserFailure) break;
+        if (result.blocked) break;
       } catch (error) {
         const timeout = error instanceof JobKoreaLifecycleTimeoutError || (error instanceof Error && /Timeout/i.test(error.name + error.message));
         const snapshotCode = error instanceof JobKoreaSnapshotError ? error.code : null;

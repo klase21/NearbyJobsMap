@@ -358,6 +358,16 @@ export function validateJobKoreaPageSnapshot(value: unknown): JobKoreaPageSnapsh
     || !Array.isArray(value.rejectedCandidates) || value.rejectedCandidates.length > JOBKOREA_REJECTED_SAMPLE_LIMIT) fail("excluded candidate sample limit이 유효하지 않습니다.");
   const promotedCandidates = value.promotedCandidates.map((item) => excludedCandidate(item, true));
   const rejectedCandidates = value.rejectedCandidates.map((item) => excludedCandidate(item, false));
+  if (!Array.isArray(value.collectionCandidates) || value.collectionCandidates.length > JOBKOREA_SNAPSHOT_CANDIDATE_LIMIT) fail("collection candidate 배열이 유효하지 않습니다.");
+  const collectionClassifications = new Set(["verified_ordinary", "explicit_promoted", "recommendation", "recent_view", "structurally_provisional", "unclassified_result_link"]);
+  const collectionCandidates = value.collectionCandidates.map((item) => {
+    if (!isPlainRecord(item)) fail("collection candidate가 plain object가 아닙니다.");
+    const postingId = stringField(item, "postingId", 30);
+    const listingClassification = stringField(item, "listingClassification", 40);
+    if (!/^\d+$/.test(postingId) || !collectionClassifications.has(listingClassification)) fail("collection candidate identity 또는 classification이 유효하지 않습니다.");
+    return { postingId, canonicalUrl: stringField(item, "canonicalUrl", 2_048), firstSourcePosition: countField(item, "firstSourcePosition")!,
+      observedLinkCount: countField(item, "observedLinkCount")!, listingClassification: listingClassification as JobKoreaPageSnapshot["collectionCandidates"][number]["listingClassification"] };
+  });
   if (!isPlainRecord(value.diagnosticSamples)) fail("diagnosticSamples가 유효하지 않습니다.");
   const sampleLimits = { ordinary: JOBKOREA_ORDINARY_SAMPLE_LIMIT, promoted: JOBKOREA_PROMOTED_SAMPLE_LIMIT, rejected: JOBKOREA_REJECTED_SAMPLE_LIMIT } as const;
   const diagnosticSamples = { ordinary: [] as JobKoreaCandidateDiagnosticSample[], promoted: [] as JobKoreaCandidateDiagnosticSample[], rejected: [] as JobKoreaCandidateDiagnosticSample[], ordinaryTruncated: false, promotedTruncated: false, rejectedTruncated: false };
@@ -378,7 +388,7 @@ export function validateJobKoreaPageSnapshot(value: unknown): JobKoreaPageSnapsh
     documentReadyState: readyState as JobKoreaDocumentReadyState, extractionCompleted: value.extractionCompleted,
     extractionDurationMs: value.extractionDurationMs as number | null, readiness, domChangedAfterReadiness: value.domChangedAfterReadiness as boolean | null,
     evidence, rejectionReasonCounts, promotionSignalCounts, ordinaryCandidates, promotedCandidates, rejectedCandidates, diagnosticSamples,
-    containerSignatures, containerSignaturesTruncated: value.containerSignaturesTruncated, shadowStructure,
+    containerSignatures, containerSignaturesTruncated: value.containerSignaturesTruncated, shadowStructure, collectionCandidates,
     diagnostics: diagnosticArray(value.diagnostics),
   };
 }
@@ -519,7 +529,7 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
     const extractionStarted = performance.now();
     const bodyText = compact(document.body?.innerText, 200000);
     const detailNodes = Array.from(document.querySelectorAll('a[href*="/Recruit/GI_Read"]'));
-    const ordinaryCandidates=[], promotedCandidates=[], rejectedCandidates=[], diagnostics=[];
+    const ordinaryCandidates=[], promotedCandidates=[], rejectedCandidates=[], collectionCandidateMap={}, diagnostics=[];
     const diagnosticSamples={ordinary:[],promoted:[],rejected:[],ordinaryTruncated:false,promotedTruncated:false,rejectedTruncated:false};
     const rejectionCounts={}, promotionSignalCounts={}, signatureAggregates={};
     const explicitPromotedElements=new Set();
@@ -546,6 +556,7 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
       const recent=Boolean(recentRoot)||/최근\s*본\s*공고/.test(containerText);
       const promoted=Boolean(promotedEvidence); if(promotedEvidence)explicitPromotedElements.add(promotedEvidence.element);
       const flags={resultRoot,row:Boolean(row),promoted,recommendation,recent};
+      if(pathId&&parsed&&["www.jobkorea.co.kr","m.jobkorea.co.kr"].includes(parsed.hostname)&&resultRoot){const existing=collectionCandidateMap[pathId];const listingClassification=recent?"recent_view":recommendation?"recommendation":promoted?"explicit_promoted":row||(ordinaryRoot&&!recommendationRoot&&!recentRoot)?"verified_ordinary":"unclassified_result_link";if(existing){existing.observedLinkCount+=1;}else{collectionCandidateMap[pathId]={postingId:pathId,canonicalUrl:"https://www.jobkorea.co.kr/Recruit/GI_Read/"+pathId,firstSourcePosition:position,observedLinkCount:1,listingClassification};}}
       let rejection=null;
       if(!parsed) rejection="INVALID_DETAIL_PATH";
       else if(!["www.jobkorea.co.kr","m.jobkorea.co.kr"].includes(parsed.hostname)) rejection="DISALLOWED_HOST";
@@ -585,10 +596,11 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
     const numericInLists=numericNodes.filter((node)=>Boolean(node.closest("ul,ol"))&&withinRoot(node)).length;
     const numericInCards=numericNodes.filter((node)=>Boolean(node.closest("article"))&&withinRoot(node)).length;
     const shadowStructure=buildShadowStructure(detailNodes,resultRoots,ordinaryCandidates,diagnostics);
+    const provisionalIds=new Set(shadowStructure.provisionalUniquePostingIds);const collectionCandidates=Object.values(collectionCandidateMap).sort((a,b)=>a.firstSourcePosition-b.firstSourcePosition).slice(0,ordinaryCandidateLimit).map((item)=>({...item,listingClassification:item.listingClassification==="unclassified_result_link"&&provisionalIds.has(item.postingId)?"structurally_provisional":item.listingClassification}));
     return {schemaVersion,serializedSnapshotBytes:0,finalUrl:String(location.href),pageTitle:compact(document.title,500),documentReadyState:["loading","interactive","complete"].includes(document.readyState)?document.readyState:"unknown",extractionCompleted:true,extractionDurationMs:Math.max(0,performance.now()-extractionStarted),readiness:null,domChangedAfterReadiness:null,
       evidence:{ordinaryContainerCount:document.querySelectorAll(ordinarySelectors).length,ordinaryRowCount:document.querySelectorAll("tr.devloopArea[data-gno]").length,resultRootCount:resultRoots.length,knownTableResultCount:tableResults,knownListResultCount:listResults,knownCardResultCount:cardResults,numericLinksInsideKnownTableResults:numericInTables,numericLinksInsideKnownListResults:numericInLists,numericLinksInsideKnownCardResults:numericInCards,ordinaryDetailLinkCount,allNumericDetailLinkCount,promotedContainerCount:explicitPromotedElements.size,recommendationContainerCount:document.querySelectorAll(recommendationSelectors).length,recentViewContainerCount:document.querySelectorAll(recentSelectors).length,promotedDetailLinkCount,rejectedDetailLinkCount,numericLinksInsideKnownResultRoots:insideCount,numericLinksOutsideKnownResultRoots:numericNodes.length-insideCount,noResultMarkerCount:noResult,loginMarkerCount:login,captchaMarkerCount:captcha,verificationMarkerCount:verification,accessDeniedMarkerCount:accessDenied},
-      rejectionReasonCounts:sortedRejectionCounts,promotionSignalCounts:sortedPromotionSignalCounts,ordinaryCandidates,promotedCandidates,rejectedCandidates,diagnosticSamples,containerSignatures,containerSignaturesTruncated,shadowStructure,diagnostics};
-  }catch(error){const message=error instanceof Error?error.message:String(error);return {schemaVersion,serializedSnapshotBytes:0,finalUrl:String(location.href),pageTitle:compact(document.title,500),documentReadyState:["loading","interactive","complete"].includes(document.readyState)?document.readyState:"unknown",extractionCompleted:false,extractionDurationMs:null,readiness:null,domChangedAfterReadiness:null,evidence:emptyEvidence(),rejectionReasonCounts:{},promotionSignalCounts:{},ordinaryCandidates:[],promotedCandidates:[],rejectedCandidates:[],diagnosticSamples:{ordinary:[],promoted:[],rejected:[],ordinaryTruncated:false,promotedTruncated:false,rejectedTruncated:false},containerSignatures:[],containerSignaturesTruncated:false,shadowStructure:emptyShadowStructure(),diagnostics:[{code:"JOBKOREA_SNAPSHOT_EVALUATION_FAILED",message:compact(message,500)||"page context snapshot extraction failed"}]};}
+      rejectionReasonCounts:sortedRejectionCounts,promotionSignalCounts:sortedPromotionSignalCounts,ordinaryCandidates,promotedCandidates,rejectedCandidates,diagnosticSamples,containerSignatures,containerSignaturesTruncated,shadowStructure,collectionCandidates,diagnostics};
+  }catch(error){const message=error instanceof Error?error.message:String(error);return {schemaVersion,serializedSnapshotBytes:0,finalUrl:String(location.href),pageTitle:compact(document.title,500),documentReadyState:["loading","interactive","complete"].includes(document.readyState)?document.readyState:"unknown",extractionCompleted:false,extractionDurationMs:null,readiness:null,domChangedAfterReadiness:null,evidence:emptyEvidence(),rejectionReasonCounts:{},promotionSignalCounts:{},ordinaryCandidates:[],promotedCandidates:[],rejectedCandidates:[],diagnosticSamples:{ordinary:[],promoted:[],rejected:[],ordinaryTruncated:false,promotedTruncated:false,rejectedTruncated:false},containerSignatures:[],containerSignaturesTruncated:false,shadowStructure:emptyShadowStructure(),collectionCandidates:[],diagnostics:[{code:"JOBKOREA_SNAPSHOT_EVALUATION_FAILED",message:compact(message,500)||"page context snapshot extraction failed"}]};}
 })()`;
 
 export async function captureJobKoreaReadinessEvidence(page: Page): Promise<JobKoreaReadinessEvidence> {

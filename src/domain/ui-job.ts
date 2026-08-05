@@ -19,6 +19,7 @@ export interface UiJobRecord {
   mapPosition: MapPosition | null;
   provenanceKind?: DataProvenanceKind;
   observedAt?: string | null;
+  observationKind?: "bounded_public_browser_observation" | "bounded_manual_collection" | null;
 }
 
 export interface SalaryThresholds { hourly: number; daily: number; monthly: number; annual: number; normalizedMonthly: number }

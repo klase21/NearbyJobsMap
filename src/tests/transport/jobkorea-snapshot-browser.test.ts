@@ -47,6 +47,15 @@ describe("잡코리아 synthetic page snapshot browser boundary", () => {
       evidence: { ordinaryDetailLinkCount: 2, allNumericDetailLinkCount: 2 } });
     expect(value.ordinaryCandidates.map(({ postingId }) => postingId)).toEqual(["50000001", "50000002"]);
     expect(value.ordinaryCandidates[0]?.href).toBe("https://www.jobkorea.co.kr/Recruit/GI_Read/50000001");
+    expect(value.collectionCandidates.map(({ postingId }) => postingId)).toEqual(["50000001", "50000002"]);
+  });
+
+  it("결과 루트 안의 unknown 구조도 수집 후보로 유지하되 production ordinary로 승격하지 않는다", async () => {
+    const value = await snapshot(`<base href="https://www.jobkorea.co.kr/Search?stext=AI"><main><div class="unknown-card"><a href="/Recruit/GI_Read/50009991?logpath=x">공고</a><a href="https://www.jobkorea.co.kr/Recruit/GI_Read/50009991">회사</a></div></main>`);
+    expect(value.ordinaryCandidates).toHaveLength(0);
+    expect(value.collectionCandidates).toEqual([{ postingId: "50009991", canonicalUrl: "https://www.jobkorea.co.kr/Recruit/GI_Read/50009991",
+      firstSourcePosition: 1, observedLinkCount: 2, listingClassification: "structurally_provisional" }]);
+    expect(classifyJobKoreaRenderedPage(value)).toBe("malformed_results");
   });
 
   it("ordinary·AD·추천·영역 밖 링크를 분리한다", async () => {

@@ -81,6 +81,7 @@ export function buildJobKoreaListingPageResult(snapshot: JobKoreaPageSnapshot, p
     containerSignatures: countsMeasured ? snapshot.containerSignatures : null,
     containerSignaturesTruncated: countsMeasured ? snapshot.containerSignaturesTruncated : null,
     shadowStructure: countsMeasured ? snapshot.shadowStructure : null,
+    collectionCandidates: countsMeasured ? snapshot.collectionCandidates : null,
     diagnostics, candidates,
   };
 }
