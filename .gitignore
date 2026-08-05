@@ -9,10 +9,15 @@ coverage/
 data/private/
 data/raw/
 data/live/
+data/*.sqlite
+data/*.sqlite-*
+data/*.db
+data/*.db-*
 exports/
 cookies.json
 session.json
 playwright/.auth/
 artifacts/visual-qa/
+artifacts/runtime/
 *.db
 *.sqlite

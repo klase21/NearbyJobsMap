@@ -7,6 +7,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "db:migrate": "tsx scripts/db-migrate.ts",
+    "db:import:fixtures": "tsx scripts/db-import-fixtures.ts",
+    "db:seed:demo": "tsx scripts/db-seed-demo.ts",
+    "db:status": "tsx scripts/db-status.ts",
+    "db:reset": "tsx scripts/db-reset.ts",
+    "setup:local": "tsx scripts/setup-local.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run"
@@ -16,6 +22,7 @@
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/leaflet": "^1.9.22",
     "@types/node": "^26.1.2",
     "@types/react": "^19.2.18",
@@ -23,15 +30,18 @@
     "eslint": "^10.8.0",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.7",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.66.0",
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "leaflet": "^1.9.4",
     "next": "^16.3.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-leaflet": "^5.0.0"
+    "react-leaflet": "^5.0.0",
+    "server-only": "^0.0.1"
   }
 }

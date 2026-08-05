@@ -50,6 +50,16 @@
 - 연봉 원문과 인센티브·협의 문구를 손실 없이 보존한다.
 - 근거 없이 좌표 하나를 복수 근무지 전체를 대표하는 값으로 사용하지 않는다.
 - 지도 marker는 소스에서 관찰됐거나 명시적인 가상 데이터 좌표에만 만든다.
+- SQLite driver와 repository는 server-only이며 client component에서 import하지 않는다.
+- 커밋된 SQL migration은 append-only다. 이미 배포·적용된 migration 파일을 다시 쓰지 않는다.
+- DB 테스트는 고유한 임시 SQLite 파일만 사용하고 `data/nearby-jobs.sqlite`를 열거나 reset하지 않는다.
+- `(source, sourcePostingId)` exact identity 고유성을 유지하며 probable duplicate를 DB identity로 병합하지 않는다.
+- 카테고리·고용형태·`workplaces[]`를 쉼표 문자열이나 JSON 한 필드로 평탄화하지 않는다.
+- fixture-derived와 fictional provenance 및 evidence 구분을 DB와 UI에서 유지한다.
+- 사용자 지원 상태는 localStorage에 남기고 source lifecycle을 저장하는 SQLite jobs table에 합치지 않는다.
+- production build 중 migration, fixture import, demo seed 등 DB write를 실행하지 않는다.
+- SQLite·WAL·SHM·임시 테스트 DB 파일을 커밋하지 않는다.
+- DB reset은 확인 플래그와 안전한 대상 경로 검증 없이 실행하지 않는다.
 
 ## Product and UX Guidance
 

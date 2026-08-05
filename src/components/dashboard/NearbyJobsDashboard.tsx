@@ -10,10 +10,10 @@ import { JobList } from "../jobs/JobList";
 import { MapPanel } from "../map/MapPanel";
 import { SummaryStrip } from "../summary/SummaryStrip";
 
-interface NearbyJobsDashboardProps { initialJobs: UiJobRecord[]; dataError?: string }
+interface NearbyJobsDashboardProps { initialJobs: UiJobRecord[]; dataError?: string; dataWarning?: string | undefined }
 const REFERENCE_NOW = new Date("2026-08-05T12:00:00+09:00");
 
-export function NearbyJobsDashboard({ initialJobs, dataError }: NearbyJobsDashboardProps) {
+export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: NearbyJobsDashboardProps) {
   const [filters, setFilters] = useState<JobFilterState>(DEFAULT_PREFERENCES.filters);
   const [sort, setSort] = useState<SortOption>(DEFAULT_PREFERENCES.sort);
   const [mapVisible, setMapVisible] = useState(DEFAULT_PREFERENCES.mapVisible);
@@ -109,6 +109,7 @@ export function NearbyJobsDashboard({ initialJobs, dataError }: NearbyJobsDashbo
       </div>
       {corruptedSettings && <div className="warning-banner" role="alert">저장된 설정을 읽을 수 없어 안전한 기본값으로 초기화했습니다.</div>}
       {storageFailed && <div className="warning-banner" role="alert">브라우저 저장공간에 설정을 저장하지 못했습니다. 현재 화면에서는 계속 사용할 수 있습니다.</div>}
+      {dataWarning && <div className="warning-banner" role="status">{dataWarning}</div>}
       <SummaryStrip {...summary} />
       {filtersOpen && <FilterPanel filters={filters} jobs={initialJobs} onChange={setFilters} onClose={closeFilters} />}
       <div className="mobile-view-switch" aria-label="모바일 화면 전환">

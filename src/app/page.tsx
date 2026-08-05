@@ -1,10 +1,21 @@
+import { connection } from "next/server";
 import { NearbyJobsDashboard } from "../components/dashboard/NearbyJobsDashboard";
-import { getUiJobs } from "../data/job-provider";
+import { DatabaseSetupState } from "../components/dashboard/DatabaseSetupState";
+import { DatabaseAccessError } from "../db/connection";
+import { getPersistedUiJobs } from "../data/sqlite-job-provider";
 
-export default function HomePage() {
+export default async function HomePage() {
+  await connection();
   try {
-    return <NearbyJobsDashboard initialJobs={getUiJobs()} />;
-  } catch {
-    return <NearbyJobsDashboard initialJobs={[]} dataError="공고 데이터를 준비하지 못했습니다. fixture 계약을 다시 확인해 주세요." />;
+    const result = getPersistedUiJobs();
+    if (result.diagnostics.length) console.warn("DB_ROW_VALIDATION_SKIPPED", result.diagnostics.map(({ jobId, code }) => ({ jobId, code })));
+    return <NearbyJobsDashboard initialJobs={result.jobs} dataWarning={result.diagnostics.length ? `손상된 로컬 공고 ${result.diagnostics.length}건을 제외하고 표시합니다.` : undefined} />;
+  } catch (error) {
+    if (error instanceof DatabaseAccessError) {
+      if (error.code === "DATABASE_NOT_READY") return <DatabaseSetupState kind="not_ready" />;
+      if (error.code === "DATABASE_CORRUPT") return <DatabaseSetupState kind="corrupt" />;
+    }
+    console.error("LOCAL_DATABASE_LOAD_FAILED", error instanceof Error ? error.message : "unknown");
+    return <DatabaseSetupState kind="unavailable" />;
   }
 }

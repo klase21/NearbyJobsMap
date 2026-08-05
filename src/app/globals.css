@@ -52,6 +52,14 @@ input:disabled { cursor: not-allowed; background: #f4f6f8; color: #8a94a3; }
 .notice-strip strong { color: var(--ink); }
 .privacy-note { text-align: right; }
 .warning-banner { margin: 12px 24px 0; border: 1px solid #f0c997; border-radius: 10px; background: #fff9ee; padding: 10px 14px; color: #7b4d11; font-size: 13px; }
+.database-setup-shell { display: grid; min-height: 100vh; place-items: center; padding: 24px; }
+.database-setup-panel { width: min(560px, 100%); border: 1px solid var(--line); border-radius: 16px; background: white; padding: 32px; box-shadow: 0 10px 30px rgba(20,27,39,.07); }
+.database-setup-kicker { margin: 0 0 10px; color: var(--blue); font-size: 12px; font-weight: 750; }
+.database-setup-panel h1 { margin: 0; font-size: 24px; line-height: 1.35; }
+.database-setup-panel p { color: var(--muted); font-size: 14px; line-height: 1.65; }
+.database-setup-panel pre { overflow-x: auto; border-radius: 10px; background: #f1f4f8; padding: 14px; color: var(--ink); }
+.database-setup-note { font-size: 12px !important; }
+.database-retry { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 
 .summary-strip { display: grid; grid-template-columns: repeat(6, minmax(125px, 1fr)); gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--line); background: white; }
 .summary-card { min-width: 0; border: 1px solid var(--line); border-radius: 11px; padding: 12px 14px; background: white; }
