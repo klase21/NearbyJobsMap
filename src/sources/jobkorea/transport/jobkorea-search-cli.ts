@@ -5,7 +5,7 @@ import { normalizeJobKoreaSearchUrl } from "./jobkorea-url-policy";
 export function parseJobKoreaSearchCliArgs(argv: string[]): JobKoreaSearchOptions {
   const values = new Map<string, string | true>();
   const valueFlags = new Set(["--search-url", "--pages", "--max-details", "--transport"]);
-  const booleanFlags = new Set(["--confirm", "--dry-run"]);
+  const booleanFlags = new Set(["--confirm", "--dry-run", "--diagnostic"]);
   for (let index = 0; index < argv.length; index += 1) {
     const key = argv[index]!;
     if (booleanFlags.has(key)) { values.set(key, true); continue; }
@@ -26,5 +26,5 @@ export function parseJobKoreaSearchCliArgs(argv: string[]): JobKoreaSearchOption
   if (!(["auto", "playwright", "direct"] as const).includes(transport)) throw new JobKoreaTransportError("JOBKOREA_TRANSPORT_SELECTION_INVALID", "--transport는 auto, playwright, direct 중 하나여야 합니다.");
   if (transport === "direct" && pages !== 1) throw new JobKoreaTransportError("JOBKOREA_DIRECT_PAGE_LIMIT", "direct 검증은 요청 한도상 --pages 1만 허용합니다.");
   return { searchUrl: normalizeJobKoreaSearchUrl(searchCandidate), pages, maxDetails: maxDetails as 0 | 1 | 2 | 3,
-    transport, confirm: true, dryRun: values.has("--dry-run") };
+    transport, confirm: true, dryRun: values.has("--dry-run"), diagnostic: values.has("--diagnostic") };
 }

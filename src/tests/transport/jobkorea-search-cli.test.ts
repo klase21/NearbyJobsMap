@@ -16,6 +16,7 @@ describe("잡코리아 bounded search CLI", () => {
   it.each([-1, 4, 1.5])("잘못된 max-details %s를 거부한다", (maximum) => expect(() => parseJobKoreaSearchCliArgs(["--search-url", search, "--pages", "1", "--max-details", String(maximum), "--confirm"])).toThrow());
   it.each(["auto", "playwright", "direct"] as const)("transport %s를 해석한다", (transport) => expect(parseJobKoreaSearchCliArgs(args("--transport", transport)).transport).toBe(transport));
   it("dry-run과 명시된 page 수만 유지한다", () => expect(parseJobKoreaSearchCliArgs(args("--dry-run"))).toMatchObject({ dryRun: true, pages: 1 }));
+  it("diagnostic 출력 요청을 명시적으로 해석한다", () => expect(parseJobKoreaSearchCliArgs(args("--diagnostic"))).toMatchObject({ diagnostic: true }));
   it("direct는 요청 상한 때문에 pages 2를 거부한다", () => expect(() => parseJobKoreaSearchCliArgs(["--search-url", search, "--pages", "2", "--max-details", "0", "--transport", "direct", "--confirm"])).toThrow(/pages 1/));
 });
 

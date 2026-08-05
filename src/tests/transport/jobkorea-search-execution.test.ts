@@ -4,13 +4,13 @@ import { createJobKoreaSearchExecution } from "../../sources/jobkorea/transport/
 import type { JobKoreaDirectContractObservation, JobKoreaSearchExecution, JobKoreaSearchOptions } from "../../sources/jobkorea/transport/jobkorea-search-types";
 
 const options = (transport: "auto" | "playwright" | "direct"): JobKoreaSearchOptions => ({ searchUrl: "https://www.jobkorea.co.kr/Search?stext=AI&Page_No=1",
-  pages: 1, maxDetails: 0, transport, confirm: true, dryRun: true });
+  pages: 1, maxDetails: 0, transport, confirm: true, dryRun: true, diagnostic: false });
 const directObservation: JobKoreaDirectContractObservation = { endpoint: "https://www.jobkorea.co.kr/Recruit/Home/_GI_List/", method: "POST",
   body: { page: "1", order: "20", pagesize: "40", tabindex: "0", "condition[local]": "" }, contentType: "application/x-www-form-urlencoded",
   ordinaryResultSelector: "tr.devloopArea[data-gno]", hasCookieHeader: false, hasAuthorizationHeader: false, hasTokenField: false };
 
 function fakeBrowser(available: boolean): JobKoreaSearchExecution {
-  return { transportUsed: "playwright", pages: [], consoleErrors: [], searchNavigationCount: 1, detailNavigationCount: 0, directRequestCount: 0,
+  return { transportUsed: "playwright", pages: [], consoleErrors: [], lifecycleDiagnostics: [], searchNavigationCount: 1, detailNavigationCount: 0, directRequestCount: 0,
     directVerification: available ? { classification: "available", observation: directObservation,
       diagnostic: { severity: "info", code: "AVAILABLE", field: null, message: "available" } }
       : { classification: "direct_endpoint_unavailable", observation: null,

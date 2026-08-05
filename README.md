@@ -91,7 +91,8 @@ npm.cmd run transport:jobkorea:search:once -- `
   --transport playwright `
   --max-details 0 `
   --dry-run `
-  --confirm
+  --confirm `
+  --diagnostic
 ```
 
 쓰기 실행:
@@ -110,7 +111,8 @@ npm.cmd run transport:jobkorea:search:once -- `
 - `--transport auto`는 현재 검증 상태에서 Playwright를 명시적으로 선택한다. access block 뒤 direct로 몰래 전환하지 않는다.
 - `--transport direct`는 공개 페이지에서 현재 `POST /Recruit/Home/_GI_List/` 요청이 관찰되고 cookie·authorization·token이 없을 때만 최대 1회 익명 POST를 허용한다. `page`, `condition[local]`, `order`, `pagesize`, `tabindex`는 관찰된 internal/public-page form 계약이지 공식 API가 아니다. session 또는 token 신호가 있거나 현재 계약이 관찰되지 않으면 `direct_endpoint_session_required` 또는 `direct_endpoint_unavailable`로 끝난다.
 - 매 명령은 robots.txt를 최대 1회 별도 확인한다. robots 허용은 법적 허가를 의미하지 않는다.
-- Playwright page timeout은 15초이고 readiness는 ordinary 상세 링크, 명시적 no-result, login/verification/block 신호 중 하나를 기다린 뒤 짧은 안정화 지연을 사용한다. 무기한 sleep은 없다.
+- page-1/listing-only 진단 명령은 40초 내부 예산을 가진다. robots 사전확인, 브라우저 시작·연결, navigation, DOM readiness, snapshot, page close, browser close/kill에 각각 더 작은 상한이 적용되며 `--diagnostic`은 각 단계의 상태와 소요 시간을 출력한다. DOM readiness는 ordinary 상세 링크, 명시적 no-result, login/verification/block 신호 중 하나를 기다린 뒤 0.4초 안정화 지연을 사용한다.
+- Playwright는 강제 종료 가능한 임시 `BrowserServer`로 실행된다. 정상 close가 제한 안에 끝나지 않으면 해당 run의 server process만 kill하고, 어느 단계가 멈춰도 timeout 또는 unexpected-page 구조화 결과를 반환한다.
 - 일반 공고는 `tr.devloopArea[data-gno]` 또는 검색 결과 문맥 안의 `/Recruit/GI_Read/{숫자 ID}` 링크만 후보로 삼는다. `AD`, sponsored, 추천·최근·주목 영역은 별도 집계하고 제외한다.
 - 페이지의 `validEmptyPage`는 source가 명시적으로 no-result를 표시할 때만 true다. `uniqueNewCount=0`, duplicate-only, login, block, timeout, parser failure는 empty가 아니다.
 - raw HTML은 메모리에서만 읽고 저장하지 않는다. sanitizer는 최소 JobPosting·목록 anchor만 남기며 설명 본문·연락처·지원자·script·분석/광고 필드를 제외한다.
@@ -119,6 +121,10 @@ npm.cmd run transport:jobkorea:search:once -- `
 - 현재 이용·재가공 권한은 `unverified`다. 결과는 `원샷 전송 검증 데이터`와 관찰 시각으로 표시하며 원문 페이지를 최종 기준으로 확인해야 한다.
 
 2026-08-05 bounded 실제 재검증에서는 명령 전달 오류 3회가 confirmation 단계에서 네트워크 전에 차단됐다. 이후 올바르게 시작된 Playwright Step 1은 외부 60초 실행 한도까지 구조화 결과를 반환하지 못해 강제 종료됐고, source 결과·후보 수·direct contract를 확정하지 못했다. 남은 프로세스와 임시 profile은 확인 후 제거했고 SQLite hash는 동일했다. 따라서 과거 Playwright 성공 이력은 유효한 반증이지만, **현재 Playwright 흐름은 이번 실행에서 성공 또는 접근 차단 어느 쪽으로도 재확인되지 않았다.** `_GI_List`도 현재 익명 요청으로 재검증되지 않아 runtime `auto`는 Playwright를 유지한다.
+
+이후 lifecycle 진단 보강은 위 실패의 원인이 될 수 있던 직렬 15초 navigation + 15초 readiness와 무상한 cleanup을 제거했다. 이 변경은 source 접근 결과를 미리 성공으로 간주하지 않으며, 동일한 page-1/max-details-0 dry-run을 한 번만 다시 실행해 구조화된 분류를 얻기 위한 것이다.
+
+보강 후 단일 page-1/max-details-0 실제 dry-run은 4.282초에 구조화 결과를 반환했다. robots, browser launch/connect/context, navigation, readiness, page close, browser close/kill은 모두 내부 상한 안에서 종료됐다. 현재 확인된 실패 지점은 `page-1-snapshot`이며 결과는 `unexpected_page`다. 이는 로그인·CAPTCHA·접근 차단 판정이 아니며 후보 수를 0으로 확정하는 근거도 아니다. 요청을 반복하지 않았고 상세 navigation, direct 요청, DB write는 없었다.
 
 원샷 관찰 데이터를 로컬에서 모두 제거하려면 서버를 중지하고 전체 로컬 DB reset 후 fixture/demo를 다시 준비한다. 이 작업은 사용자 상태 localStorage를 지우지 않는다.
 
@@ -177,8 +183,8 @@ npm run db:status
 - 연봉 단일값·범위·인센티브 표시는 source fixture로 확인했지만, 복수 근무지와 근무지 미정의 실제 상세 구조는 이번 소스별 3건 제한에서 찾지 못해 여전히 미검증이다.
 - 알바몬의 관찰된 내부 BFF는 공식 API가 아니며 live 코드가 호출하거나 의존하지 않는다.
 - 잡코리아 browser transport의 기술적 접근 가능성·robots 결과는 이용허가가 아니다. 현행 계약·저작권·재가공·보관 범위는 미확인이다.
-- bounded search는 최대 2페이지만 검증하며 전체 pagination, 최신성 보장, 삭제 동기화, 자동 refresh가 없다. 현재 실제 Playwright 재검증은 runner timeout으로 미확정이고 direct `_GI_List` 익명 계약도 미확정이다.
+- bounded search는 최대 2페이지만 검증하며 전체 pagination, 최신성 보장, 삭제 동기화, 자동 refresh가 없다. page-1 lifecycle은 구조화 종료가 확인됐지만 현재 DOM snapshot 단계는 `unexpected_page`로 미확정이고 direct `_GI_List` 익명 계약도 미확정이다.
 
 ## 다음 개발 단계
 
-다음 정확한 작업은 **사용자가 이번 runner-timeout 결과와 종료 보강을 검토한 뒤, 별도 승인된 단 한 번의 Playwright page-1/max-details-0 재검증을 실행해 current DOM 후보 수와 `_GI_List` 관찰 여부만 확정하는 것**이다. 성공 전에는 page 2나 상세을 열지 않고, 성공하더라도 full pagination은 별도 승인 전 시작하지 않는다.
+다음 정확한 작업은 **네트워크 호출 없이 synthetic JobKorea형 DOM으로 `page-1-snapshot` 브라우저-context 직렬화 실패를 재현·수정하고, 그 수정 검토 후 별도 승인된 page-1/max-details-0 실제 dry-run을 단 한 번 수행하는 것**이다. 그 전에는 page 2, 상세, direct 요청을 열지 않고, 성공하더라도 full pagination은 별도 승인 전 시작하지 않는다.

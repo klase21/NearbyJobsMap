@@ -8,10 +8,12 @@ import { parseJobKoreaDetail } from "../detail-parser";
 import { normalizeJobKorea } from "../normalize";
 import type { JobKoreaListing } from "../types";
 import { JobKoreaTransportError } from "./jobkorea-error";
+import { JOBKOREA_PAGE1_COMMAND_BUDGET_MS, runBoundedLifecyclePhase, type JobKoreaLifecycleDiagnostic } from "./jobkorea-lifecycle";
 import { JobKoreaHttpClient } from "./jobkorea-http-client";
 import { JobKoreaRequestBudget, JOBKOREA_PREFLIGHT_REQUEST_LIMIT } from "./jobkorea-request-budget";
 import { preflightJobKoreaRobots } from "./jobkorea-robots";
 import { createJobKoreaSearchExecution } from "./jobkorea-search-execution";
+import { failedSearchPageResult } from "./jobkorea-playwright-search";
 import type { JobKoreaSearchExecution, JobKoreaSearchOneShotResult, JobKoreaSearchOptions } from "./jobkorea-search-types";
 import { JOBKOREA_PARSER_CONTRACT_VERSION, JOBKOREA_SANITIZER_VERSION, sanitizeJobKoreaDetail } from "./jobkorea-sanitizer";
 import type { JobKoreaDetailOutcome } from "./types";
@@ -31,14 +33,21 @@ function asListing(candidate: JobKoreaSearchExecution["pages"][number]["candidat
 }
 
 export async function runJobKoreaSearchOneShot(options: JobKoreaSearchOptions, dependencies: JobKoreaSearchOneShotDependencies): Promise<JobKoreaSearchOneShotResult> {
+  const startedAt = performance.now();
   const selectedTransport = options.transport === "direct" ? "direct" : "playwright";
   const budget = new JobKoreaRequestBudget(Math.max(1, options.maxDetails));
-  const client = dependencies.httpClient ?? new JobKoreaHttpClient();
+  const client = dependencies.httpClient ?? new JobKoreaHttpClient(fetch, { timeoutMs: 4_000, maxResponseBytes: 512 * 1024 });
   const now = dependencies.now ?? (() => new Date());
   const jobs = new JobRepository(dependencies.database);
   const runs = new IngestionRunRepository(dependencies.database);
+  const commandLifecycleDiagnostics: JobKoreaLifecycleDiagnostic[] = [];
   let runId: string | null = null;
   let execution: JobKoreaSearchExecution | null = null;
+  let returnedResult: JobKoreaSearchOneShotResult | null = null;
+  const finish = (result: JobKoreaSearchOneShotResult): JobKoreaSearchOneShotResult => {
+    returnedResult = result;
+    return result;
+  };
   if (!options.dryRun) runId = runs.begin("jobkorea", "jobkorea_one_shot_transport", options.maxDetails, {
     permissionStatus: "unverified", listingUrl: options.searchUrl, maxDetails: options.maxDetails,
     contentRequestLimit: options.maxDetails, preflightRequestLimit: JOBKOREA_PREFLIGHT_REQUEST_LIMIT, dryRun: false,
@@ -49,14 +58,16 @@ export async function runJobKoreaSearchOneShot(options: JobKoreaSearchOptions, d
   const blockedResult = (message: string): JobKoreaSearchOneShotResult => ({ runId, status: "blocked", permissionStatus: "blocked", dryRun: options.dryRun,
     transportRequested: options.transport, transportUsed: selectedTransport, robotsRequests: budget.preflightRequests, searchNavigations: 0,
     detailNavigations: 0, directRequests: 0, pageResults: [], selectedCandidates: 0, globalDuplicateCount: 0,
-    inserted: 0, updated: 0, unchanged: 0, skipped: 0, failed: 0, blocked: 1, details: [], consoleErrors: [message], directVerification: emptyDirectVerification });
+    inserted: 0, updated: 0, unchanged: 0, skipped: 0, failed: 0, blocked: 1, details: [], consoleErrors: [message], directVerification: emptyDirectVerification,
+    lifecycleDiagnostics: [...commandLifecycleDiagnostics], elapsedMs: Math.round(performance.now() - startedAt), internalBudgetMs: JOBKOREA_PAGE1_COMMAND_BUDGET_MS });
 
   try {
-    const robots = await preflightJobKoreaRobots(client, budget, options.searchUrl);
+    const robots = await runBoundedLifecyclePhase("robots-preflight", 4_500,
+      () => preflightJobKoreaRobots(client, budget, options.searchUrl), commandLifecycleDiagnostics);
     if (robots.blocked) {
       if (runId) runs.block(runId, robots.message, { preflightRequests: budget.preflightRequests, contentRequests: 0,
         selectedDetailCount: 0, blockedCount: 1, browserNavigations: 0, detailNavigations: 0, directRequests: 0 });
-      return blockedResult(robots.message);
+      return finish(blockedResult(robots.message));
     }
 
     execution = await (dependencies.createExecution ?? createJobKoreaSearchExecution)(options);
@@ -81,11 +92,12 @@ export async function runJobKoreaSearchOneShot(options: JobKoreaSearchOptions, d
         if (blockedPages) runs.block(runId, summary, completion);
         else runs.fail(runId, summary, completion);
       }
-      return { runId, status: blockedPages ? "blocked" : "failed", permissionStatus: blockedPages ? "blocked" : "unverified", dryRun: options.dryRun,
+      return finish({ runId, status: blockedPages ? "blocked" : "failed", permissionStatus: blockedPages ? "blocked" : "unverified", dryRun: options.dryRun,
         transportRequested: options.transport, transportUsed: execution.transportUsed, robotsRequests: budget.preflightRequests,
         searchNavigations: execution.searchNavigationCount, detailNavigations: execution.detailNavigationCount, directRequests: execution.directRequestCount,
         pageResults, selectedCandidates: 0, globalDuplicateCount, inserted: 0, updated: 0, unchanged: 0, skipped: 0,
-        failed: blockedPages ? 0 : 1, blocked: blockedPages, details, consoleErrors: execution.consoleErrors, directVerification: execution.directVerification };
+        failed: blockedPages ? 0 : 1, blocked: blockedPages, details, consoleErrors: execution.consoleErrors, directVerification: execution.directVerification,
+        lifecycleDiagnostics: [...commandLifecycleDiagnostics, ...execution.lifecycleDiagnostics], elapsedMs: Math.round(performance.now() - startedAt), internalBudgetMs: JOBKOREA_PAGE1_COMMAND_BUDGET_MS });
     }
 
     for (const candidate of selected) {
@@ -135,16 +147,32 @@ export async function runJobKoreaSearchOneShot(options: JobKoreaSearchOptions, d
       });
       ({ inserted, updated, unchanged, skipped, failed } = ingestion);
     }
-    return { runId, status: failed || blockedPages ? "partial" : "completed", permissionStatus: "unverified", dryRun: options.dryRun,
+    return finish({ runId, status: failed || blockedPages ? "partial" : "completed", permissionStatus: "unverified", dryRun: options.dryRun,
       transportRequested: options.transport, transportUsed: execution.transportUsed, robotsRequests: budget.preflightRequests,
       searchNavigations: execution.searchNavigationCount, detailNavigations: execution.detailNavigationCount, directRequests: execution.directRequestCount,
       pageResults, selectedCandidates: selected.length, globalDuplicateCount, inserted, updated, unchanged, skipped, failed,
-      blocked: blockedPages, details, consoleErrors: execution.consoleErrors, directVerification: execution.directVerification };
+      blocked: blockedPages, details, consoleErrors: execution.consoleErrors, directVerification: execution.directVerification,
+      lifecycleDiagnostics: [...commandLifecycleDiagnostics, ...execution.lifecycleDiagnostics], elapsedMs: Math.round(performance.now() - startedAt), internalBudgetMs: JOBKOREA_PAGE1_COMMAND_BUDGET_MS });
   } catch (error) {
     const transport = error instanceof JobKoreaTransportError ? error : new JobKoreaTransportError("JOBKOREA_SEARCH_COMMAND_FAILED", "잡코리아 검색 원샷 처리에 실패했습니다.", options.searchUrl, { cause: error });
     if (runId) runs.fail(runId, `${transport.code}: ${transport.message}`, { preflightRequests: budget.preflightRequests, contentRequests: 0,
       selectedDetailCount: 0, blockedCount: 0, browserNavigations: execution?.searchNavigationCount ?? 0,
       detailNavigations: execution?.detailNavigationCount ?? 0, directRequests: execution?.directRequestCount ?? 0 });
-    throw transport;
-  } finally { await execution?.close(); }
+    const pageResult = failedSearchPageResult(1, "unexpected_page", transport.code);
+    return finish({ runId, status: "failed", permissionStatus: "unverified", dryRun: options.dryRun,
+      transportRequested: options.transport, transportUsed: selectedTransport, robotsRequests: budget.preflightRequests,
+      searchNavigations: execution?.searchNavigationCount ?? 0, detailNavigations: execution?.detailNavigationCount ?? 0,
+      directRequests: execution?.directRequestCount ?? 0, pageResults: execution?.pages.length ? execution.pages : [pageResult],
+      selectedCandidates: 0, globalDuplicateCount: 0, inserted: 0, updated: 0, unchanged: 0, skipped: 0,
+      failed: 1, blocked: 0, details: [], consoleErrors: [...(execution?.consoleErrors ?? []), `${transport.code}: ${transport.message}`],
+      directVerification: execution?.directVerification ?? emptyDirectVerification,
+      lifecycleDiagnostics: [...commandLifecycleDiagnostics, ...(execution?.lifecycleDiagnostics ?? [])], elapsedMs: Math.round(performance.now() - startedAt), internalBudgetMs: JOBKOREA_PAGE1_COMMAND_BUDGET_MS });
+  } finally {
+    await execution?.close();
+    const completedResult = returnedResult as JobKoreaSearchOneShotResult | null;
+    if (completedResult) {
+      completedResult.lifecycleDiagnostics = [...commandLifecycleDiagnostics, ...(execution?.lifecycleDiagnostics ?? [])];
+      completedResult.elapsedMs = Math.round(performance.now() - startedAt);
+    }
+  }
 }

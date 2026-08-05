@@ -11,7 +11,7 @@ let testDatabase: TestDatabase | null = null;
 afterEach(() => { testDatabase?.cleanup(); testDatabase = null; });
 const searchUrl = "https://www.jobkorea.co.kr/Search?stext=AI&tabType=recruit&Page_No=1";
 const options = (overrides: Partial<JobKoreaSearchOptions> = {}): JobKoreaSearchOptions => ({ searchUrl, pages: 1, maxDetails: 3,
-  transport: "playwright", confirm: true, dryRun: false, ...overrides });
+  transport: "playwright", confirm: true, dryRun: false, diagnostic: false, ...overrides });
 const directVerification = { classification: "direct_endpoint_unavailable" as const, observation: null,
   diagnostic: { severity: "warning" as const, code: "JOBKOREA_DIRECT_ENDPOINT_UNAVAILABLE", field: null, message: "미관찰" } };
 
@@ -25,6 +25,7 @@ function page(ids: string[], pageNumber = 1, globalSeen = new Set<string>()): Jo
 class FakeExecution implements JobKoreaSearchExecution {
   readonly transportUsed = "playwright" as const;
   readonly consoleErrors: string[] = [];
+  readonly lifecycleDiagnostics = [];
   readonly directVerification = directVerification;
   readonly directRequestCount = 0;
   detailNavigationCount = 0;
@@ -107,5 +108,17 @@ describe("잡코리아 browser search → parser → SQLite pipeline", () => {
       httpClient: robotsClient(), createExecution: async () => execution });
     expect(result).toMatchObject({ selectedCandidates: 0, detailNavigations: 0, inserted: 0 });
     expect(testDatabase.database.serialize()).toEqual(before);
+  });
+
+  it("browser 실행 생성 실패도 throw 대신 구조화된 실패 결과를 반환한다", async () => {
+    testDatabase = createTestDatabase();
+    const result = await runJobKoreaSearchOneShot(options({ maxDetails: 0, dryRun: true, diagnostic: true }), {
+      database: testDatabase.database,
+      httpClient: robotsClient(),
+      createExecution: async () => { throw new Error("synthetic launch failure"); },
+    });
+    expect(result).toMatchObject({ status: "failed", dryRun: true, selectedCandidates: 0, detailNavigations: 0, internalBudgetMs: 40_000 });
+    expect(result.pageResults[0]).toMatchObject({ classification: "unexpected_page", validEmptyPage: false });
+    expect(result.consoleErrors[0]).toContain("JOBKOREA_SEARCH_COMMAND_FAILED");
   });
 });

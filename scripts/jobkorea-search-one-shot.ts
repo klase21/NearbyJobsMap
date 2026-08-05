@@ -2,6 +2,7 @@ import { getDatabasePath, openReadonlyDatabase, openWritableDatabase } from "../
 import { listAppliedMigrations } from "../src/db/migrate";
 import { REQUIRED_MIGRATION_VERSION } from "../src/db/schema";
 import { JobKoreaTransportError } from "../src/sources/jobkorea/transport/jobkorea-error";
+import { JOBKOREA_PAGE1_COMMAND_BUDGET_MS } from "../src/sources/jobkorea/transport/jobkorea-lifecycle";
 import { parseJobKoreaSearchCliArgs } from "../src/sources/jobkorea/transport/jobkorea-search-cli";
 import { runJobKoreaSearchOneShot } from "../src/sources/jobkorea/transport/jobkorea-search-one-shot";
 
@@ -16,6 +17,7 @@ async function main(): Promise<void> {
   console.log("Direct _GI_List requests: 최대 1 (현재 익명 계약이 관찰된 경우만)");
   console.log("Cookies/profile/login/stealth/retries: disabled");
   console.log(`Database writes: ${options.dryRun ? "disabled" : "enabled"}`);
+  console.log(`Internal page-1 command budget: ${JOBKOREA_PAGE1_COMMAND_BUDGET_MS}ms`);
   const database = options.dryRun ? openReadonlyDatabase(getDatabasePath()) : openWritableDatabase(getDatabasePath());
   try {
     if (!listAppliedMigrations(database).includes(REQUIRED_MIGRATION_VERSION)) throw new JobKoreaTransportError("JOBKOREA_MIGRATION_MISSING", `migration ${REQUIRED_MIGRATION_VERSION}이 필요합니다.`);
@@ -37,6 +39,15 @@ async function main(): Promise<void> {
     console.log(`source console errors: ${result.consoleErrors.length}`);
     for (const detail of result.details) console.log(`- ${detail.sourcePostingId ?? "unknown"} result=${detail.result} diagnostics=${detail.diagnosticCodes.join(",") || "none"}`);
     console.log(`Run ID: ${result.runId ?? "dry-run (DB 기록 없음)"}`);
+    console.log(`Elapsed: ${result.elapsedMs}ms / ${result.internalBudgetMs}ms`);
+    if (options.diagnostic) {
+      console.log("Lifecycle diagnostics:");
+      if (!result.lifecycleDiagnostics.length) console.log("- browser lifecycle not started");
+      for (const entry of result.lifecycleDiagnostics) {
+        console.log(`- phase=${entry.phase} status=${entry.status} elapsed_ms=${entry.elapsedMs} code=${entry.code ?? "none"} message=${entry.message ?? "none"}`);
+      }
+      for (const message of result.consoleErrors.slice(0, 5)) console.log(`- source_error=${message.replace(/\s+/g, " ").slice(0, 500)}`);
+    }
     if (result.status === "failed" || result.status === "blocked") process.exitCode = 1;
   } finally { database.close(); }
 }

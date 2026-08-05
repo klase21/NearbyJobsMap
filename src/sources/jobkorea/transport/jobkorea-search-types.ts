@@ -1,5 +1,6 @@
 import type { ParseDiagnostic } from "../../../domain/source-contract";
 import type { JobKoreaDetailOutcome, JobKoreaPermissionStatus, JobKoreaRunStatus } from "./types";
+import type { JobKoreaLifecycleDiagnostic } from "./jobkorea-lifecycle";
 
 export type JobKoreaSearchTransportChoice = "auto" | "playwright" | "direct";
 export type JobKoreaSelectedSearchTransport = Exclude<JobKoreaSearchTransportChoice, "auto">;
@@ -24,6 +25,7 @@ export interface JobKoreaSearchOptions {
   transport: JobKoreaSearchTransportChoice;
   confirm: true;
   dryRun: boolean;
+  diagnostic: boolean;
 }
 
 export interface JobKoreaListingCandidate {
@@ -98,6 +100,7 @@ export interface JobKoreaSearchExecution {
   readonly searchNavigationCount: number;
   readonly detailNavigationCount: number;
   readonly directRequestCount: number;
+  readonly lifecycleDiagnostics: JobKoreaLifecycleDiagnostic[];
   close(): Promise<void>;
   fetchDetail(url: string): Promise<{ finalUrl: string; html: string; explicitClosed: boolean }>;
 }
@@ -125,4 +128,7 @@ export interface JobKoreaSearchOneShotResult {
   details: JobKoreaDetailOutcome[];
   consoleErrors: string[];
   directVerification: JobKoreaDirectVerificationResult;
+  lifecycleDiagnostics: JobKoreaLifecycleDiagnostic[];
+  elapsedMs: number;
+  internalBudgetMs: number;
 }

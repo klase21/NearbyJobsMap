@@ -76,6 +76,8 @@
 - 잡코리아 bounded browser 검증은 수동 `--confirm` 명령만 허용하며 검색 최대 2페이지, 상세 최대 3건, direct 최대 1회, robots 최대 1회를 넘기지 않는다.
 - 과거 AI 검색 607페이지 crawl을 자동으로 재실행하지 않는다. full pagination과 request cap 확대는 별도 명시적 승인이 필요하다.
 - browser/direct transport 자동 테스트는 mock 또는 synthetic sanitized contract만 사용하고 live source를 호출하지 않는다.
+- page-1/max-details-0 Playwright 진단 명령의 40초 내부 예산과 단계별 timeout을 약화하지 않는다. page·browser cleanup은 상한을 가져야 하며 정상 close가 멈추면 해당 임시 BrowserServer만 종료한다.
+- lifecycle timeout도 구조화된 page result와 단계 진단을 반환해야 하며 raw stack trace나 무기한 pending command로 끝내지 않는다.
 
 ## Product and UX Guidance
 
