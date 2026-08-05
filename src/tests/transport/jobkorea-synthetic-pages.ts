@@ -6,6 +6,12 @@ const row = (id: string, href = `/Recruit/GI_Read/${id}`, extra = "") => `<tr cl
   <span class="company">가상회사 ${id}</span><a href="${href}">가상 공고 ${id}</a>${extra}
   </td></tr>`;
 
+const structuralCard = (id: number, linkCount: 1 | 2 | 3 = 3, className = "flex gap-5 p-7 w-full") => `<div class="${className}">
+  <div class="mb-0.5"><a href="/Recruit/GI_Read/${id}?logpath=title">Synthetic title link</a></div>
+  <div class="w-full">${linkCount >= 2 ? `<a href="https://www.jobkorea.co.kr/Recruit/GI_Read/${id}">Synthetic company link</a>` : "<span>company slot</span>"}</div>
+  <div class="actions">${linkCount >= 3 ? `<a href="/Recruit/GI_Read/${id}?utm_source=synthetic">Synthetic action link</a>` : "<span>action slot</span>"}</div>
+</div>`;
+
 export const syntheticJobKoreaPages = {
   validSearch: document(`<main><table class="recruit-list">${row("50000001")}${row("50000002")}</table></main>`),
   promotedAndOrdinary: document(`<main><table class="recruit-list">${row("50000001")}
@@ -86,4 +92,38 @@ export const syntheticJobKoreaPages = {
     <section class="recommend-list"><a href="/Recruit/GI_Read/59000005">Synthetic related posting</a></section>
     <section class="recent-list"><a href="/Recruit/GI_Read/59000006">Synthetic recent posting</a></section>
   </main>`),
+  structuralMeasuredShape88: document(`<main data-section="synthetic-structural-shape"><div class="results-shell">
+    ${Array.from({ length: 28 }, (_, index) => structuralCard(60000000 + index, 3)).join("")}
+    ${Array.from({ length: 2 }, (_, index) => structuralCard(60000028 + index, 2)).join("")}
+  </div></main>`),
+  repeatedSingleLinkCards: document(`<main data-section="synthetic-single-link"><div class="results-shell">
+    ${Array.from({ length: 3 }, (_, index) => structuralCard(61000000 + index, 1)).join("")}
+  </div></main>`),
+  twoSingleLinkCards: document(`<main data-section="synthetic-two-link"><div class="results-shell">
+    ${Array.from({ length: 2 }, (_, index) => structuralCard(62000000 + index, 1)).join("")}
+  </div></main>`),
+  broadMixedIdWrapper: document(`<main data-section="synthetic-broad"><div class="broad-wrapper">
+    ${Array.from({ length: 5 }, (_, index) => `<a href="/Recruit/GI_Read/${63000000 + index}">Synthetic link</a>`).join("")}
+  </div></main>`),
+  repeatedMixedIdSiblings: document(`<main data-section="synthetic-mixed"><div class="results-shell">
+    ${Array.from({ length: 3 }, (_, index) => `<div class="mixed-card"><a href="/Recruit/GI_Read/${64000000 + index * 2}">A</a><a href="/Recruit/GI_Read/${64000001 + index * 2}">B</a></div>`).join("")}
+  </div></main>`),
+  splitPostingGroup: document(`<main data-section="synthetic-split"><div class="results-shell">
+    <div class="split-card"><a href="/Recruit/GI_Read/65000001">First</a></div>
+    <div class="split-card"><a href="/Recruit/GI_Read/65000001">Second</a></div>
+    <div class="split-card"><a href="/Recruit/GI_Read/65000002">Peer</a></div>
+  </div></main>`),
+  mixedStructuralExclusions: document(`<main data-section="synthetic-exclusions"><div class="results-shell">
+    ${Array.from({ length: 3 }, (_, index) => structuralCard(66000000 + index, 1)).join("")}
+    <div class="ad"><a href="/Recruit/GI_Read/66000100">Promoted</a></div>
+    <section class="recommend-list"><a href="/Recruit/GI_Read/66000101">Recommended</a></section>
+    <section class="recent-list"><a href="/Recruit/GI_Read/66000102">Recent</a></section>
+    <div class="mixed-card"><a href="/Recruit/GI_Read/66000103">Mixed A</a><a href="/Recruit/GI_Read/66000104">Mixed B</a></div>
+  </div></main>`),
+  pageLevelGroups: document(`<main data-section="synthetic-page-level">
+    <a href="/Recruit/GI_Read/67000001">Page-level A</a><a href="/Recruit/GI_Read/67000002">Page-level B</a>
+  </main>`),
+  manyStructuralGroups: document(`<main data-section="synthetic-many-groups"><div class="results-shell">
+    ${Array.from({ length: 45 }, (_, index) => `<article class="shape-${index}"><a href="/Recruit/GI_Read/${68000000 + index}">Synthetic</a></article>`).join("")}
+  </div></main>`),
 } as const;

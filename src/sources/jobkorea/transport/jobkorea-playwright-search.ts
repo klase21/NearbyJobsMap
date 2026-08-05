@@ -83,6 +83,7 @@ export function failedSearchPageResult(pageNumber: number, classification: "time
     duplicateWithinPageCount: null, uniqueNewCount: null, sourceReportsNoResults: null, validEmptyPage: false,
     blocked: false, parserFailure: classification === "timeout" || classification === "unexpected_page",
     evidence: null, rejectionReasonCounts: null, promotionSignalCounts: null, diagnosticSamples: null, containerSignatures: null, containerSignaturesTruncated: null,
+    shadowStructure: null,
     diagnostics: [diagnostic(code, `잡코리아 검색 페이지 분류: ${classification}`, "error")], candidates: [] };
 }
 

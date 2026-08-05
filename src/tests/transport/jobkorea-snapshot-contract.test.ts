@@ -4,6 +4,7 @@ import {
   JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE,
   captureJobKoreaPageSnapshot,
   JOBKOREA_SNAPSHOT_MAX_BYTES,
+  emptyJobKoreaShadowStructure,
   JobKoreaSnapshotError,
   validateAndRoundTripJobKoreaSnapshot,
   validateJobKoreaPageSnapshot,
@@ -28,7 +29,7 @@ const rawSnapshot = (): JobKoreaPageSnapshot => ({
     title: "가상 공고", companyName: "가상회사", position: 1, rowId: "50000001", sourceSelector: "tr.devloopArea[data-gno]" }],
   promotedCandidates: [], rejectedCandidates: [],
   diagnosticSamples: { ordinary: [], promoted: [], rejected: [], ordinaryTruncated: false, promotedTruncated: false, rejectedTruncated: false },
-  containerSignatures: [], containerSignaturesTruncated: false, diagnostics: [],
+  containerSignatures: [], containerSignaturesTruncated: false, shadowStructure: emptyJobKoreaShadowStructure(1), diagnostics: [],
 });
 const validSnapshot = (): JobKoreaPageSnapshot => validateAndRoundTripJobKoreaSnapshot(rawSnapshot());
 
@@ -97,6 +98,32 @@ describe("잡코리아 snapshot JSON-safe contract", () => {
       rejectionReasonCounts: { UNKNOWN_REJECTION: 1 },
       rejectedCandidates: [{ postingId: "9", href: "https://www.jobkorea.co.kr/Recruit/GI_Read/9", reason: "UNKNOWN_REJECTION" }] });
     expect(value.rejectionReasonCounts).toEqual({ UNKNOWN_REJECTION: 1 });
+  });
+
+  it("shadow group 및 link aggregate count 불일치를 precise diagnostic으로 거부한다", () => {
+    const groupMismatch = { ...rawSnapshot(), shadowStructure: { ...emptyJobKoreaShadowStructure(1),
+      provisionalPostingGroupCount: 2, structurallyEligibleGroupCount: 1 } };
+    expect(() => validateAndRoundTripJobKoreaSnapshot(groupMismatch)).toThrowError(
+      expect.objectContaining({ code: "JOBKOREA_PROVISIONAL_GROUP_COUNT_MISMATCH" }),
+    );
+    const linkMismatch = { ...rawSnapshot(), shadowStructure: emptyJobKoreaShadowStructure(0) };
+    expect(() => validateAndRoundTripJobKoreaSnapshot(linkMismatch)).toThrowError(
+      expect.objectContaining({ code: "JOBKOREA_PROVISIONAL_LINK_COUNT_MISMATCH" }),
+    );
+  });
+
+  it("page-level provisional ancestor와 malformed multi-ID group shape를 거부한다", () => {
+    const base = emptyJobKoreaShadowStructure(0);
+    const malformed = { ...rawSnapshot(), shadowStructure: { ...base, provisionalPostingGroupCount: 1,
+      structurallyRejectedGroupCount: 1, totalGroupedNumericLinkCount: 1,
+      structuralGroupRejectionReasonCounts: { GROUP_ANCESTOR_IS_PAGE_LEVEL: 1 }, provisionalUniquePostingIds: ["50000001"],
+      provisionalPostingGroups: [{ postingId: "50000001", canonicalUrl: "https://www.jobkorea.co.kr/Recruit/GI_Read/50000001",
+        linkCount: 1, sourcePositions: [1], groupAncestor: null, groupAncestorDepth: null, parentListSignature: null,
+        siblingGroupCount: null, uniquePostingIdsInsideGroup: ["50000001", "50000002"], allLinksSharePostingId: true,
+        insideKnownResultRoot: true, explicitPromotionEvidence: false, explicitRecommendationEvidence: false,
+        explicitRecentViewEvidence: false, repeatedSiblingStructure: false, structurallyEligible: false, verifiedOrdinary: false,
+        rejectionReasons: ["GROUP_ANCESTOR_IS_PAGE_LEVEL"], structuralSignatureKey: null, parentSignatureKey: null }] } };
+    expect(() => validateAndRoundTripJobKoreaSnapshot(malformed)).toThrowError(JobKoreaSnapshotError);
   });
 
   it.each([

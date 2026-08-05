@@ -39,6 +39,18 @@ export function formatJobKoreaSearchResult(result: JobKoreaSearchOneShotResult, 
         lines.push(`  - ${item.signatureKey}: count=${item.count} tag=${signature.tag} classes=${classes} role=${signature.role ?? "none"} data=${data} depth=${signature.depthFromAnchor} numeric_links=${signature.numericDetailLinkCount} ordinary=${item.candidateClassifications.ordinary} promoted=${item.candidateClassifications.promoted} rejected=${item.candidateClassifications.rejected} sample_ids=${ids}`);
       }
     }
+    if (options.diagnostic && page.shadowStructure) {
+      const shadow = page.shadowStructure;
+      lines.push("  JobKorea provisional ordinary structure:");
+      lines.push(`  - provisional_groups=${shadow.provisionalPostingGroupCount} eligible=${shadow.structurallyEligibleGroupCount} rejected=${shadow.structurallyRejectedGroupCount} grouped_links=${shadow.totalGroupedNumericLinkCount} ungrouped_links=${shadow.ungroupedNumericLinkCount}`);
+      lines.push(`  - verified_agreement=${shadow.verifiedOrdinaryAlsoStructurallyEligible} eligible_unverified=${shadow.structurallyEligibleButUnverified} verified_mismatch=${shadow.verifiedOrdinaryStructuralMismatch}`);
+      if (Object.keys(shadow.structuralGroupRejectionReasonCounts).length) {
+        lines.push(`  - structural_rejections=${Object.entries(shadow.structuralGroupRejectionReasonCounts).map(([reason, count]) => `${reason}:${count}`).join(" ")}`);
+      }
+      for (const item of shadow.structuralGroupSignatureSummaries) {
+        lines.push(`  - group_signature=${item.signatureKey} groups=${item.groupCount} eligible=${item.eligibleGroupCount} rejected=${item.rejectedGroupCount} links=${Object.entries(item.linkCountDistribution).map(([count, groups]) => `${count}x${groups}`).join(",")} sibling_max=${item.siblingGroupCountMaximum} sample_ids=${item.samplePostingIds.join(",") || "none"}`);
+      }
+    }
   }
   lines.push(`선택=${result.selectedCandidates} 전역중복=${result.globalDuplicateCount} 삽입=${result.inserted} 갱신=${result.updated} 변경없음=${result.unchanged} 실패=${result.failed} 차단=${result.blocked}`);
   lines.push(`direct 검증: ${result.directVerification.classification} (${result.directVerification.diagnostic.code})`);

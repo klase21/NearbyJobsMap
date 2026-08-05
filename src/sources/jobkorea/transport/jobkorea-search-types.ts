@@ -85,6 +85,72 @@ export interface JobKoreaContainerSignatureSummary {
   signature: JobKoreaElementSignature;
 }
 
+export type JobKoreaStructuralGroupRejectionReason =
+  | "OUTSIDE_KNOWN_RESULT_ROOT" | "MULTIPLE_POSTING_IDS_IN_GROUP" | "GROUP_ANCESTOR_NOT_FOUND"
+  | "GROUP_ANCESTOR_IS_PAGE_LEVEL" | "GROUP_CONTAINS_PROMOTED_EVIDENCE"
+  | "GROUP_CONTAINS_RECOMMENDATION_EVIDENCE" | "GROUP_CONTAINS_RECENT_VIEW_EVIDENCE"
+  | "GROUP_STRUCTURE_NOT_REPEATED" | "GROUP_DESCENDANT_LIMIT_EXCEEDED" | "DUPLICATE_GROUP";
+
+export interface JobKoreaProvisionalPostingGroup {
+  postingId: string;
+  canonicalUrl: string;
+  linkCount: number;
+  sourcePositions: number[];
+  groupAncestor: JobKoreaElementSignature | null;
+  groupAncestorDepth: number | null;
+  parentListSignature: JobKoreaElementSignature | null;
+  siblingGroupCount: number | null;
+  uniquePostingIdsInsideGroup: string[];
+  allLinksSharePostingId: boolean;
+  insideKnownResultRoot: boolean;
+  explicitPromotionEvidence: boolean;
+  explicitRecommendationEvidence: boolean;
+  explicitRecentViewEvidence: boolean;
+  repeatedSiblingStructure: boolean;
+  structurallyEligible: boolean;
+  verifiedOrdinary: boolean;
+  rejectionReasons: JobKoreaStructuralGroupRejectionReason[];
+  structuralSignatureKey: string | null;
+  parentSignatureKey: string | null;
+}
+
+export interface JobKoreaStructuralGroupSignatureSummary {
+  signatureKey: string;
+  groupCount: number;
+  eligibleGroupCount: number;
+  rejectedGroupCount: number;
+  linkCountDistribution: Record<string, number>;
+  siblingGroupCountMaximum: number;
+  samplePostingIds: string[];
+  signature: JobKoreaElementSignature;
+}
+
+export interface JobKoreaRepeatedListParentSummary {
+  signatureKey: string;
+  parentCount: number;
+  repeatedGroupCount: number;
+  samplePostingIds: string[];
+  signature: JobKoreaElementSignature;
+}
+
+export interface JobKoreaShadowStructureDiagnostics {
+  provisionalPostingGroupCount: number;
+  structurallyEligibleGroupCount: number;
+  structurallyRejectedGroupCount: number;
+  totalGroupedNumericLinkCount: number;
+  ungroupedNumericLinkCount: number;
+  provisionalPostingGroups: JobKoreaProvisionalPostingGroup[];
+  structuralGroupRejectionReasonCounts: Partial<Record<JobKoreaStructuralGroupRejectionReason, number>>;
+  structuralGroupSignatureSummaries: JobKoreaStructuralGroupSignatureSummary[];
+  repeatedListParentSummaries: JobKoreaRepeatedListParentSummary[];
+  provisionalUniquePostingIds: string[];
+  provisionalGroupSamplesTruncated: boolean;
+  structuralSummariesTruncated: boolean;
+  verifiedOrdinaryAlsoStructurallyEligible: number;
+  structurallyEligibleButUnverified: number;
+  verifiedOrdinaryStructuralMismatch: number;
+}
+
 export interface JobKoreaSnapshotOrdinaryCandidate {
   postingId: string;
   href: string;
@@ -157,6 +223,7 @@ export interface JobKoreaPageSnapshot {
   };
   containerSignatures: JobKoreaContainerSignatureSummary[];
   containerSignaturesTruncated: boolean;
+  shadowStructure: JobKoreaShadowStructureDiagnostics;
   diagnostics: JobKoreaSnapshotDiagnostic[];
 }
 
@@ -205,6 +272,7 @@ export interface JobKoreaListingPageResult {
   diagnosticSamples: JobKoreaPageSnapshot["diagnosticSamples"] | null;
   containerSignatures: JobKoreaContainerSignatureSummary[] | null;
   containerSignaturesTruncated: boolean | null;
+  shadowStructure: JobKoreaShadowStructureDiagnostics | null;
   diagnostics: ParseDiagnostic[];
   candidates: JobKoreaListingCandidate[];
 }

@@ -1,4 +1,4 @@
-import { validateAndRoundTripJobKoreaSnapshot } from "../../sources/jobkorea/transport/jobkorea-page-snapshot";
+import { emptyJobKoreaShadowStructure, validateAndRoundTripJobKoreaSnapshot } from "../../sources/jobkorea/transport/jobkorea-page-snapshot";
 import type { JobKoreaPageSnapshot, JobKoreaSnapshotOrdinaryCandidate } from "../../sources/jobkorea/transport/jobkorea-search-types";
 
 export const jobKoreaCandidate = (id: string, overrides: Partial<JobKoreaSnapshotOrdinaryCandidate> = {}): JobKoreaSnapshotOrdinaryCandidate => ({
@@ -28,7 +28,7 @@ export function jobKoreaSnapshot(
     rejectionReasonCounts: {}, promotionSignalCounts: {}, ordinaryCandidates, promotedCandidates: [], rejectedCandidates: [],
     diagnosticSamples: { ordinary: [], promoted: [], rejected: [], ordinaryTruncated: false,
       promotedTruncated: false, rejectedTruncated: false },
-    containerSignatures: [], containerSignaturesTruncated: false, diagnostics: [],
+    containerSignatures: [], containerSignaturesTruncated: false, shadowStructure: emptyJobKoreaShadowStructure(count), diagnostics: [],
   };
   return validateAndRoundTripJobKoreaSnapshot({ ...base, ...overrides, evidence: { ...base.evidence, ...overrides.evidence } });
 }

@@ -2,7 +2,8 @@ import type { Page } from "playwright";
 import type {
   JobKoreaCandidateDiagnosticSample, JobKoreaContainerSignatureSummary, JobKoreaDocumentReadyState,
   JobKoreaElementSignature, JobKoreaPageSnapshot, JobKoreaReadinessEvidence, JobKoreaRejectionReason,
-  JobKoreaSnapshotDiagnostic, JobKoreaSnapshotExcludedCandidate,
+  JobKoreaShadowStructureDiagnostics, JobKoreaSnapshotDiagnostic, JobKoreaSnapshotExcludedCandidate,
+  JobKoreaStructuralGroupRejectionReason,
 } from "./jobkorea-search-types";
 
 export const JOBKOREA_SNAPSHOT_SCHEMA_VERSION = 2 as const;
@@ -13,6 +14,17 @@ export const JOBKOREA_PROMOTED_SAMPLE_LIMIT = 10;
 export const JOBKOREA_REJECTED_SAMPLE_LIMIT = 20;
 export const JOBKOREA_CONTAINER_SIGNATURE_LIMIT = 20;
 export const JOBKOREA_ANCESTOR_DEPTH_LIMIT = 8;
+export const JOBKOREA_PROVISIONAL_GROUP_SAMPLE_LIMIT = 40;
+export const JOBKOREA_STRUCTURAL_SUMMARY_LIMIT = 20;
+export const JOBKOREA_PROVISIONAL_GROUP_LIMIT = 100;
+
+export const emptyJobKoreaShadowStructure = (ungroupedNumericLinkCount = 0): JobKoreaShadowStructureDiagnostics => ({
+  provisionalPostingGroupCount: 0, structurallyEligibleGroupCount: 0, structurallyRejectedGroupCount: 0,
+  totalGroupedNumericLinkCount: 0, ungroupedNumericLinkCount, provisionalPostingGroups: [],
+  structuralGroupRejectionReasonCounts: {}, structuralGroupSignatureSummaries: [], repeatedListParentSummaries: [],
+  provisionalUniquePostingIds: [], provisionalGroupSamplesTruncated: false, structuralSummariesTruncated: false,
+  verifiedOrdinaryAlsoStructurallyEligible: 0, structurallyEligibleButUnverified: 0, verifiedOrdinaryStructuralMismatch: 0,
+});
 
 export const JOBKOREA_REJECTION_REASONS = [
   "NO_ORDINARY_ANCESTOR", "INSIDE_RECOMMENDATION_REGION", "INSIDE_RECENT_VIEW_REGION",
@@ -25,6 +37,13 @@ const REJECTION_REASON_SET = new Set<string>(JOBKOREA_REJECTION_REASONS);
 const PROMOTION_SIGNAL_SET = new Set(["exact_class_token", "data_attribute", "semantic_label"]);
 const READY_STATES = new Set(["loading", "interactive", "complete", "unknown"]);
 const READINESS_REASONS = new Set(["numeric_detail_link", "ordinary_container", "no_result", "login", "captcha", "verification", "access_denied", "unknown"]);
+export const JOBKOREA_STRUCTURAL_GROUP_REJECTION_REASONS = [
+  "OUTSIDE_KNOWN_RESULT_ROOT", "MULTIPLE_POSTING_IDS_IN_GROUP", "GROUP_ANCESTOR_NOT_FOUND",
+  "GROUP_ANCESTOR_IS_PAGE_LEVEL", "GROUP_CONTAINS_PROMOTED_EVIDENCE",
+  "GROUP_CONTAINS_RECOMMENDATION_EVIDENCE", "GROUP_CONTAINS_RECENT_VIEW_EVIDENCE",
+  "GROUP_STRUCTURE_NOT_REPEATED", "GROUP_DESCENDANT_LIMIT_EXCEEDED", "DUPLICATE_GROUP",
+] as const satisfies readonly JobKoreaStructuralGroupRejectionReason[];
+const STRUCTURAL_REJECTION_REASON_SET = new Set<string>(JOBKOREA_STRUCTURAL_GROUP_REJECTION_REASONS);
 const EVIDENCE_KEYS = [
   "ordinaryContainerCount", "ordinaryRowCount", "resultRootCount", "knownTableResultCount",
   "knownListResultCount", "knownCardResultCount", "numericLinksInsideKnownTableResults",
@@ -165,6 +184,126 @@ function containerSummary(value: unknown): JobKoreaContainerSignatureSummary {
     samplePostingIds: value.samplePostingIds as string[], signature: elementSignature(value.signature) };
 }
 
+function structuralReasonCounts(value: unknown): JobKoreaShadowStructureDiagnostics["structuralGroupRejectionReasonCounts"] {
+  if (!isPlainRecord(value)) fail("structural rejection counts가 plain object가 아닙니다.");
+  const result: JobKoreaShadowStructureDiagnostics["structuralGroupRejectionReasonCounts"] = {};
+  const keys = Object.keys(value);
+  if (keys.join("\0") !== [...keys].sort().join("\0")) fail("structural rejection keys가 결정적 순서가 아닙니다.");
+  for (const key of keys) {
+    if (!STRUCTURAL_REJECTION_REASON_SET.has(key)) fail("알 수 없는 structural rejection reason입니다.");
+    const count = countField(value, key)!;
+    if (count > 0) result[key as JobKoreaStructuralGroupRejectionReason] = count;
+  }
+  return result;
+}
+
+function stringCountRecord(value: unknown, field: string): Record<string, number> {
+  if (!isPlainRecord(value)) fail(`${field}가 plain object가 아닙니다.`);
+  const result: Record<string, number> = {};
+  for (const key of Object.keys(value).sort()) {
+    if (!/^\d+$/.test(key)) fail(`${field} key가 유효하지 않습니다.`);
+    result[key] = countField(value, key)!;
+  }
+  if (Object.keys(value).join("\0") !== Object.keys(value).sort().join("\0")) fail(`${field} key 순서가 안정적이지 않습니다.`);
+  return result;
+}
+
+function structuralGroup(value: unknown): JobKoreaShadowStructureDiagnostics["provisionalPostingGroups"][number] {
+  if (!isPlainRecord(value)) fail("provisional group이 plain object가 아닙니다.");
+  const postingId = stringField(value, "postingId", 30);
+  if (!/^\d+$/.test(postingId)) fail("provisional postingId가 유효하지 않습니다.");
+  if (!Array.isArray(value.sourcePositions) || value.sourcePositions.length > JOBKOREA_SNAPSHOT_CANDIDATE_LIMIT) fail("group source positions가 유효하지 않습니다.");
+  const sourcePositions = value.sourcePositions.map((item) => {
+    if (!Number.isInteger(item) || (item as number) < 1) fail("group source position이 유효하지 않습니다.");
+    return item as number;
+  });
+  if (!Array.isArray(value.uniquePostingIdsInsideGroup) || value.uniquePostingIdsInsideGroup.length > JOBKOREA_PROVISIONAL_GROUP_LIMIT
+    || value.uniquePostingIdsInsideGroup.some((item) => typeof item !== "string" || !/^\d+$/.test(item))) fail("group unique IDs가 유효하지 않습니다.");
+  if (!Array.isArray(value.rejectionReasons) || value.rejectionReasons.some((reason) => typeof reason !== "string" || !STRUCTURAL_REJECTION_REASON_SET.has(reason))) fail("group rejection reasons가 유효하지 않습니다.");
+  const booleans = ["allLinksSharePostingId", "insideKnownResultRoot", "explicitPromotionEvidence", "explicitRecommendationEvidence",
+    "explicitRecentViewEvidence", "repeatedSiblingStructure", "structurallyEligible", "verifiedOrdinary"] as const;
+  if (booleans.some((key) => typeof value[key] !== "boolean")) fail("group boolean 값이 유효하지 않습니다.");
+  if (value.structurallyEligible && value.rejectionReasons.length) fail("eligible group에 rejection reason이 있습니다.");
+  const expectedShared = value.uniquePostingIdsInsideGroup.length === 1 && value.uniquePostingIdsInsideGroup[0] === postingId;
+  if (value.allLinksSharePostingId !== expectedShared) fail("group posting ID consistency가 유효하지 않습니다.", "JOBKOREA_PROVISIONAL_GROUP_MULTIPLE_IDS");
+  if (value.structurallyEligible && (!expectedShared || !value.repeatedSiblingStructure || !value.insideKnownResultRoot
+    || value.explicitPromotionEvidence || value.explicitRecommendationEvidence || value.explicitRecentViewEvidence)) {
+    fail("eligible provisional group 조건이 유효하지 않습니다.");
+  }
+  const groupAncestorDepth = countField(value, "groupAncestorDepth", true);
+  if (groupAncestorDepth !== null && groupAncestorDepth > JOBKOREA_ANCESTOR_DEPTH_LIMIT) fail("group ancestor depth가 제한을 초과했습니다.");
+  const siblingGroupCount = countField(value, "siblingGroupCount", true);
+  if (value.groupAncestor !== null) {
+    const ancestor = elementSignature(value.groupAncestor);
+    if (["html", "body", "main", "header", "footer", "nav"].includes(ancestor.tag)
+      && !value.rejectionReasons.includes("GROUP_ANCESTOR_IS_PAGE_LEVEL") && !value.rejectionReasons.includes("DUPLICATE_GROUP")) {
+      fail("page-level group ancestor가 명시적으로 거부되지 않았습니다.", "JOBKOREA_PROVISIONAL_GROUP_PAGE_LEVEL");
+    }
+  }
+  return {
+    postingId, canonicalUrl: stringField(value, "canonicalUrl", 2_048), linkCount: countField(value, "linkCount")!, sourcePositions,
+    groupAncestor: value.groupAncestor === null ? null : elementSignature(value.groupAncestor), groupAncestorDepth,
+    parentListSignature: value.parentListSignature === null ? null : elementSignature(value.parentListSignature), siblingGroupCount,
+    uniquePostingIdsInsideGroup: value.uniquePostingIdsInsideGroup as string[],
+    allLinksSharePostingId: value.allLinksSharePostingId as boolean, insideKnownResultRoot: value.insideKnownResultRoot as boolean,
+    explicitPromotionEvidence: value.explicitPromotionEvidence as boolean, explicitRecommendationEvidence: value.explicitRecommendationEvidence as boolean,
+    explicitRecentViewEvidence: value.explicitRecentViewEvidence as boolean, repeatedSiblingStructure: value.repeatedSiblingStructure as boolean,
+    structurallyEligible: value.structurallyEligible as boolean, verifiedOrdinary: value.verifiedOrdinary as boolean,
+    rejectionReasons: value.rejectionReasons as JobKoreaStructuralGroupRejectionReason[],
+    structuralSignatureKey: nullableString(value, "structuralSignatureKey", 500), parentSignatureKey: nullableString(value, "parentSignatureKey", 500),
+  };
+}
+
+function validateShadowStructure(value: unknown, evidence: JobKoreaPageSnapshot["evidence"]): JobKoreaShadowStructureDiagnostics {
+  if (!isPlainRecord(value)) fail("shadow structure가 plain object가 아닙니다.");
+  if (!Array.isArray(value.provisionalPostingGroups) || value.provisionalPostingGroups.length > JOBKOREA_PROVISIONAL_GROUP_SAMPLE_LIMIT) fail("provisional group sample limit이 유효하지 않습니다.");
+  const groups = value.provisionalPostingGroups.map(structuralGroup);
+  const provisionalPostingGroupCount = countField(value, "provisionalPostingGroupCount")!;
+  const structurallyEligibleGroupCount = countField(value, "structurallyEligibleGroupCount")!;
+  const structurallyRejectedGroupCount = countField(value, "structurallyRejectedGroupCount")!;
+  if (structurallyEligibleGroupCount + structurallyRejectedGroupCount !== provisionalPostingGroupCount) fail("provisional group count 합계가 다릅니다.", "JOBKOREA_PROVISIONAL_GROUP_COUNT_MISMATCH");
+  const totalGroupedNumericLinkCount = countField(value, "totalGroupedNumericLinkCount")!;
+  const ungroupedNumericLinkCount = countField(value, "ungroupedNumericLinkCount")!;
+  if (evidence.allNumericDetailLinkCount !== null && totalGroupedNumericLinkCount + ungroupedNumericLinkCount !== evidence.allNumericDetailLinkCount) fail("provisional link count 합계가 다릅니다.", "JOBKOREA_PROVISIONAL_LINK_COUNT_MISMATCH");
+  const rejectionReasonCounts = structuralReasonCounts(value.structuralGroupRejectionReasonCounts);
+  const rejectedReasonTotal = Object.values(rejectionReasonCounts).reduce((sum, count) => sum + (count ?? 0), 0);
+  if (rejectedReasonTotal < structurallyRejectedGroupCount) fail("structural rejection reason 합계가 rejected group보다 작습니다.");
+  if (!Array.isArray(value.provisionalUniquePostingIds) || value.provisionalUniquePostingIds.length > JOBKOREA_PROVISIONAL_GROUP_LIMIT
+    || value.provisionalUniquePostingIds.some((item) => typeof item !== "string" || !/^\d+$/.test(item))) fail("provisional unique IDs가 유효하지 않습니다.");
+  if (new Set(value.provisionalUniquePostingIds).size !== value.provisionalUniquePostingIds.length
+    || value.provisionalUniquePostingIds.length !== provisionalPostingGroupCount) fail("provisional posting ID aggregate가 유효하지 않습니다.");
+  if (!Array.isArray(value.structuralGroupSignatureSummaries) || value.structuralGroupSignatureSummaries.length > JOBKOREA_STRUCTURAL_SUMMARY_LIMIT) fail("structural summary limit이 유효하지 않습니다.");
+  const structuralGroupSignatureSummaries = value.structuralGroupSignatureSummaries.map((item) => {
+    if (!isPlainRecord(item) || !Array.isArray(item.samplePostingIds) || item.samplePostingIds.length > 3) fail("structural signature summary가 유효하지 않습니다.");
+    const groupCount = countField(item, "groupCount")!, eligibleGroupCount = countField(item, "eligibleGroupCount")!, rejectedGroupCount = countField(item, "rejectedGroupCount")!;
+    if (eligibleGroupCount + rejectedGroupCount !== groupCount) fail("structural summary count 합계가 다릅니다.");
+    if (item.samplePostingIds.some((id) => typeof id !== "string" || !/^\d+$/.test(id))) fail("structural sample ID가 유효하지 않습니다.");
+    return { signatureKey: stringField(item, "signatureKey", 500), groupCount, eligibleGroupCount, rejectedGroupCount,
+      linkCountDistribution: stringCountRecord(item.linkCountDistribution, "linkCountDistribution"), siblingGroupCountMaximum: countField(item, "siblingGroupCountMaximum")!,
+      samplePostingIds: item.samplePostingIds as string[], signature: elementSignature(item.signature) };
+  });
+  if (!Array.isArray(value.repeatedListParentSummaries) || value.repeatedListParentSummaries.length > JOBKOREA_STRUCTURAL_SUMMARY_LIMIT) fail("parent summary limit이 유효하지 않습니다.");
+  const repeatedListParentSummaries = value.repeatedListParentSummaries.map((item) => {
+    if (!isPlainRecord(item) || !Array.isArray(item.samplePostingIds) || item.samplePostingIds.length > 3
+      || item.samplePostingIds.some((id) => typeof id !== "string" || !/^\d+$/.test(id))) fail("parent summary가 유효하지 않습니다.");
+    return { signatureKey: stringField(item, "signatureKey", 500), parentCount: countField(item, "parentCount")!,
+      repeatedGroupCount: countField(item, "repeatedGroupCount")!, samplePostingIds: item.samplePostingIds as string[], signature: elementSignature(item.signature) };
+  });
+  if (typeof value.provisionalGroupSamplesTruncated !== "boolean" || typeof value.structuralSummariesTruncated !== "boolean") fail("shadow truncation flags가 유효하지 않습니다.");
+  if ((!value.provisionalGroupSamplesTruncated && groups.length !== provisionalPostingGroupCount)
+    || (value.provisionalGroupSamplesTruncated && groups.length !== JOBKOREA_PROVISIONAL_GROUP_SAMPLE_LIMIT)) fail("provisional group sample truncation 계약이 유효하지 않습니다.");
+  const eligibleButUnverified = countField(value, "structurallyEligibleButUnverified")!;
+  if (eligibleButUnverified !== structurallyEligibleGroupCount) fail("shadow agreement count가 유효하지 않습니다.");
+  return { provisionalPostingGroupCount, structurallyEligibleGroupCount, structurallyRejectedGroupCount,
+    totalGroupedNumericLinkCount, ungroupedNumericLinkCount, provisionalPostingGroups: groups,
+    structuralGroupRejectionReasonCounts: rejectionReasonCounts, structuralGroupSignatureSummaries, repeatedListParentSummaries,
+    provisionalUniquePostingIds: value.provisionalUniquePostingIds as string[], provisionalGroupSamplesTruncated: value.provisionalGroupSamplesTruncated,
+    structuralSummariesTruncated: value.structuralSummariesTruncated,
+    verifiedOrdinaryAlsoStructurallyEligible: countField(value, "verifiedOrdinaryAlsoStructurallyEligible")!,
+    structurallyEligibleButUnverified: eligibleButUnverified,
+    verifiedOrdinaryStructuralMismatch: countField(value, "verifiedOrdinaryStructuralMismatch")! };
+}
+
 export function validateJobKoreaPageSnapshot(value: unknown): JobKoreaPageSnapshot {
   if (!isPlainRecord(value) || value.schemaVersion !== JOBKOREA_SNAPSHOT_SCHEMA_VERSION) {
     fail("지원하지 않는 snapshot schema version입니다.", "JOBKOREA_SNAPSHOT_SCHEMA_VERSION_UNSUPPORTED");
@@ -232,13 +371,15 @@ export function validateJobKoreaPageSnapshot(value: unknown): JobKoreaPageSnapsh
   }
   if (!Array.isArray(value.containerSignatures) || value.containerSignatures.length > JOBKOREA_CONTAINER_SIGNATURE_LIMIT || typeof value.containerSignaturesTruncated !== "boolean") fail("container signature collection이 유효하지 않습니다.");
   const containerSignatures = value.containerSignatures.map(containerSummary);
+  const shadowStructure = validateShadowStructure(value.shadowStructure, evidence);
   if (!value.extractionCompleted && (EVIDENCE_KEYS.some((key) => evidence[key] !== null) || ordinaryCandidates.length || promotedCandidates.length || rejectedCandidates.length)) fail("미완료 snapshot에 측정값이 있습니다.");
   return {
     schemaVersion: 2, serializedSnapshotBytes, finalUrl: stringField(value, "finalUrl", 2_048), pageTitle: stringField(value, "pageTitle", 500),
     documentReadyState: readyState as JobKoreaDocumentReadyState, extractionCompleted: value.extractionCompleted,
     extractionDurationMs: value.extractionDurationMs as number | null, readiness, domChangedAfterReadiness: value.domChangedAfterReadiness as boolean | null,
     evidence, rejectionReasonCounts, promotionSignalCounts, ordinaryCandidates, promotedCandidates, rejectedCandidates, diagnosticSamples,
-    containerSignatures, containerSignaturesTruncated: value.containerSignaturesTruncated, diagnostics: diagnosticArray(value.diagnostics),
+    containerSignatures, containerSignaturesTruncated: value.containerSignaturesTruncated, shadowStructure,
+    diagnostics: diagnosticArray(value.diagnostics),
   };
 }
 
@@ -284,6 +425,7 @@ export const JOBKOREA_PAGE_READINESS_EVALUATOR_SOURCE = String.raw`(() => {
 export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
   const schemaVersion = 2;
   const ordinaryCandidateLimit = 200, ordinarySampleLimit = 10, promotedSampleLimit = 10, rejectedSampleLimit = 20, signatureLimit = 20, ancestorLimit = 8, promotionAncestorLimit = 6;
+  const structuralLinkLimit = 200, structuralGroupLimit = 100, structuralGroupSampleLimit = 40, structuralSummaryLimit = 20, siblingChildLimit = 200, repeatedSiblingMinimum = 3;
   const ordinarySelectors = "tr.devloopArea[data-gno], .list-default, .recruit-info, .recruit-list, .search-list, .list-post, [class*='recruit-list'], [class*='search-list']";
   const resultRootSelectors = "main, [role='main'], .list-default, .recruit-info, .recruit-list, .search-list, .list-post, [class*='recruit-list'], [class*='search-list']";
   const recommendationSelectors = "[class*='recommend'], [class*='attention']";
@@ -316,6 +458,61 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
   const ancestorChain = (anchor) => { const result=[]; let current=anchor.parentElement; let depth=1; while(current && depth<=ancestorLimit){ result.push(signature(current,depth)); if(current.tagName==="BODY" || current.tagName==="MAIN" || current.matches(resultRootSelectors)) break; current=current.parentElement; depth+=1; } return result; };
   const structureKind = (anchor) => anchor.closest("table") ? "table" : anchor.closest("ul,ol,li") ? "list" : anchor.closest("article") ? "article" : anchor.closest("section") ? "section" : anchor.closest("div") ? "div" : "other";
   const signatureKey = (item) => { const classPart=item.classes.length ? "."+item.classes.join(".") : ""; const dataPart=Object.keys(item.dataAttributes).sort().map((key)=>"["+key+"]").join(""); const rolePart=item.role ? "[role="+item.role+"]" : ""; return compact(item.tag+classPart+dataPart+rolePart+"@"+item.depthFromAnchor,500); };
+  const emptyShadowStructure = () => ({provisionalPostingGroupCount:0,structurallyEligibleGroupCount:0,structurallyRejectedGroupCount:0,totalGroupedNumericLinkCount:0,ungroupedNumericLinkCount:0,provisionalPostingGroups:[],structuralGroupRejectionReasonCounts:{},structuralGroupSignatureSummaries:[],repeatedListParentSummaries:[],provisionalUniquePostingIds:[],provisionalGroupSamplesTruncated:false,structuralSummariesTruncated:false,verifiedOrdinaryAlsoStructurallyEligible:0,structurallyEligibleButUnverified:0,verifiedOrdinaryStructuralMismatch:0});
+  const numericPostingId = (node) => { if(!(node instanceof HTMLAnchorElement))return null; let parsed=null;try{parsed=new URL(node.href);}catch{return null;}if(!["www.jobkorea.co.kr","m.jobkorea.co.kr"].includes(parsed.hostname))return null;return /^\/Recruit\/GI_Read\/(\d+)\/?$/i.exec(parsed.pathname)?.[1]??null; };
+  const numericIdsInside = (element) => Array.from(element.querySelectorAll('a[href*="/Recruit/GI_Read"]')).slice(0,structuralLinkLimit).map(numericPostingId).filter(Boolean);
+  const structuralShapeKey = (element,depth) => { const item=signature(element,depth); const childBucket=item.childElementCount>20?"21+":item.childElementCount>10?"11-20":item.childElementCount>5?"6-10":String(item.childElementCount); const kind=["TR","LI","ARTICLE","SECTION","DIV"].includes(element.tagName)?element.tagName.toLowerCase():"other"; return compact(kind+"|role="+(item.role??"")+"|classes="+item.classes.join(".")+"|data="+Object.keys(item.dataAttributes).sort().join(",")+"|children="+childBucket+"|ids="+new Set(numericIdsInside(element)).size,500); };
+  const isPageLevel = (element,resultRoots) => !element || ["HTML","BODY","MAIN","HEADER","FOOTER","NAV"].includes(element.tagName) || resultRoots.includes(element);
+  const depthFromAnchor = (anchor,element) => {let current=anchor.parentElement,depth=1;while(current&&depth<=ancestorLimit){if(current===element)return depth;current=current.parentElement;depth+=1;}return null;};
+  const commonAncestor = (anchors) => { if(!anchors.length)return null;let current=anchors[0].parentElement,depth=1;while(current&&depth<=ancestorLimit){if(anchors.every((anchor)=>current.contains(anchor)))return current;current=current.parentElement;depth+=1;}return null; };
+  const exclusionFlags = (anchors) => ({promoted:anchors.some((anchor)=>Boolean(promotionEvidence(anchor))),recommendation:anchors.some((anchor)=>Boolean(anchor.closest(recommendationSelectors))||/지금\s*주목할\s*만한\s*공고|추천\s*공고/.test(compact((anchor.closest("li,article,section,div,tr")??anchor).textContent,1000))),recent:anchors.some((anchor)=>Boolean(anchor.closest(recentSelectors))||/최근\s*본\s*공고/.test(compact((anchor.closest("li,article,section,div,tr")??anchor).textContent,1000)))});
+  const buildShadowStructure = (detailNodes,resultRoots,ordinaryCandidates,diagnostics) => {
+    const records=[];
+    for(let index=0;index<detailNodes.length&&records.length<structuralLinkLimit;index+=1){const anchor=detailNodes[index];const postingId=numericPostingId(anchor);if(postingId)records.push({anchor,postingId,position:index+1});}
+    const grouped={};for(const record of records){if(!grouped[record.postingId])grouped[record.postingId]=[];grouped[record.postingId].push(record);}
+    const verifiedIds=new Set(ordinaryCandidates.map((item)=>item.postingId));
+    const allGroups=[], rejectionCounts={}, structuralAggregates={}, parentAggregates={};
+    const addStructuralReason=(reason)=>{rejectionCounts[reason]=(rejectionCounts[reason]??0)+1;};
+    const insideRoot=(anchor)=>resultRoots.some((root)=>root===anchor||root.contains(anchor));
+    for(const postingId of Object.keys(grouped).slice(0,structuralGroupLimit)){
+      const entries=grouped[postingId],anchors=entries.map((item)=>item.anchor),initial=commonAncestor(anchors),flags=exclusionFlags(anchors);
+      let selected=null,selectedDepth=null,siblingGroupCount=null,repeated=false,parent=null;
+      let current=initial;
+      while(current instanceof Element){const depth=depthFromAnchor(anchors[0],current);if(depth===null||depth>ancestorLimit||isPageLevel(current,resultRoots))break;const ids=[...new Set(numericIdsInside(current))];const descendantCount=current.querySelectorAll("*").length;if(descendantCount>siblingChildLimit)break;if(ids.length===1&&ids[0]===postingId&&current.parentElement){const shape=structuralShapeKey(current,depth);const siblings=Array.from(current.parentElement.children).slice(0,siblingChildLimit).filter((sibling)=>{if(isPageLevel(sibling,resultRoots)||structuralShapeKey(sibling,depth)!==shape)return false;const siblingIds=[...new Set(numericIdsInside(sibling))];return siblingIds.length===1;});const distinct=new Set(siblings.flatMap((sibling)=>numericIdsInside(sibling)));if(siblings.length>=repeatedSiblingMinimum&&distinct.size>=repeatedSiblingMinimum){selected=current;selectedDepth=depth;siblingGroupCount=siblings.length;repeated=true;parent=current.parentElement;break;}}current=current.parentElement;}
+      if(!selected&&initial instanceof Element){selected=initial;selectedDepth=depthFromAnchor(anchors[0],initial);parent=initial.parentElement;}
+      const uniqueInside=selected instanceof Element?[...new Set(numericIdsInside(selected))]:[];
+      const insideKnown=anchors.every(insideRoot),pageLevel=isPageLevel(selected,resultRoots),descendantExceeded=selected instanceof Element&&selected.querySelectorAll("*").length>siblingChildLimit;
+      const reasons=[];
+      if(!insideKnown)reasons.push("OUTSIDE_KNOWN_RESULT_ROOT");
+      if(!selected)reasons.push("GROUP_ANCESTOR_NOT_FOUND");
+      else if(pageLevel)reasons.push(entries.length>1?"DUPLICATE_GROUP":"GROUP_ANCESTOR_IS_PAGE_LEVEL");
+      else if(descendantExceeded)reasons.push("GROUP_DESCENDANT_LIMIT_EXCEEDED");
+      else if(uniqueInside.length!==1||uniqueInside[0]!==postingId)reasons.push(entries.length>1?"DUPLICATE_GROUP":"MULTIPLE_POSTING_IDS_IN_GROUP");
+      if(flags.promoted)reasons.push("GROUP_CONTAINS_PROMOTED_EVIDENCE");
+      if(flags.recommendation)reasons.push("GROUP_CONTAINS_RECOMMENDATION_EVIDENCE");
+      if(flags.recent)reasons.push("GROUP_CONTAINS_RECENT_VIEW_EVIDENCE");
+      if(!repeated&&!pageLevel&&selected)reasons.push("GROUP_STRUCTURE_NOT_REPEATED");
+      const eligible=reasons.length===0;
+      const verifiedOrdinary=verifiedIds.has(postingId);
+      const ancestorSignature=selected instanceof Element&&selectedDepth!==null?signature(selected,selectedDepth):null;
+      const parentDepth=selectedDepth===null?null:Math.min(ancestorLimit,selectedDepth+1);
+      const parentSignature=parent instanceof Element&&parentDepth!==null?signature(parent,parentDepth):null;
+      const group={postingId,canonicalUrl:"https://www.jobkorea.co.kr/Recruit/GI_Read/"+postingId,linkCount:entries.length,sourcePositions:entries.map((item)=>item.position),groupAncestor:ancestorSignature,groupAncestorDepth:selectedDepth,parentListSignature:parentSignature,siblingGroupCount,uniquePostingIdsInsideGroup:uniqueInside,allLinksSharePostingId:uniqueInside.length===1&&uniqueInside[0]===postingId,insideKnownResultRoot:insideKnown,explicitPromotionEvidence:flags.promoted,explicitRecommendationEvidence:flags.recommendation,explicitRecentViewEvidence:flags.recent,repeatedSiblingStructure:repeated,structurallyEligible:eligible,verifiedOrdinary,rejectionReasons:reasons,structuralSignatureKey:ancestorSignature?structuralShapeKey(selected,selectedDepth):null,parentSignatureKey:parentSignature?structuralShapeKey(parent,parentDepth):null};
+      allGroups.push(group);
+      if(!verifiedOrdinary){for(const reason of reasons)addStructuralReason(reason);if(group.structuralSignatureKey&&ancestorSignature){if(!structuralAggregates[group.structuralSignatureKey])structuralAggregates[group.structuralSignatureKey]={signatureKey:group.structuralSignatureKey,groupCount:0,eligibleGroupCount:0,rejectedGroupCount:0,linkCountDistribution:{},siblingGroupCountMaximum:0,samplePostingIds:[],signature:ancestorSignature};const summary=structuralAggregates[group.structuralSignatureKey];summary.groupCount+=1;summary[eligible?"eligibleGroupCount":"rejectedGroupCount"]+=1;summary.linkCountDistribution[String(entries.length)]=(summary.linkCountDistribution[String(entries.length)]??0)+1;summary.siblingGroupCountMaximum=Math.max(summary.siblingGroupCountMaximum,siblingGroupCount??0);if(summary.samplePostingIds.length<3)summary.samplePostingIds.push(postingId);}
+        if(repeated&&group.parentSignatureKey&&parentSignature){if(!parentAggregates[group.parentSignatureKey])parentAggregates[group.parentSignatureKey]={signatureKey:group.parentSignatureKey,parentCount:0,repeatedGroupCount:0,samplePostingIds:[],signature:parentSignature,parents:new Set()};const summary=parentAggregates[group.parentSignatureKey];if(!summary.parents.has(parent)){summary.parents.add(parent);summary.parentCount+=1;}summary.repeatedGroupCount+=1;if(summary.samplePostingIds.length<3)summary.samplePostingIds.push(postingId);}}
+    }
+    const provisional=allGroups.filter((group)=>!group.verifiedOrdinary),eligible=provisional.filter((group)=>group.structurallyEligible),rejected=provisional.filter((group)=>!group.structurallyEligible);
+    const structuralAll=Object.values(structuralAggregates).sort((a,b)=>b.groupCount-a.groupCount||a.signatureKey.localeCompare(b.signatureKey));
+    const parentAll=Object.values(parentAggregates).map(({parents,...item})=>item).sort((a,b)=>b.repeatedGroupCount-a.repeatedGroupCount||a.signatureKey.localeCompare(b.signatureKey));
+    const provisionalGroupSamplesTruncated=provisional.length>structuralGroupSampleLimit,structuralSummariesTruncated=structuralAll.length>structuralSummaryLimit||parentAll.length>structuralSummaryLimit;
+    if(provisionalGroupSamplesTruncated)diagnostics.push({code:"JOBKOREA_PROVISIONAL_GROUPS_TRUNCATED",message:"provisional group samples exceeded limit="+structuralGroupSampleLimit});
+    if(structuralSummariesTruncated)diagnostics.push({code:"JOBKOREA_STRUCTURAL_SUMMARIES_TRUNCATED",message:"structural summaries exceeded limit="+structuralSummaryLimit});
+    if(eligible.length>0)diagnostics.push({code:"JOBKOREA_PROVISIONAL_ORDINARY_STRUCTURE_DETECTED",message:"eligible provisional groups="+eligible.length+", grouped links="+eligible.reduce((sum,item)=>sum+item.linkCount,0)});
+    const sortedReasons={};for(const key of Object.keys(rejectionCounts).sort())if(rejectionCounts[key]>0)sortedReasons[key]=rejectionCounts[key];
+    const groupedCount=allGroups.reduce((sum,item)=>sum+item.linkCount,0),numericCount=detailNodes.filter((node)=>node instanceof HTMLAnchorElement&&/\/Recruit\/GI_Read\/\d+(?:[/?#]|$)/i.test(node.href)).length;
+    return {provisionalPostingGroupCount:provisional.length,structurallyEligibleGroupCount:eligible.length,structurallyRejectedGroupCount:rejected.length,totalGroupedNumericLinkCount:groupedCount,ungroupedNumericLinkCount:Math.max(0,numericCount-groupedCount),provisionalPostingGroups:provisional.slice(0,structuralGroupSampleLimit),structuralGroupRejectionReasonCounts:sortedReasons,structuralGroupSignatureSummaries:structuralAll.slice(0,structuralSummaryLimit),repeatedListParentSummaries:parentAll.slice(0,structuralSummaryLimit),provisionalUniquePostingIds:provisional.map((item)=>item.postingId),provisionalGroupSamplesTruncated,structuralSummariesTruncated,verifiedOrdinaryAlsoStructurallyEligible:allGroups.filter((item)=>item.verifiedOrdinary&&item.structurallyEligible).length,structurallyEligibleButUnverified:eligible.length,verifiedOrdinaryStructuralMismatch:allGroups.filter((item)=>item.verifiedOrdinary&&!item.structurallyEligible).length};
+  };
   try {
     const extractionStarted = performance.now();
     const bodyText = compact(document.body?.innerText, 200000);
@@ -385,10 +582,11 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
     const numericInTables=numericNodes.filter((node)=>Boolean(node.closest("table"))&&withinRoot(node)).length;
     const numericInLists=numericNodes.filter((node)=>Boolean(node.closest("ul,ol"))&&withinRoot(node)).length;
     const numericInCards=numericNodes.filter((node)=>Boolean(node.closest("article"))&&withinRoot(node)).length;
+    const shadowStructure=buildShadowStructure(detailNodes,resultRoots,ordinaryCandidates,diagnostics);
     return {schemaVersion,serializedSnapshotBytes:0,finalUrl:String(location.href),pageTitle:compact(document.title,500),documentReadyState:["loading","interactive","complete"].includes(document.readyState)?document.readyState:"unknown",extractionCompleted:true,extractionDurationMs:Math.max(0,performance.now()-extractionStarted),readiness:null,domChangedAfterReadiness:null,
       evidence:{ordinaryContainerCount:document.querySelectorAll(ordinarySelectors).length,ordinaryRowCount:document.querySelectorAll("tr.devloopArea[data-gno]").length,resultRootCount:resultRoots.length,knownTableResultCount:tableResults,knownListResultCount:listResults,knownCardResultCount:cardResults,numericLinksInsideKnownTableResults:numericInTables,numericLinksInsideKnownListResults:numericInLists,numericLinksInsideKnownCardResults:numericInCards,ordinaryDetailLinkCount,allNumericDetailLinkCount,promotedContainerCount:explicitPromotedElements.size,recommendationContainerCount:document.querySelectorAll(recommendationSelectors).length,recentViewContainerCount:document.querySelectorAll(recentSelectors).length,promotedDetailLinkCount,rejectedDetailLinkCount,numericLinksInsideKnownResultRoots:insideCount,numericLinksOutsideKnownResultRoots:numericNodes.length-insideCount,noResultMarkerCount:noResult,loginMarkerCount:login,captchaMarkerCount:captcha,verificationMarkerCount:verification,accessDeniedMarkerCount:accessDenied},
-      rejectionReasonCounts:sortedRejectionCounts,promotionSignalCounts:sortedPromotionSignalCounts,ordinaryCandidates,promotedCandidates,rejectedCandidates,diagnosticSamples,containerSignatures,containerSignaturesTruncated,diagnostics};
-  }catch(error){const message=error instanceof Error?error.message:String(error);return {schemaVersion,serializedSnapshotBytes:0,finalUrl:String(location.href),pageTitle:compact(document.title,500),documentReadyState:["loading","interactive","complete"].includes(document.readyState)?document.readyState:"unknown",extractionCompleted:false,extractionDurationMs:null,readiness:null,domChangedAfterReadiness:null,evidence:emptyEvidence(),rejectionReasonCounts:{},promotionSignalCounts:{},ordinaryCandidates:[],promotedCandidates:[],rejectedCandidates:[],diagnosticSamples:{ordinary:[],promoted:[],rejected:[],ordinaryTruncated:false,promotedTruncated:false,rejectedTruncated:false},containerSignatures:[],containerSignaturesTruncated:false,diagnostics:[{code:"JOBKOREA_SNAPSHOT_EVALUATION_FAILED",message:compact(message,500)||"page context snapshot extraction failed"}]};}
+      rejectionReasonCounts:sortedRejectionCounts,promotionSignalCounts:sortedPromotionSignalCounts,ordinaryCandidates,promotedCandidates,rejectedCandidates,diagnosticSamples,containerSignatures,containerSignaturesTruncated,shadowStructure,diagnostics};
+  }catch(error){const message=error instanceof Error?error.message:String(error);return {schemaVersion,serializedSnapshotBytes:0,finalUrl:String(location.href),pageTitle:compact(document.title,500),documentReadyState:["loading","interactive","complete"].includes(document.readyState)?document.readyState:"unknown",extractionCompleted:false,extractionDurationMs:null,readiness:null,domChangedAfterReadiness:null,evidence:emptyEvidence(),rejectionReasonCounts:{},promotionSignalCounts:{},ordinaryCandidates:[],promotedCandidates:[],rejectedCandidates:[],diagnosticSamples:{ordinary:[],promoted:[],rejected:[],ordinaryTruncated:false,promotedTruncated:false,rejectedTruncated:false},containerSignatures:[],containerSignaturesTruncated:false,shadowStructure:emptyShadowStructure(),diagnostics:[{code:"JOBKOREA_SNAPSHOT_EVALUATION_FAILED",message:compact(message,500)||"page context snapshot extraction failed"}]};}
 })()`;
 
 export async function captureJobKoreaReadinessEvidence(page: Page): Promise<JobKoreaReadinessEvidence> {

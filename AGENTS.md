@@ -101,6 +101,14 @@
 - production ordinary selector는 실제 관찰 또는 기존 기록 근거 없이 넓히지 않는다.
 - JobKorea evaluator의 synthetic 88/28/60 acceptance 계약과 외부-network 차단을 유지한다.
 - 실제 JobKorea transport run은 매번 별도 명시 승인을 받아야 한다.
+- JobKorea structural grouping은 shadow diagnostic 전용이며 provisional group을 production ordinary candidate나 `CanonicalJob`으로 승격하지 않는다.
+- provisional group identity는 visible text나 utility class가 아니라 numeric posting ID를 사용한다.
+- group ancestor는 한 posting ID만 포함해야 하며 `HTML`·`BODY`·`MAIN`·전체 result root 같은 page-level element일 수 없다.
+- 검증되지 않은 구조의 provisional eligibility에는 같은 parent 아래 최소 3개의 반복 single-posting sibling이 필요하다.
+- explicit promoted·recommendation·recent-view region은 provisional ordinary eligibility에서 제외한다.
+- generic class는 구조 반복을 비교하는 diagnostic shape에만 사용할 수 있고 production ordinary selector 근거가 아니다.
+- synthetic structural DOM은 real-source evidence가 아니며 실제 transport는 별도 명시 승인이 있어야 한다.
+- shadow aggregate는 sample truncation과 무관하게 완전해야 하고 snapshot은 JSON-safe 256 KiB 상한을 유지한다.
 
 - 목록이 주 인터페이스이고 지도는 보조다.
 - 급여와 위치는 빠르게 비교할 수 있어야 한다.

@@ -96,6 +96,7 @@ describe("잡코리아 synthetic page snapshot browser boundary", () => {
     const result = buildJobKoreaListingPageResult(value, 1);
     expect(result).toMatchObject({ classification: "malformed_results", ordinaryPostingCount: 0,
       rejectedCandidateCount: 1, validEmptyPage: false });
+    expect(value.shadowStructure.provisionalPostingGroupCount).toBe(0);
   });
 
   it("SVGAnimatedString href를 반환하지 않고 non-HTML anchor를 명시적으로 제외한다", async () => {
@@ -183,6 +184,8 @@ describe("잡코리아 synthetic page snapshot browser boundary", () => {
     const value = await snapshot(syntheticJobKoreaPages.outsideResultRoot);
     expect(value.rejectionReasonCounts).toEqual({ OUTSIDE_RESULT_ROOT: 1 });
     expect(value.evidence.numericLinksOutsideKnownResultRoots).toBe(1);
+    expect(value.shadowStructure).toMatchObject({ structurallyEligibleGroupCount: 0,
+      structuralGroupRejectionReasonCounts: { OUTSIDE_KNOWN_RESULT_ROOT: 1 } });
   });
 
   it("88/28/60 measured-shape simulation의 complete aggregate와 bounded samples를 유지한다", async () => {
@@ -248,5 +251,104 @@ describe("잡코리아 synthetic page snapshot browser boundary", () => {
       rejectedDetailLinkCount: 2, recommendationContainerCount: 1, recentViewContainerCount: 1 });
     expect(value.rejectionReasonCounts).toEqual({ INSIDE_RECENT_VIEW_REGION: 1, INSIDE_RECOMMENDATION_REGION: 1 });
     expect(value.promotionSignalCounts).toEqual({});
+  });
+
+  it("same posting ID의 relative·absolute·tracking link를 lowest safe shared ancestor로 묶는다", async () => {
+    const value = await snapshot(syntheticJobKoreaPages.structuralMeasuredShape88);
+    const group = value.shadowStructure.provisionalPostingGroups[0]!;
+    expect(group).toMatchObject({ postingId: "60000000", linkCount: 3, sourcePositions: [1, 2, 3],
+      allLinksSharePostingId: true, insideKnownResultRoot: true, repeatedSiblingStructure: true,
+      structurallyEligible: true, groupAncestor: { tag: "div", classes: ["flex", "gap-5", "p-7", "w-full"] } });
+    expect(group.canonicalUrl).toBe("https://www.jobkorea.co.kr/Recruit/GI_Read/60000000");
+    expect(group.groupAncestorDepth).toBeGreaterThan(1);
+  });
+
+  it("synthetic 28x3 + 2x2 shape를 30개 provisional group으로 측정하되 production 분류는 유지한다", async () => {
+    const value = await snapshot(syntheticJobKoreaPages.structuralMeasuredShape88);
+    expect(value.evidence).toMatchObject({ allNumericDetailLinkCount: 88, ordinaryDetailLinkCount: 0,
+      promotedDetailLinkCount: 0, rejectedDetailLinkCount: 88 });
+    expect(value.shadowStructure).toMatchObject({ provisionalPostingGroupCount: 30,
+      structurallyEligibleGroupCount: 30, structurallyRejectedGroupCount: 0,
+      totalGroupedNumericLinkCount: 88, ungroupedNumericLinkCount: 0,
+      structurallyEligibleButUnverified: 30, verifiedOrdinaryAlsoStructurallyEligible: 0 });
+    expect(value.shadowStructure.provisionalUniquePostingIds).toHaveLength(30);
+    expect(value.shadowStructure.structuralGroupSignatureSummaries[0]).toMatchObject({
+      groupCount: 30, eligibleGroupCount: 30, rejectedGroupCount: 0,
+      linkCountDistribution: { "2": 2, "3": 28 }, siblingGroupCountMaximum: 30,
+    });
+    expect(value.shadowStructure.repeatedListParentSummaries[0]).toMatchObject({ parentCount: 1,
+      repeatedGroupCount: 30, samplePostingIds: ["60000000", "60000001", "60000002"] });
+    expect(classifyJobKoreaRenderedPage(value)).toBe("malformed_results");
+    expect(value.diagnostics.map(({ code }) => code)).toEqual(expect.arrayContaining([
+      "JOBKOREA_ORDINARY_CONTAINER_CONTRACT_MISMATCH", "JOBKOREA_PROVISIONAL_ORDINARY_STRUCTURE_DETECTED",
+    ]));
+    expect(value.serializedSnapshotBytes).toBeLessThanOrEqual(256 * 1024);
+  });
+
+  it("single-link card는 세 반복 sibling일 때만 provisional eligibility를 얻는다", async () => {
+    const repeated = await snapshot(syntheticJobKoreaPages.repeatedSingleLinkCards);
+    expect(repeated.shadowStructure).toMatchObject({ provisionalPostingGroupCount: 3,
+      structurallyEligibleGroupCount: 3, structurallyRejectedGroupCount: 0 });
+    const isolatedPair = await snapshot(syntheticJobKoreaPages.twoSingleLinkCards);
+    expect(isolatedPair.shadowStructure).toMatchObject({ provisionalPostingGroupCount: 2,
+      structurallyEligibleGroupCount: 0, structurallyRejectedGroupCount: 2,
+      structuralGroupRejectionReasonCounts: { GROUP_STRUCTURE_NOT_REPEATED: 2 } });
+  });
+
+  it("page-level·mixed-ID·split group을 provisional ordinary로 승인하지 않는다", async () => {
+    const broad = await snapshot(syntheticJobKoreaPages.broadMixedIdWrapper);
+    expect(broad.shadowStructure.structurallyEligibleGroupCount).toBe(0);
+    expect(broad.shadowStructure.structuralGroupRejectionReasonCounts).toMatchObject({ MULTIPLE_POSTING_IDS_IN_GROUP: 5 });
+    const mixed = await snapshot(syntheticJobKoreaPages.repeatedMixedIdSiblings);
+    expect(mixed.shadowStructure.structurallyEligibleGroupCount).toBe(0);
+    expect(mixed.shadowStructure.structuralGroupRejectionReasonCounts.MULTIPLE_POSTING_IDS_IN_GROUP).toBe(6);
+    const split = await snapshot(syntheticJobKoreaPages.splitPostingGroup);
+    expect(split.shadowStructure.structurallyEligibleGroupCount).toBe(0);
+    expect(split.shadowStructure.structuralGroupRejectionReasonCounts.DUPLICATE_GROUP).toBe(1);
+  });
+
+  it("promoted·recommendation·recent group을 structural eligibility에서 제외한다", async () => {
+    const value = await snapshot(syntheticJobKoreaPages.mixedStructuralExclusions);
+    expect(value.shadowStructure.structurallyEligibleGroupCount).toBe(3);
+    expect(value.shadowStructure.structuralGroupRejectionReasonCounts).toMatchObject({
+      GROUP_CONTAINS_PROMOTED_EVIDENCE: 1,
+      GROUP_CONTAINS_RECOMMENDATION_EVIDENCE: 1,
+      GROUP_CONTAINS_RECENT_VIEW_EVIDENCE: 1,
+      MULTIPLE_POSTING_IDS_IN_GROUP: 2,
+    });
+    expect(value.shadowStructure.provisionalPostingGroups.filter(({ structurallyEligible }) => structurallyEligible)
+      .every(({ explicitPromotionEvidence, explicitRecommendationEvidence, explicitRecentViewEvidence }) =>
+        !explicitPromotionEvidence && !explicitRecommendationEvidence && !explicitRecentViewEvidence)).toBe(true);
+  });
+
+  it("historic devloopArea production candidates는 provisional-only로 이중 계산하지 않는다", async () => {
+    const html = syntheticJobKoreaPages.validSearch.replace("</table>",
+      '<tr class="devloopArea" data-gno="50000003"><td><a href="/Recruit/GI_Read/50000003">third</a></td></tr></table>');
+    const value = await snapshot(html);
+    expect(value.ordinaryCandidates).toHaveLength(3);
+    expect(value.shadowStructure).toMatchObject({ provisionalPostingGroupCount: 0,
+      structurallyEligibleButUnverified: 0, verifiedOrdinaryAlsoStructurallyEligible: 3,
+      verifiedOrdinaryStructuralMismatch: 0 });
+  });
+
+  it("MAIN/result root를 posting ancestor로 허용하지 않는다", async () => {
+    const value = await snapshot(syntheticJobKoreaPages.pageLevelGroups);
+    expect(value.shadowStructure).toMatchObject({ provisionalPostingGroupCount: 2,
+      structurallyEligibleGroupCount: 0, structurallyRejectedGroupCount: 2,
+      structuralGroupRejectionReasonCounts: { GROUP_ANCESTOR_IS_PAGE_LEVEL: 2 } });
+    expect(value.shadowStructure.provisionalPostingGroups.every(({ groupAncestor }) => groupAncestor?.tag === "main")).toBe(true);
+  });
+
+  it("group sample과 structural summary를 deterministic cap으로 제한하고 aggregate는 보존한다", async () => {
+    const value = await snapshot(syntheticJobKoreaPages.manyStructuralGroups);
+    expect(value.shadowStructure).toMatchObject({ provisionalPostingGroupCount: 45,
+      structurallyEligibleGroupCount: 0, structurallyRejectedGroupCount: 45,
+      provisionalGroupSamplesTruncated: true, structuralSummariesTruncated: true });
+    expect(value.shadowStructure.provisionalPostingGroups).toHaveLength(40);
+    expect(value.shadowStructure.structuralGroupSignatureSummaries).toHaveLength(20);
+    expect(value.shadowStructure.structuralGroupRejectionReasonCounts.GROUP_STRUCTURE_NOT_REPEATED).toBe(45);
+    expect(value.diagnostics.map(({ code }) => code)).toEqual(expect.arrayContaining([
+      "JOBKOREA_PROVISIONAL_GROUPS_TRUNCATED", "JOBKOREA_STRUCTURAL_SUMMARIES_TRUNCATED",
+    ]));
   });
 });

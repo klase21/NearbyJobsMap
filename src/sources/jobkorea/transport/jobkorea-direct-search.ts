@@ -1,7 +1,7 @@
 import type { ParseDiagnostic } from "../../../domain/source-contract";
 import { JobKoreaTransportError } from "./jobkorea-error";
 import { buildJobKoreaListingPageResult, classifyJobKoreaRenderedPage } from "./jobkorea-listing-page";
-import { validateAndRoundTripJobKoreaSnapshot } from "./jobkorea-page-snapshot";
+import { emptyJobKoreaShadowStructure, validateAndRoundTripJobKoreaSnapshot } from "./jobkorea-page-snapshot";
 import { failedSearchPageResult } from "./jobkorea-playwright-search";
 import { JOBKOREA_HARD_MAX_RESPONSE_BYTES, JOBKOREA_HARD_TIMEOUT_MS, JOBKOREA_USER_AGENT } from "./jobkorea-http-client";
 import type { JobKoreaDirectContractObservation, JobKoreaListingPageResult, JobKoreaPageSnapshot } from "./jobkorea-search-types";
@@ -69,7 +69,8 @@ export function directHtmlSnapshot(html: string, finalUrl: string): JobKoreaPage
     ordinaryCandidates, promotedCandidates: promotedCandidates.slice(0, 10), rejectedCandidates: [],
     diagnosticSamples: { ordinary: [], promoted: [], rejected: [], ordinaryTruncated: false,
       promotedTruncated: promotedCandidates.length > 10, rejectedTruncated: false },
-    containerSignatures: [], containerSignaturesTruncated: false, diagnostics: [] });
+    containerSignatures: [], containerSignaturesTruncated: false,
+    shadowStructure: emptyJobKoreaShadowStructure(ordinaryCandidates.length + promotedCandidates.length), diagnostics: [] });
 }
 
 export function classifyDirectContractResponse(input: { status: number; contentType: string; body: string; finalUrl: string }, pageNumber = 1): JobKoreaListingPageResult {

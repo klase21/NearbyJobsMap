@@ -64,6 +64,18 @@ describe("잡코리아 browser search → parser → SQLite pipeline", () => {
         childElementCount: 1, numericDetailLinkCount: 1, hasKnownOrdinaryMarker: false,
         hasPromotedMarker: false, hasRecommendationMarker: false, hasRecentViewMarker: false } }];
     result.pageResults[0]!.promotionSignalCounts = { exact_class_token: 2 };
+    result.pageResults[0]!.shadowStructure = {
+      provisionalPostingGroupCount: 3, structurallyEligibleGroupCount: 3, structurallyRejectedGroupCount: 0,
+      totalGroupedNumericLinkCount: 6, ungroupedNumericLinkCount: 0, provisionalPostingGroups: [],
+      structuralGroupRejectionReasonCounts: {}, repeatedListParentSummaries: [], provisionalUniquePostingIds: ["101", "102", "103"],
+      provisionalGroupSamplesTruncated: false, structuralSummariesTruncated: false,
+      verifiedOrdinaryAlsoStructurallyEligible: 0, structurallyEligibleButUnverified: 3, verifiedOrdinaryStructuralMismatch: 0,
+      structuralGroupSignatureSummaries: [{ signatureKey: "div|classes=job-card", groupCount: 3,
+        eligibleGroupCount: 3, rejectedGroupCount: 0, linkCountDistribution: { "2": 3 }, siblingGroupCountMaximum: 3,
+        samplePostingIds: ["101", "102", "103"], signature: { tag: "div", id: null, classes: ["job-card"], role: null,
+          dataAttributes: {}, ariaLabelPresent: false, depthFromAnchor: 2, childElementCount: 2, numericDetailLinkCount: 2,
+          hasKnownOrdinaryMarker: false, hasPromotedMarker: false, hasRecommendationMarker: false, hasRecentViewMarker: false } }],
+    };
     result.failedResources = { totalCount: 1, typeCounts: { image: 1 }, samples: [{ resourceType: "image",
       hostCategory: "third_party", failureCode: "net::ERR_FAILED", navigationCritical: false }],
       samplesTruncated: false, preventedReadinessOrExtraction: false };
@@ -73,6 +85,8 @@ describe("잡코리아 browser search → parser → SQLite pipeline", () => {
     expect(diagnosticOutput).toContain("failed resources: 1 prevented_readiness_or_extraction=false");
     expect(diagnosticOutput).toContain("  - exact_class_token: 2");
     expect(diagnosticOutput).toContain("  - article.recruit-card[data-gno]@1: count=2 tag=article classes=recruit-card role=none data=data-gno=101 depth=1 numeric_links=1 ordinary=0 promoted=0 rejected=2 sample_ids=101,102");
+    expect(diagnosticOutput).toContain("  - provisional_groups=3 eligible=3 rejected=0 grouped_links=6 ungrouped_links=0");
+    expect(diagnosticOutput).toContain("  - group_signature=div|classes=job-card groups=3 eligible=3 rejected=0 links=2x3 sibling_max=3 sample_ids=101,102,103");
     expect(diagnosticOutput).toContain("- type=image host=third_party code=net::ERR_FAILED navigation_critical=false");
     expect(new JobRepository(testDatabase.database).listAll()).toHaveLength(3);
     expect(execution.closed).toBe(true);
