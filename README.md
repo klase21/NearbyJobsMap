@@ -139,6 +139,10 @@ synthetic JobKorea형 DOM 테스트는 일반 결과, 일반+광고·추천, 중
 
 이 단계에서는 실제 잡코리아 요청을 한 번도 실행하지 않았다. 88 numeric / 28 promoted / 60 rejected / 0 ordinary 형태는 이전 실제 실행의 **집계값**만 재현한 synthetic 테스트이며, card·list-item·nested-div 구조는 진단 계약 검증용 가상 DOM일 뿐 실제 source container의 증거가 아니다. 따라서 production ordinary selector는 변경하지 않았다. 상세 navigation, page 2, `_GI_List`, retry, SQLite write도 실행하지 않았다.
 
+별도 승인된 schema 2 실제 page-1/max-details-0 dry-run은 2026-08-05에 정확히 한 번 실행됐고 4.630초에 종료됐다. 36,189-byte snapshot은 `complete` 상태로 정상 검증됐으며 readiness와 snapshot 모두 numeric link 89개, ordinary container 0개로 같아 DOM 변화는 없었다. result root 1개 안의 numeric link 89개가 모두 promoted로 분류됐고 rejected와 ordinary는 각각 0개였다. promoted container count는 127개였으며 dominant link-container signature는 `div.mb-0.5@1` 30개, `div.w-full@1` 30개, `div.flex.gap-5.p-7.w-full@1` 29개였다. 이는 broad promoted ancestor 판정이 실제 utility class 구조를 과포착했을 가능성을 보여주지만, 어느 class token이 원인인지는 이번 bounded snapshot 출력만으로 확정하지 않는다. production ordinary/promoted selector는 변경하지 않았으며 다음 변경은 이 실측값을 근거로 한 별도 오프라인 계약 작업이어야 한다.
+
+같은 실행에서 failed resource는 image 55개와 font 8개, 합계 63개였으나 readiness와 snapshot extraction을 막지 않았다. 로그인·CAPTCHA·verification·access denial·명시적 empty marker는 모두 0이었다. robots 1회와 search navigation 1회만 수행했고 detail, page 2, direct, retry, DB write는 0이었다. 실행 뒤 진단 renderer는 향후 bounded run이 snapshot에 이미 보존된 signature 세부 필드·sample posting ID와 sanitized failed-resource sample을 누락 없이 출력하도록 오프라인에서 보강했으며 stabilization delay도 별도 lifecycle timing으로 기록한다. 이 출력 보강 후 실제 source 요청은 반복하지 않았다.
+
 원샷 관찰 데이터를 로컬에서 모두 제거하려면 서버를 중지하고 전체 로컬 DB reset 후 fixture/demo를 다시 준비한다. 이 작업은 사용자 상태 localStorage를 지우지 않는다.
 
 ```powershell
@@ -200,4 +204,4 @@ npm run db:status
 
 ## 다음 개발 단계
 
-다음 정확한 작업은 **별도 승인된 page-1, `max-details=0`, Playwright dry-run을 정확히 한 번 실행해 schema 2의 거절 사유와 최소 container signature를 측정하는 것**이다. 그 실행에서도 상세 navigation, page 2, direct 요청, retry, SQLite write를 열지 않으며 full pagination은 계속 별도 승인 대상이다.
+다음 정확한 작업은 **실측된 89/89 promoted 과포착을 synthetic DOM으로 재현하고 promoted ancestor 판정을 class-token 기반으로 좁히는 별도 오프라인 selector-contract 업데이트**다. 이 작업에서도 실제 source 재실행, 상세 navigation, page 2, direct 요청, retry, SQLite write를 열지 않으며 full pagination은 계속 별도 승인 대상이다.

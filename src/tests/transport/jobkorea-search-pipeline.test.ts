@@ -57,10 +57,21 @@ describe("잡코리아 browser search → parser → SQLite pipeline", () => {
     const result = await runJobKoreaSearchOneShot(options(), { database: testDatabase.database, httpClient: robotsClient(), createExecution: async () => execution,
       now: () => new Date("2026-08-05T00:00:00Z") });
     expect(result).toMatchObject({ status: "completed", searchNavigations: 1, detailNavigations: 3, inserted: 3, failed: 0 });
+    result.pageResults[0]!.containerSignatures = [{ signatureKey: "article.recruit-card[data-gno]@1", count: 2,
+      candidateClassifications: { ordinary: 0, promoted: 0, rejected: 2 }, samplePostingIds: ["101", "102"],
+      signature: { tag: "article", id: null, classes: ["recruit-card"], role: null,
+        dataAttributes: { "data-gno": "101" }, ariaLabelPresent: false, depthFromAnchor: 1,
+        childElementCount: 1, numericDetailLinkCount: 1, hasKnownOrdinaryMarker: false,
+        hasPromotedMarker: false, hasRecommendationMarker: false, hasRecentViewMarker: false } }];
+    result.failedResources = { totalCount: 1, typeCounts: { image: 1 }, samples: [{ resourceType: "image",
+      hostCategory: "third_party", failureCode: "net::ERR_FAILED", navigationCritical: false }],
+      samplesTruncated: false, preventedReadinessOrExtraction: false };
     const diagnosticOutput = formatJobKoreaSearchResult(result, options({ diagnostic: true }));
     expect(diagnosticOutput.find((line) => line.includes("snapshot_schema=2"))).toMatch(/bytes=\d+ ready_state=complete/);
     expect(diagnosticOutput.find((line) => line.includes("timing classification_ms="))).toContain("extraction_ms=1");
-    expect(diagnosticOutput).toContain("failed resources: 0 prevented_readiness_or_extraction=unknown");
+    expect(diagnosticOutput).toContain("failed resources: 1 prevented_readiness_or_extraction=false");
+    expect(diagnosticOutput).toContain("  - article.recruit-card[data-gno]@1: count=2 tag=article classes=recruit-card role=none data=data-gno=101 depth=1 numeric_links=1 ordinary=0 promoted=0 rejected=2 sample_ids=101,102");
+    expect(diagnosticOutput).toContain("- type=image host=third_party code=net::ERR_FAILED navigation_critical=false");
     expect(new JobRepository(testDatabase.database).listAll()).toHaveLength(3);
     expect(execution.closed).toBe(true);
     expect(testDatabase.database.prepare("SELECT observation_kind, observation_transport, observation_page_number, observation_listing_position FROM jobs WHERE source_posting_id = '101'").get())

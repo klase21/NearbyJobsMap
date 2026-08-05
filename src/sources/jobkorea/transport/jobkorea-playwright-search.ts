@@ -145,7 +145,8 @@ export class JobKoreaPlaywrightSearchExecution implements JobKoreaSearchExecutio
           }, undefined, { timeout: READINESS_TIMEOUT_MS });
           return captureJobKoreaReadinessEvidence(page!);
         }, this.lifecycleDiagnostics);
-        await page.waitForTimeout(STABILITY_DELAY_MS);
+        await runBoundedLifecyclePhase(`page-${pageNumber}-stabilization`, STABILITY_DELAY_MS + 250,
+          () => page!.waitForTimeout(STABILITY_DELAY_MS), this.lifecycleDiagnostics);
         const snapshot = await runBoundedLifecyclePhase(`page-${pageNumber}-snapshot`, SNAPSHOT_TIMEOUT_MS,
           () => captureJobKoreaPageSnapshot(page!, readiness), this.lifecycleDiagnostics);
         this.snapshotCompleted = snapshot.extractionCompleted;

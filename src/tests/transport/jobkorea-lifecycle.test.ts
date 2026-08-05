@@ -47,4 +47,11 @@ describe("잡코리아 Playwright lifecycle deadline", () => {
     expect(diagnostics).toEqual([{ phase: "browser-context-close", status: "completed",
       elapsedMs: expect.any(Number), code: null, message: null }]);
   });
+
+  it("stabilization delay를 별도 bounded phase로 기록할 수 있다", async () => {
+    const diagnostics: JobKoreaLifecycleDiagnostic[] = [];
+    await runBoundedLifecyclePhase("page-1-stabilization", 100, async () => undefined, diagnostics);
+    expect(diagnostics).toEqual([{ phase: "page-1-stabilization", status: "completed",
+      elapsedMs: expect.any(Number), code: null, message: null }]);
+  });
 });

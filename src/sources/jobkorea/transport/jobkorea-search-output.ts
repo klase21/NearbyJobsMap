@@ -26,7 +26,14 @@ export function formatJobKoreaSearchResult(result: JobKoreaSearchOneShotResult, 
     }
     if (options.diagnostic && page.containerSignatures?.length) {
       lines.push("  dominant container signatures:");
-      for (const item of page.containerSignatures.slice(0, 5)) lines.push(`  - ${item.signatureKey}: ${item.count} (ordinary=${item.candidateClassifications.ordinary}, promoted=${item.candidateClassifications.promoted}, rejected=${item.candidateClassifications.rejected})`);
+      for (const item of page.containerSignatures) {
+        const signature = item.signature;
+        const classes = signature.classes.length ? signature.classes.join(",") : "none";
+        const data = Object.keys(signature.dataAttributes).length
+          ? Object.entries(signature.dataAttributes).map(([key, value]) => `${key}=${value}`).join(",") : "none";
+        const ids = item.samplePostingIds.length ? item.samplePostingIds.join(",") : "none";
+        lines.push(`  - ${item.signatureKey}: count=${item.count} tag=${signature.tag} classes=${classes} role=${signature.role ?? "none"} data=${data} depth=${signature.depthFromAnchor} numeric_links=${signature.numericDetailLinkCount} ordinary=${item.candidateClassifications.ordinary} promoted=${item.candidateClassifications.promoted} rejected=${item.candidateClassifications.rejected} sample_ids=${ids}`);
+      }
     }
   }
   lines.push(`선택=${result.selectedCandidates} 전역중복=${result.globalDuplicateCount} 삽입=${result.inserted} 갱신=${result.updated} 변경없음=${result.unchanged} 실패=${result.failed} 차단=${result.blocked}`);
@@ -35,6 +42,10 @@ export function formatJobKoreaSearchResult(result: JobKoreaSearchOneShotResult, 
   lines.push(`failed resources: ${result.failedResources.totalCount} prevented_readiness_or_extraction=${result.failedResources.preventedReadinessOrExtraction ?? "unknown"}`);
   if (options.diagnostic && Object.keys(result.failedResources.typeCounts).length) {
     lines.push(`failed resource types: ${Object.entries(result.failedResources.typeCounts).map(([type, count]) => `${type}=${count}`).join(" ")}`);
+  }
+  if (options.diagnostic && result.failedResources.samples.length) {
+    lines.push("failed resource samples:");
+    for (const sample of result.failedResources.samples) lines.push(`- type=${sample.resourceType} host=${sample.hostCategory} code=${sample.failureCode} navigation_critical=${sample.navigationCritical}`);
   }
   for (const detail of result.details) lines.push(`- ${detail.sourcePostingId ?? "unknown"} result=${detail.result} diagnostics=${detail.diagnosticCodes.join(",") || "none"}`);
   lines.push(`Run ID: ${result.runId ?? "dry-run (DB 기록 없음)"}`);
