@@ -18,6 +18,10 @@ const collectionCandidate = (postingId: string, position: number, classification
   observedLinkCount, listingClassification: classification,
 });
 
+const listingCandidate = (postingId: string, position = 1): SnapshotCandidate => ({ ...collectionCandidate(postingId, position, "structurally_provisional", 3),
+  listingFields: { title: `목록 공고 ${postingId}`, companyName: `목록 회사 ${postingId}`, regionText: "서울 중구", salaryText: "연봉 4,000만원",
+    employmentTypes: ["정규직"], experienceRequirement: null, educationRequirement: null, postedAt: "2026-08-05", deadlineText: null } });
+
 function page(number: number, candidates: SnapshotCandidate[]) {
   const linkCount = candidates.reduce((sum, item) => sum + item.observedLinkCount, 0);
   return buildJobKoreaListingPageResult(jobKoreaSnapshot([], {
@@ -150,5 +154,42 @@ describe("JobKorea bounded collection pipeline", () => {
       { database: testDb.database, createExecution: async () => mock, httpClient: http({ "50005002": { html: html("50005002"), closed: true } }).client, now: () => new Date("2026-09-05T00:00:00Z") });
     expect(result.details.map((item) => item.status)).toEqual(["expired", "closed"]);
     expect(result.successfullyParsed).toBe(2);
+  });
+
+  it("blocked detail을 valid listing-only record로 dry-run하며 DB에는 쓰지 않는다", async () => {
+    const testDb = createTestDatabase(); databases.push(testDb);
+    const candidate = listingCandidate("50006001");
+    const blocked = new JobKoreaHttpClient(async () => new Response("<!doctype html><a href='/login'>로그인이 필요합니다</a>", { status: 200, headers: { "content-type": "text/html" } }));
+    const result = await collectJobKoreaOnce({ searchUrl: "https://www.jobkorea.co.kr/Search?stext=AI", pages: 1, maxDetails: 1, mode: "dry-run", confirm: true, allowListingFallback: true },
+      { database: testDb.database, createExecution: async () => execution([page(1, [candidate])]), httpClient: blocked });
+    expect(result).toMatchObject({ successfullyParsed: 0, listingOnlyRecords: 1, predictedInserts: 1, failedRecords: 0 });
+    expect(result.details[0]).toMatchObject({ status: "access_blocked", dataCompleteness: "listing_only", databaseAction: "inserted" });
+    expect(testDb.database.prepare("SELECT COUNT(*) count FROM jobs").get()).toEqual({ count: 0 });
+    expect(testDb.database.prepare("SELECT COUNT(*) count FROM ingestion_runs").get()).toEqual({ count: 0 });
+  });
+
+  it("listing-only를 저장하고 detail-complete로 올리되 이후 listing-only로 강등하지 않는다", async () => {
+    const testDb = createTestDatabase(); databases.push(testDb);
+    const candidate = listingCandidate("50006002");
+    const options = { searchUrl: "https://www.jobkorea.co.kr/Search?stext=AI", pages: 1 as const, maxDetails: 1, mode: "write" as const, confirm: true as const, allowListingFallback: true };
+    const blocked = () => new JobKoreaHttpClient(async () => new Response("<!doctype html><a href='/login'>로그인이 필요합니다</a>", { status: 200, headers: { "content-type": "text/html" } }));
+    const first = await collectJobKoreaOnce(options, { database: testDb.database, createExecution: async () => execution([page(1, [candidate])]), httpClient: blocked() });
+    const detailed = await collectJobKoreaOnce(options, { database: testDb.database, createExecution: async () => execution([page(1, [candidate])]), httpClient: http().client });
+    const lower = await collectJobKoreaOnce(options, { database: testDb.database, createExecution: async () => execution([page(1, [candidate])]), httpClient: blocked() });
+    expect(first.actualInserts).toBe(1); expect(detailed.actualUpdates).toBe(1); expect(lower.actualLowerCompletenessSkips).toBe(1);
+    const row = testDb.database.prepare("SELECT title, observation_kind FROM jobs WHERE source_posting_id=?").get("50006002") as Record<string, string>;
+    expect(row).toMatchObject({ title: "공고 50006002", observation_kind: "bounded_manual_collection" });
+    expect(testDb.database.prepare("SELECT COUNT(*) count FROM jobs WHERE source_posting_id='50006002'").get()).toEqual({ count: 1 });
+    expect(testDb.database.prepare("SELECT COUNT(*) count FROM ingestion_items").get()).toEqual({ count: 3 });
+  });
+
+  it("invalid listing fallback은 저장하지 않고 failure item만 남긴다", async () => {
+    const testDb = createTestDatabase(); databases.push(testDb);
+    const invalid = { ...listingCandidate("50006003"), listingFields: { ...listingCandidate("50006003").listingFields!, companyName: null } };
+    const blocked = new JobKoreaHttpClient(async () => new Response("<!doctype html><a href='/login'>로그인이 필요합니다</a>", { status: 200, headers: { "content-type": "text/html" } }));
+    const result = await collectJobKoreaOnce({ searchUrl: "https://www.jobkorea.co.kr/Search?stext=AI", pages: 1, maxDetails: 1, mode: "write", confirm: true, allowListingFallback: true },
+      { database: testDb.database, createExecution: async () => execution([page(1, [invalid])]), httpClient: blocked });
+    expect(result).toMatchObject({ listingOnlyRecords: 0, failedRecords: 1, actualInserts: 0 });
+    expect(testDb.database.prepare("SELECT COUNT(*) count FROM ingestion_items").get()).toEqual({ count: 1 });
   });
 });

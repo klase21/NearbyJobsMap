@@ -108,6 +108,18 @@
 
 ## Product and UX Guidance
 
+### Bounded JobKorea collection
+
+- 제품 진행을 막는 구체적 결함이 없는 한 DOM 검증 전용 framework나 snapshot schema를 계속 확장하지 않는다.
+- 알려진 search result root 안의 numeric posting ID는 listing 분류와 무관하게 상세 검증 후보가 될 수 있고 identity는 numeric posting ID를 기준으로 한다.
+- 상세 transport 실패 시 명시적으로 검증된 listing card fallback을 사용할 수 있지만 제목과 회사명이 모두 있어야 한다.
+- listing fallback은 raw HTML, 카드 전체 text 또는 상세 설명을 저장하지 않고 `bounded_listing_collection` provenance와 `목록 정보` 표시를 유지한다.
+- `bounded_manual_collection` 상세 확인 데이터는 이후 `bounded_listing_collection` 데이터로 downgrade하거나 덮어쓰지 않는다.
+- JobKorea 수집은 수동 실행만 허용하며 상세 동시성은 최대 2, retry는 0이다.
+- dry-run은 SQLite에 쓰지 않고 write mode는 `--write`와 `--confirm`을 모두 요구한다.
+- 인증, cookie/session/profile 재사용, stealth 또는 접근 제어 우회는 금지한다.
+- fixture, fictional demo, 상세 확인 수집, 목록 정보 수집 provenance와 UI 표시는 서로 구분한다.
+
 - 광고 판정에 `[class*="ad"]`, `className.includes("ad")`, `/ad/`처럼 짧은 부분 문자열을 사용하지 않는다.
 - 광고 class는 완전한 token 또는 근거가 있는 제한적 prefix pattern으로만 판정하며 `shadow`, `badge`, `header`, `gradient` 같은 utility token은 광고 근거가 아니다.
 - 광고 판정은 후보 anchor에서 최대 6단계의 가까운 ancestor로 제한하고 `BODY`·`MAIN`의 페이지 수준 라벨을 하위 후보에 전파하지 않는다.

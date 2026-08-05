@@ -54,8 +54,21 @@ describe("잡코리아 synthetic page snapshot browser boundary", () => {
     const value = await snapshot(`<base href="https://www.jobkorea.co.kr/Search?stext=AI"><main><div class="unknown-card"><a href="/Recruit/GI_Read/50009991?logpath=x">공고</a><a href="https://www.jobkorea.co.kr/Recruit/GI_Read/50009991">회사</a></div></main>`);
     expect(value.ordinaryCandidates).toHaveLength(0);
     expect(value.collectionCandidates).toEqual([{ postingId: "50009991", canonicalUrl: "https://www.jobkorea.co.kr/Recruit/GI_Read/50009991",
-      firstSourcePosition: 1, observedLinkCount: 2, listingClassification: "structurally_provisional" }]);
+      firstSourcePosition: 1, observedLinkCount: 2, listingClassification: "structurally_provisional",
+      listingFields: { title: "공고", companyName: "회사", regionText: null, salaryText: null, employmentTypes: [],
+        experienceRequirement: null, educationRequirement: null, postedAt: null, deadlineText: null } }]);
     expect(classifyJobKoreaRenderedPage(value)).toBe("malformed_results");
+  });
+
+  it("같은 posting ID 카드에서 bounded 목록 필드를 추출하고 다른 카드 정보를 섞지 않는다", async () => {
+    const value = await snapshot(`<base href="https://www.jobkorea.co.kr/Search?stext=AI"><main data-section="recruit-search-results"><div class="cards">
+      <article><a class="company" href="/Recruit/Co_Read/C/one">가상회사 하나</a><a href="/Recruit/GI_Read/70000001">긴 가상 공고 제목 하나</a><span class="location">서울 중구</span><span class="salary">연봉 4,000만원</span></article>
+      <article><a class="company" href="/Recruit/Co_Read/C/two">가상회사 둘</a><a href="/Recruit/GI_Read/70000002">긴 가상 공고 제목 둘</a><span class="location">경기 수원시</span></article>
+      <article><a class="company" href="/Recruit/Co_Read/C/three">가상회사 셋</a><a href="/Recruit/GI_Read/70000003">긴 가상 공고 제목 셋</a></article>
+    </div></main>`);
+    expect(value.collectionCandidates[0]?.listingFields).toMatchObject({ title: "긴 가상 공고 제목 하나", companyName: "가상회사 하나", regionText: "서울 중구", salaryText: "연봉 4,000만원" });
+    expect(value.collectionCandidates[1]?.listingFields).toMatchObject({ title: "긴 가상 공고 제목 둘", companyName: "가상회사 둘", regionText: "경기 수원시" });
+    expect(value.collectionCandidates[0]?.listingFields?.companyName).not.toBe("가상회사 둘");
   });
 
   it("ordinary·AD·추천·영역 밖 링크를 분리한다", async () => {

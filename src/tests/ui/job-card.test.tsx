@@ -73,4 +73,15 @@ describe("공고 카드", () => {
     expect(screen.getByText(/원문을 최종 기준으로 확인하세요/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /원문 새 창에서 보기/ })).toHaveAttribute("rel", "noopener noreferrer");
   });
+
+  it("목록 정보와 상세 확인 수집 완성도를 명확히 구분한다", () => {
+    const listingOnly: UiJobRecord = { ...demo, isFictional: false, safeSourceUrl: "https://www.jobkorea.co.kr/Recruit/GI_Read/50000002",
+      provenanceKind: "live_one_shot_observation", observationKind: "bounded_listing_collection", observedAt: "2026-08-05T00:00:00Z" };
+    const { rerender } = render(<JobCard record={listingOnly} rank={1} selected={false} origin={DEFAULT_ORIGIN} userStatus="reviewing" onSelect={() => undefined} onMapFocus={() => undefined} onUserStatusChange={() => undefined} cardRef={() => undefined} />);
+    expect(screen.getByText("목록 정보")).toBeInTheDocument();
+    expect(screen.getByText(/상세 내용은 확인되지 않았습니다/)).toBeInTheDocument();
+    rerender(<JobCard record={{ ...listingOnly, observationKind: "bounded_manual_collection" }} rank={1} selected={false} origin={DEFAULT_ORIGIN} userStatus="reviewing" onSelect={() => undefined} onMapFocus={() => undefined} onUserStatusChange={() => undefined} cardRef={() => undefined} />);
+    expect(screen.getByText("상세 확인")).toBeInTheDocument();
+    expect(screen.queryByText(/상세 내용은 확인되지 않았습니다/)).not.toBeInTheDocument();
+  });
 });

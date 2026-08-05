@@ -30,17 +30,36 @@ export function selectJobKoreaCollectionCandidates(pages: JobKoreaCollectionResu
       seen.add(candidate.postingId);
       all.push({ sourcePostingId: candidate.postingId, sourceUrl: candidate.canonicalUrl, pageNumber: page.pageNumber,
         sourcePosition: candidate.firstSourcePosition, observedLinkCount: candidate.observedLinkCount,
-        listingClassification: candidate.listingClassification });
+        listingClassification: candidate.listingClassification, listingFields: candidate.listingFields ?? null });
     }
   }
   return { candidates: all.slice(0, maximum), uniquePostingIds: seen.size };
 }
 
 function listing(candidate: JobKoreaCollectionCandidate, capturedAt: string): JobKoreaListing {
-  return { sourcePostingId: candidate.sourcePostingId, sourceUrl: candidate.sourceUrl, title: `잡코리아 공고 ${candidate.sourcePostingId}`,
-    companyName: "상세 페이지 확인 전", salaryText: null, regionText: null, categories: [], employmentTypes: [],
-    experienceRequirement: null, educationRequirement: null, postedAt: null, deadlineText: null,
+  const fields = candidate.listingFields;
+  return { sourcePostingId: candidate.sourcePostingId, sourceUrl: candidate.sourceUrl, title: fields?.title?.trim() || `잡코리아 공고 ${candidate.sourcePostingId}`,
+    companyName: fields?.companyName?.trim() || "상세 페이지 확인 전", salaryText: fields?.salaryText ?? null, regionText: fields?.regionText ?? null,
+    categories: [], employmentTypes: fields?.employmentTypes ?? [], experienceRequirement: fields?.experienceRequirement ?? null,
+    educationRequirement: fields?.educationRequirement ?? null, postedAt: fields?.postedAt ?? null, deadlineText: fields?.deadlineText ?? null,
     promoted: candidate.listingClassification === "explicit_promoted", capturedAt };
+}
+
+const hasValidListingFallback = (candidate: JobKoreaCollectionCandidate): boolean => Boolean(
+  candidate.listingFields?.title?.trim() && candidate.listingFields.companyName?.trim(),
+);
+
+function collectionRecord(candidate: JobKoreaCollectionCandidate, options: JobKoreaCollectionOptions, observedAt: string,
+  job: ReturnType<typeof normalizeJobKorea>, completeness: "detail_complete" | "listing_only", detailUrl: string | null): IngestionRecord {
+  const sourceReference = completeness === "detail_complete"
+    ? `bounded_manual_collection:detail_http:${candidate.pageNumber}:${candidate.sourcePosition}:${candidate.listingClassification}:${candidate.observedLinkCount}:${candidate.sourcePostingId}`
+    : `bounded_listing_collection:listing_playwright:${candidate.pageNumber}:${candidate.sourcePosition}:${candidate.listingClassification}:${candidate.observedLinkCount}:${candidate.sourcePostingId}`;
+  return { job, metadata: { recordKind: "live_one_shot_observation", evidenceType: "public_page_observation",
+    sourceFixtureReference: sourceReference, mapPosition: null, permissionStatus: "unverified", listingUrl: options.searchUrl,
+    detailUrl, observedAt, sanitizerVersion: completeness === "detail_complete" ? JOBKOREA_SANITIZER_VERSION : "jobkorea-listing-card-v1",
+    parserVersion: completeness === "detail_complete" ? JOBKOREA_PARSER_CONTRACT_VERSION : "jobkorea-listing-card-v1",
+    observationKind: completeness === "detail_complete" ? "bounded_manual_collection" : "bounded_listing_collection",
+    observationTransport: "playwright", pageNumber: candidate.pageNumber, listingPosition: candidate.sourcePosition } };
 }
 
 function detailStatus(status: PostingStatus): "active" | "expired" | "closed" {
@@ -85,10 +104,10 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
       if (performance.now() - started >= deadline) return { sourcePostingId: candidate.sourcePostingId, requestedUrl: candidate.sourceUrl,
         finalUrl: null, httpStatus: null, redirectCount: null, redirectClassification: "not_observed", redirectChain: [],
         status: "transport_failed", parserResult: "failed", canonicalValidation: "not_reached", databaseAction: "not_stored",
-        diagnosticCodes: ["JOBKOREA_COLLECTION_DEADLINE_EXCEEDED"], transport: "http" } satisfies JobKoreaCollectedDetailOutcome;
+        diagnosticCodes: ["JOBKOREA_COLLECTION_DEADLINE_EXCEEDED"], transport: "http", dataCompleteness: "none" } satisfies JobKoreaCollectedDetailOutcome;
       let httpResponse: JobKoreaHttpResponse | null = null;
+      const observedAt = now().toISOString();
       try {
-        const observedAt = now().toISOString();
         httpResponse = await httpClient.request(candidate.sourceUrl, "detail", httpBudget);
         const responseClassification = classifyJobKoreaResponse(httpResponse, "detail");
         const response = { finalUrl: httpResponse.finalUrl, html: httpResponse.body, explicitClosed: responseClassification === "closed_detail" };
@@ -101,22 +120,32 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
         const job = { ...normalizeJobKorea(listing(candidate, observedAt), parsed.value), sourceUrl: response.finalUrl,
           canonicalUrl: response.finalUrl, collectedAt: observedAt, lastVerifiedAt: observedAt, rawPayloadReference: null };
         const issues = validateCanonicalJob(job); if (issues.length) throw new JobKoreaTransportError("JOBKOREA_CANONICAL_VALIDATION_FAILED", issues.map((item) => item.code).join(", "), response.finalUrl);
-        const sourceReference = `bounded_manual_collection:detail_http:${candidate.pageNumber}:${candidate.sourcePosition}:${candidate.listingClassification}:${candidate.observedLinkCount}:${candidate.sourcePostingId}`;
-        const record: IngestionRecord = { job, metadata: { recordKind: "live_one_shot_observation", evidenceType: "public_page_observation",
-          sourceFixtureReference: sourceReference, mapPosition: null, permissionStatus: "unverified", listingUrl: options.searchUrl,
-          detailUrl: response.finalUrl, observedAt, sanitizerVersion: JOBKOREA_SANITIZER_VERSION, parserVersion: JOBKOREA_PARSER_CONTRACT_VERSION,
-          observationKind: "bounded_manual_collection", observationTransport: "playwright", pageNumber: candidate.pageNumber,
-          listingPosition: candidate.sourcePosition } };
+        const record = collectionRecord(candidate, options, observedAt, job, "detail_complete", response.finalUrl);
         records.push(record); const preview = jobs.previewUpsert(job, record.metadata);
         return { sourcePostingId: candidate.sourcePostingId, requestedUrl: httpResponse.requestedUrl, finalUrl: httpResponse.finalUrl,
           httpStatus: httpResponse.status, redirectCount: httpResponse.redirectCount, redirectClassification: httpResponse.redirectClassification,
           redirectChain: httpResponse.redirectChain, status: detailStatus(job.postingStatus), parserResult: "parsed", canonicalValidation: "passed",
-          databaseAction: preview.action, diagnosticCodes: parsed.diagnostics.map((item) => item.code), transport: "http" } satisfies JobKoreaCollectedDetailOutcome;
+          databaseAction: preview.action, diagnosticCodes: parsed.diagnostics.map((item) => item.code), transport: "http", dataCompleteness: "detail_complete" } satisfies JobKoreaCollectedDetailOutcome;
       } catch (error) {
         const code = error instanceof JobKoreaTransportError ? error.code : "JOBKOREA_DETAIL_PROCESSING_FAILED";
         const errorContext = error instanceof JobKoreaTransportError ? error.context : null;
         const redirectClassification = code === "JOBKOREA_ACCESS_BLOCKED" ? "access_denied"
           : errorContext?.redirectClassification ?? httpResponse?.redirectClassification ?? "not_observed";
+        if (options.allowListingFallback && hasValidListingFallback(candidate)) {
+          const fallbackJob = { ...normalizeJobKorea(listing(candidate, observedAt)), postingStatus: "unknown" as const,
+            collectedAt: observedAt, lastVerifiedAt: observedAt, rawPayloadReference: null };
+          const issues = validateCanonicalJob(fallbackJob);
+          if (!issues.length) {
+            const record = collectionRecord(candidate, options, observedAt, fallbackJob, "listing_only", null);
+            records.push(record); const preview = jobs.previewUpsert(fallbackJob, record.metadata);
+            return { sourcePostingId: candidate.sourcePostingId, requestedUrl: errorContext?.requestedUrl ?? httpResponse?.requestedUrl ?? candidate.sourceUrl,
+              finalUrl: errorContext?.finalUrl ?? httpResponse?.finalUrl ?? null, httpStatus: errorContext?.httpStatus ?? httpResponse?.status ?? null,
+              redirectCount: errorContext?.redirectCount ?? httpResponse?.redirectCount ?? null, redirectClassification,
+              redirectChain: errorContext?.redirectChain ?? httpResponse?.redirectChain ?? [], status: failureStatus(code), parserResult: "failed",
+              canonicalValidation: "passed", databaseAction: preview.action, diagnosticCodes: [code, "JOBKOREA_LISTING_FALLBACK_USED"],
+              transport: "http", dataCompleteness: "listing_only" } satisfies JobKoreaCollectedDetailOutcome;
+          }
+        }
         if (runId) runs.recordItem({ runId, source: "jobkorea", sourcePostingId: candidate.sourcePostingId,
           canonicalJobId: `jobkorea:${candidate.sourcePostingId}`, result: "failed", diagnosticCodes: [code], contentHash: null });
         return { sourcePostingId: candidate.sourcePostingId, requestedUrl: errorContext?.requestedUrl ?? httpResponse?.requestedUrl ?? candidate.sourceUrl,
@@ -125,17 +154,18 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
           redirectCount: errorContext?.redirectCount ?? httpResponse?.redirectCount ?? null,
           redirectClassification, redirectChain: errorContext?.redirectChain ?? httpResponse?.redirectChain ?? [],
           status: failureStatus(code), parserResult: "failed", canonicalValidation: code === "JOBKOREA_CANONICAL_VALIDATION_FAILED" ? "failed" : "not_reached",
-          databaseAction: "not_stored", diagnosticCodes: [code], transport: "http" } satisfies JobKoreaCollectedDetailOutcome;
+          databaseAction: "not_stored", diagnosticCodes: [code], transport: "http", dataCompleteness: "none" } satisfies JobKoreaCollectedDetailOutcome;
       }
     });
-    const failed = outcomes.filter((item) => item.parserResult === "failed").length;
+    const failed = outcomes.filter((item) => item.databaseAction === "not_stored").length;
     const completion: TransportRunCompletion = { preflightRequests: 0, contentRequests: execution.searchNavigationCount + httpBudget.contentRequests + execution.detailNavigationCount,
       selectedDetailCount: selection.candidates.length, blockedCount: blockedPages, browserNavigations: execution.searchNavigationCount,
       detailNavigations: execution.detailNavigationCount, directRequests: 0 };
-    let actualInserts = 0, actualUpdates = 0, actualUnchanged = 0;
+    let actualInserts = 0, actualUpdates = 0, actualUnchanged = 0, actualLowerCompletenessSkips = 0;
     if (runId) {
       const ingested = new IngestionService(dependencies.database).ingest(records, { source: "jobkorea", ingestionType: "jobkorea_one_shot_transport" }, { runId, initial: { failed }, transportCompletion: completion });
       actualInserts = ingested.inserted; actualUpdates = ingested.updated; actualUnchanged = ingested.unchanged;
+      actualLowerCompletenessSkips = ingested.skipped;
     }
     const parsed = outcomes.filter((item) => item.parserResult === "parsed");
     const result: JobKoreaCollectionResult = { runId, mode: options.mode, status: blockedPages && !parsed.length ? "blocked" : failed || execution.pages.length < options.pages ? "partial" : "completed",
@@ -145,8 +175,10 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
       activeJobs: parsed.filter((item) => item.status === "active").length, expiredOrClosedJobs: parsed.filter((item) => item.status === "expired" || item.status === "closed").length,
       transportFailures: outcomes.filter((item) => item.status === "transport_failed").length, blockedDetails: outcomes.filter((item) => item.status === "access_blocked").length,
       parseFailures: outcomes.filter((item) => item.status === "parse_failed" || item.status === "invalid_detail").length,
-      predictedInserts: parsed.filter((item) => item.databaseAction === "inserted").length, predictedUpdates: parsed.filter((item) => item.databaseAction === "updated").length,
-      predictedUnchanged: parsed.filter((item) => item.databaseAction === "unchanged").length, actualInserts, actualUpdates, actualUnchanged,
+      predictedInserts: outcomes.filter((item) => item.databaseAction === "inserted").length, predictedUpdates: outcomes.filter((item) => item.databaseAction === "updated").length,
+      predictedUnchanged: outcomes.filter((item) => item.databaseAction === "unchanged").length, actualInserts, actualUpdates, actualUnchanged,
+      listingOnlyRecords: outcomes.filter((item) => item.dataCompleteness === "listing_only").length, failedRecords: failed,
+      predictedLowerCompletenessSkips: outcomes.filter((item) => item.databaseAction === "skipped").length, actualLowerCompletenessSkips,
       totalSqliteJobs: jobs.listAll().length, details: outcomes, elapsedMs: Math.round(performance.now() - started) };
     return result;
   } catch (error) {

@@ -8,7 +8,7 @@ import { isLocationAccuracy, isPostingStatus, isSalaryType, validateCanonicalJob
 import type { IngestionMetadata, PersistedJobRecord, RepositoryListResult } from "../schema";
 
 type SqlRow = Record<string, unknown>;
-export type UpsertAction = "inserted" | "updated" | "unchanged";
+export type UpsertAction = "inserted" | "updated" | "unchanged" | "skipped";
 export interface UpsertResult { action: UpsertAction; jobId: string; contentHash: string }
 
 export class JobRepositoryError extends Error {
@@ -171,6 +171,9 @@ export class JobRepository {
     const contentHash = calculateJobContentHash(job, metadata.mapPosition);
     const existing = this.findIdentityRow(job);
     if (!existing) return { action: "inserted", jobId: job.id, contentHash };
+    if (nullableString(existing, "observation_kind") === "bounded_manual_collection" && metadata.observationKind === "bounded_listing_collection") {
+      return { action: "skipped", jobId: requiredString(existing, "id"), contentHash: requiredString(existing, "content_hash") };
+    }
     const existingKind = requiredString(existing, "provenance_kind");
     if (existingKind === "live_one_shot_observation" && metadata.recordKind === "fixture_derived") {
       return { action: "unchanged", jobId: requiredString(existing, "id"), contentHash: requiredString(existing, "content_hash") };
@@ -186,6 +189,10 @@ export class JobRepository {
     const now = new Date().toISOString();
     const persistedId = existing ? requiredString(existing, "id") : job.id;
     const existingKind = existing ? requiredString(existing, "provenance_kind") : null;
+    if (existing && nullableString(existing, "observation_kind") === "bounded_manual_collection" && metadata.observationKind === "bounded_listing_collection") {
+      this.recordProvenance(persistedId, metadata, now);
+      return { action: "skipped", jobId: persistedId, contentHash: requiredString(existing, "content_hash") };
+    }
     if (existing && existingKind === "live_one_shot_observation" && metadata.recordKind === "fixture_derived") {
       this.recordProvenance(persistedId, metadata, now);
       return { action: "unchanged", jobId: persistedId, contentHash: requiredString(existing, "content_hash") };

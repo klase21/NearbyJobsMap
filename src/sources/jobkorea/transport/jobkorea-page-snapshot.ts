@@ -365,8 +365,19 @@ export function validateJobKoreaPageSnapshot(value: unknown): JobKoreaPageSnapsh
     const postingId = stringField(item, "postingId", 30);
     const listingClassification = stringField(item, "listingClassification", 40);
     if (!/^\d+$/.test(postingId) || !collectionClassifications.has(listingClassification)) fail("collection candidate identity 또는 classification이 유효하지 않습니다.");
+    let listingFields = null;
+    if (item.listingFields !== null && item.listingFields !== undefined) {
+      if (!isPlainRecord(item.listingFields)) fail("collection listing fields가 plain object가 아닙니다.");
+      const employmentTypes = item.listingFields.employmentTypes;
+      if (!Array.isArray(employmentTypes) || employmentTypes.length > 10 || employmentTypes.some((entry) => typeof entry !== "string" || entry.length > 100)) fail("listing employment types가 유효하지 않습니다.");
+      listingFields = { title: nullableString(item.listingFields, "title", 300), companyName: nullableString(item.listingFields, "companyName", 200),
+        regionText: nullableString(item.listingFields, "regionText", 300), salaryText: nullableString(item.listingFields, "salaryText", 300),
+        employmentTypes: [...employmentTypes], experienceRequirement: nullableString(item.listingFields, "experienceRequirement", 200),
+        educationRequirement: nullableString(item.listingFields, "educationRequirement", 200), postedAt: nullableString(item.listingFields, "postedAt", 50),
+        deadlineText: nullableString(item.listingFields, "deadlineText", 100) };
+    }
     return { postingId, canonicalUrl: stringField(item, "canonicalUrl", 2_048), firstSourcePosition: countField(item, "firstSourcePosition")!,
-      observedLinkCount: countField(item, "observedLinkCount")!, listingClassification: listingClassification as JobKoreaPageSnapshot["collectionCandidates"][number]["listingClassification"] };
+      observedLinkCount: countField(item, "observedLinkCount")!, listingClassification: listingClassification as JobKoreaPageSnapshot["collectionCandidates"][number]["listingClassification"], listingFields };
   });
   if (!isPlainRecord(value.diagnosticSamples)) fail("diagnosticSamples가 유효하지 않습니다.");
   const sampleLimits = { ordinary: JOBKOREA_ORDINARY_SAMPLE_LIMIT, promoted: JOBKOREA_PROMOTED_SAMPLE_LIMIT, rejected: JOBKOREA_REJECTED_SAMPLE_LIMIT } as const;
@@ -475,6 +486,23 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
   const isPageLevel = (element,resultRoots) => !element || ["HTML","BODY","MAIN","HEADER","FOOTER","NAV"].includes(element.tagName) || resultRoots.includes(element);
   const depthFromAnchor = (anchor,element) => {let current=anchor.parentElement,depth=1;while(current&&depth<=ancestorLimit){if(current===element)return depth;current=current.parentElement;depth+=1;}return null;};
   const commonAncestor = (anchors) => { if(!anchors.length)return null;let current=anchors[0].parentElement,depth=1;while(current&&depth<=ancestorLimit){if(anchors.every((anchor)=>current.contains(anchor)))return current;current=current.parentElement;depth+=1;}return null; };
+  const listingCardFields = (postingId, detailNodes, resultRoots) => {
+    const anchors=detailNodes.filter((node)=>numericPostingId(node)===postingId);if(!anchors.length)return null;
+    let selected=commonAncestor(anchors)??anchors[0].parentElement;if(!(selected instanceof Element))return null;
+    while(selected.parentElement instanceof Element&&!isPageLevel(selected.parentElement,resultRoots)&&selected.parentElement.querySelectorAll("*").length<=siblingChildLimit){const ids=[...new Set(numericIdsInside(selected.parentElement))];if(ids.length!==1||ids[0]!==postingId)break;selected=selected.parentElement;}
+    if(isPageLevel(selected,resultRoots)||!resultRoots.some((root)=>root.contains(selected)))return null;
+    const safeText=(element,maximum)=>element instanceof Element?compact(element.textContent,maximum):"";
+    const actionPattern=/^(?:지원|홈페이지\s*지원|스크랩|관심|상세\s*보기|바로가기)$/i;
+    const anchorTexts=[...new Set(anchors.map((anchor)=>safeText(anchor,300)).filter((value)=>value.length>=2&&!actionPattern.test(value)))];
+    const title=anchorTexts.slice().sort((a,b)=>b.length-a.length||a.localeCompare(b))[0]??null;
+    const companyElements=Array.from(selected.querySelectorAll("a,span,div,p,strong" )).filter((element)=>{const tokens=Array.from(element.classList).map((token)=>token.toLowerCase());const field=(element.getAttribute("data-field")??element.getAttribute("data-type")??"").toLowerCase();const href=element instanceof HTMLAnchorElement?element.getAttribute("href")??"":"";return tokens.some((token)=>["company","company-name","corp","corp-name","employer"].includes(token)||/^(?:company|corp)-[a-z0-9]/.test(token))||["company","corp","employer"].includes(field)||/\/Recruit\/Co_Read|\/company\//i.test(href);});
+    const explicitCompany=companyElements.map((element)=>safeText(element,200)).find((value)=>value.length>=2&&value!==title&&!actionPattern.test(value))??null;
+    const alternateCompany=anchorTexts.filter((value)=>value!==title&&value.length<=100).sort((a,b)=>a.length-b.length||a.localeCompare(b))[0]??null;
+    const semanticText=(tokens,maximum) => {for(const element of Array.from(selected.querySelectorAll("span,div,p,li,dd"))){const classes=Array.from(element.classList).map((token)=>token.toLowerCase());if(classes.some((token)=>tokens.includes(token)||tokens.some((allowed)=>token.startsWith(allowed+"-")))){const value=safeText(element,maximum);if(value)return value;}}return null;};
+    const dateText=semanticText(["date","posted","deadline","closing"],100);const isoDates=dateText?dateText.match(/20\d{2}[-.]\d{1,2}[-.]\d{1,2}/g)??[]:[];
+    const employment=semanticText(["employment","job-type"],200);
+    return {title,companyName:explicitCompany??alternateCompany,regionText:semanticText(["location","region","address"],300),salaryText:semanticText(["salary","pay"],300),employmentTypes:employment?[employment]:[],experienceRequirement:semanticText(["experience","career"],200),educationRequirement:semanticText(["education"],200),postedAt:isoDates[0]?.replace(/\./g,"-")??null,deadlineText:isoDates[1]?.replace(/\./g,"-")??null};
+  };
   const exclusionFlags = (anchors) => ({promoted:anchors.some((anchor)=>Boolean(promotionEvidence(anchor))),recommendation:anchors.some((anchor)=>Boolean(anchor.closest(recommendationSelectors))||/지금\s*주목할\s*만한\s*공고|추천\s*공고/.test(compact((anchor.closest("li,article,section,div,tr")??anchor).textContent,1000))),recent:anchors.some((anchor)=>Boolean(anchor.closest(recentSelectors))||/최근\s*본\s*공고/.test(compact((anchor.closest("li,article,section,div,tr")??anchor).textContent,1000)))});
   const buildShadowStructure = (detailNodes,resultRoots,ordinaryCandidates,diagnostics) => {
     const records=[];
@@ -596,7 +624,7 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
     const numericInLists=numericNodes.filter((node)=>Boolean(node.closest("ul,ol"))&&withinRoot(node)).length;
     const numericInCards=numericNodes.filter((node)=>Boolean(node.closest("article"))&&withinRoot(node)).length;
     const shadowStructure=buildShadowStructure(detailNodes,resultRoots,ordinaryCandidates,diagnostics);
-    const provisionalIds=new Set(shadowStructure.provisionalUniquePostingIds);const collectionCandidates=Object.values(collectionCandidateMap).sort((a,b)=>a.firstSourcePosition-b.firstSourcePosition).slice(0,ordinaryCandidateLimit).map((item)=>({...item,listingClassification:item.listingClassification==="unclassified_result_link"&&provisionalIds.has(item.postingId)?"structurally_provisional":item.listingClassification}));
+    const provisionalIds=new Set(shadowStructure.provisionalUniquePostingIds);const collectionCandidates=Object.values(collectionCandidateMap).sort((a,b)=>a.firstSourcePosition-b.firstSourcePosition).slice(0,ordinaryCandidateLimit).map((item)=>({...item,listingClassification:item.listingClassification==="unclassified_result_link"&&provisionalIds.has(item.postingId)?"structurally_provisional":item.listingClassification,listingFields:listingCardFields(item.postingId,detailNodes,resultRoots)}));
     return {schemaVersion,serializedSnapshotBytes:0,finalUrl:String(location.href),pageTitle:compact(document.title,500),documentReadyState:["loading","interactive","complete"].includes(document.readyState)?document.readyState:"unknown",extractionCompleted:true,extractionDurationMs:Math.max(0,performance.now()-extractionStarted),readiness:null,domChangedAfterReadiness:null,
       evidence:{ordinaryContainerCount:document.querySelectorAll(ordinarySelectors).length,ordinaryRowCount:document.querySelectorAll("tr.devloopArea[data-gno]").length,resultRootCount:resultRoots.length,knownTableResultCount:tableResults,knownListResultCount:listResults,knownCardResultCount:cardResults,numericLinksInsideKnownTableResults:numericInTables,numericLinksInsideKnownListResults:numericInLists,numericLinksInsideKnownCardResults:numericInCards,ordinaryDetailLinkCount,allNumericDetailLinkCount,promotedContainerCount:explicitPromotedElements.size,recommendationContainerCount:document.querySelectorAll(recommendationSelectors).length,recentViewContainerCount:document.querySelectorAll(recentSelectors).length,promotedDetailLinkCount,rejectedDetailLinkCount,numericLinksInsideKnownResultRoots:insideCount,numericLinksOutsideKnownResultRoots:numericNodes.length-insideCount,noResultMarkerCount:noResult,loginMarkerCount:login,captchaMarkerCount:captcha,verificationMarkerCount:verification,accessDeniedMarkerCount:accessDenied},
       rejectionReasonCounts:sortedRejectionCounts,promotionSignalCounts:sortedPromotionSignalCounts,ordinaryCandidates,promotedCandidates,rejectedCandidates,diagnosticSamples,containerSignatures,containerSignaturesTruncated,shadowStructure,collectionCandidates,diagnostics};

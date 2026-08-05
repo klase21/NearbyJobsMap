@@ -41,12 +41,15 @@ export function JobCard({ record, rank, selected, origin, userStatus, onSelect, 
       </div>
       <div className="job-badges">
         <span className={`badge ${record.isFictional ? "demo" : ""}`}>{getJobDataLabel(record)}</span>
+        {record.observationKind === "bounded_listing_collection" && <span className="badge">목록 정보</span>}
+        {record.observationKind === "bounded_manual_collection" && <span className="badge exact">상세 확인</span>}
         <span className={`badge ${isExact(record) ? "exact" : "estimated"}`}>{LOCATION_LABELS[job.locationAccuracy]}</span>
         <span className={`badge ${job.postingStatus === "closing_soon" ? "closing" : ""}`}>{POSTING_STATUS_LABELS[job.postingStatus]}</span>
         {job.categories.map((category) => <span className="badge" key={category}>{category}</span>)}
         {job.employmentTypes.map((type) => <span className="badge" key={type}>{type}</span>)}
       </div>
-      {record.observationKind === "bounded_manual_collection" && <p className="observation-note">수동 수집 · {record.observedAt ? `${formatDate(record.observedAt)} 확인` : "확인 시각 미상"} · 원문을 최종 기준으로 확인하세요.</p>}
+      {record.observationKind === "bounded_manual_collection" && <p className="observation-note">수동 수집 · 상세 확인 · {record.observedAt ? `${formatDate(record.observedAt)} 확인` : "확인 시각 미상"} · 원문을 최종 기준으로 확인하세요.</p>}
+      {record.observationKind === "bounded_listing_collection" && <p className="observation-note">잡코리아 목록 페이지에서 수집된 정보이며 상세 내용은 확인되지 않았습니다. · {record.observedAt ? `${formatDate(record.observedAt)} 확인` : "확인 시각 미상"}</p>}
       {record.provenanceKind === "live_one_shot_observation" && record.observationKind !== "bounded_manual_collection" && <p className="observation-note">제한적 공개 페이지 관찰 · {record.observedAt ? `${formatDate(record.observedAt)} 확인` : "확인 시각 미상"}</p>}
       <div className="job-primary">
         <div>

@@ -29,6 +29,19 @@ export interface JobKoreaCollectionCandidate {
   firstSourcePosition: number;
   observedLinkCount: number;
   listingClassification: JobKoreaListingClassificationMetadata;
+  listingFields?: JobKoreaListingCardFields | null;
+}
+
+export interface JobKoreaListingCardFields {
+  title: string | null;
+  companyName: string | null;
+  regionText: string | null;
+  salaryText: string | null;
+  employmentTypes: string[];
+  experienceRequirement: string | null;
+  educationRequirement: string | null;
+  postedAt: string | null;
+  deadlineText: string | null;
 }
 
 export interface JobKoreaListingCandidate {

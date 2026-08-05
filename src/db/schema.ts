@@ -22,7 +22,7 @@ export interface IngestionMetadata {
   observedAt?: string | null;
   sanitizerVersion?: string | null;
   parserVersion?: string | null;
-  observationKind?: "bounded_public_browser_observation" | "bounded_manual_collection" | null;
+  observationKind?: "bounded_public_browser_observation" | "bounded_manual_collection" | "bounded_listing_collection" | null;
   observationTransport?: "playwright" | "direct" | null;
   pageNumber?: number | null;
   listingPosition?: number | null;

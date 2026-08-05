@@ -222,6 +222,39 @@ npm run db:status
 
 ## 잡코리아 수동 bounded 수집
 
+### 목록 정보 fallback의 실제 수집 결과
+
+2026-08-05 실제 HTTP-first dry-run에서는 검색 1페이지에서 numeric link 90개와 고유 posting ID 25개를 측정하고 5개를 선택했다. 다섯 상세 요청은 모두 HTTP 200, redirect 0회였지만 응답 본문은 `JOBKOREA_LOGIN_REDIRECT`로 분류되어 상세 parser 성공은 0건이었다. 요청 URL과 최종 canonical URL은 일치했고 dry-run 전후 SQLite는 완전히 동일했다.
+
+`--allow-listing-fallback`을 지정하면 상세가 차단된 posting ID에 대해 이미 렌더링된 검색 결과 카드에서 제목과 회사명이 모두 검증되는 경우에만 제한적인 목록 정보 공고를 만든다. 지역, 급여, 고용형태, 경력, 학력, 게시일과 마감일은 명시적인 카드 필드에서 확인될 때만 보존한다. raw HTML, 카드 전체 본문, 상세 설명은 저장하지 않는다. 목록 정보는 `bounded_listing_collection` provenance와 `listing_only` 완성도로 기록되며 상세 확인 데이터보다 우선하지 않고 기존 상세 확인 공고를 절대 downgrade하지 않는다.
+
+```powershell
+Set-Location C:\NearbyJobsMap
+npm.cmd run collect:jobkorea:once -- `
+  --search-url "https://www.jobkorea.co.kr/Search?stext=AI" `
+  --pages 1 `
+  --max-details 5 `
+  --dry-run `
+  --confirm `
+  --allow-listing-fallback
+```
+
+Write mode 역시 수동 실행이며 `--write`, `--confirm`, `--allow-listing-fallback`을 명시한다. 최대 3페이지, 30개 고유 posting ID, 상세 동시성 2, retry 0 제한은 그대로 유지된다.
+
+```powershell
+npm.cmd run collect:jobkorea:once -- `
+  --search-url "https://www.jobkorea.co.kr/Search?stext=AI" `
+  --pages 3 `
+  --max-details 30 `
+  --write `
+  --confirm `
+  --allow-listing-fallback
+```
+
+Fallback dry-run은 5건의 목록 정보 insert를 예측하면서 DB를 변경하지 않았다. 이어진 bounded write는 3페이지에서 numeric link 240개, 고유 posting ID 64개를 측정하고 처음 30개를 처리했다. 상세 결과는 login 분류 29건과 verification 분류 1건이었고 검증된 목록 정보 30건을 insert했다. 완료 후 SQLite는 jobs 46, ingestion runs 9, ingestion items 94, provenance rows 46이며 중복 source identity는 0건이다.
+
+UI는 수집된 공고에 `잡코리아`, `수동 수집`, `목록 정보`를 표시하고 상세 확인 공고에는 `상세 확인`을 표시한다. 목록 정보에는 상세 내용이 확인되지 않았다는 짧은 안내가 노출된다. 좌표가 없는 수집 공고도 목록에서는 사용할 수 있지만 지도 marker는 만들지 않는다. 이 수집은 공식 API나 제휴 feed가 아니며 사용 권한은 여전히 미확인 상태다. scheduler, background crawler, 인증, 쿠키 재사용 또는 접근 제어 우회는 없다.
+
 제품 경계는 이제 `검색 페이지 → result root 안 숫자 posting ID → 상세 페이지 검증 → CanonicalJob → SQLite`로 연결된다. 미해결 ordinary 컨테이너 판정은 목록 provenance metadata일 뿐 상세 방문 gate가 아니다. result root 밖 링크, 비숫자 ID, 비정규 URL은 제외하며 페이지 번호와 최초 source 위치 순서로 posting ID를 중복 제거한다. 상세 페이지의 ID, JobPosting 구조, 제목, 회사명, 기존 parser·normalizer 및 canonical 검증이 저장 여부의 최종 기준이다.
 
 Dry-run은 상세 페이지까지 확인하고 insert/update/unchanged를 예측하지만 ingestion run, item, provenance 또는 job을 쓰지 않는다.
@@ -255,4 +288,4 @@ npm.cmd run collect:jobkorea:once -- `
 
 별도 승인된 HTTP-first 실제 dry-run도 page 1의 numeric link 90개와 고유 posting ID 26개에서 동일한 앞 5개를 선택했다. 명령은 6.171초에 종료됐고 다섯 canonical desktop 상세 URL 모두 첫 HTTP redirect에서 `JOBKOREA_LOGIN_REDIRECT`로 분류됐다. 유효 상세 body가 없었으므로 parser·normalizer·canonical validation은 실행되지 않았고 예상 insert/update/unchanged는 모두 0이었다. dry-run 전후 DB SHA-256과 jobs 16, ingestion runs 8, provenance 16, ingestion items 64, one-shot records 0은 동일했다. 이 결과는 **그 anonymous HTTP 요청 계약의 로그인 redirect**를 뜻하며 공개 browser 상세의 일반 접근 가능성까지 부정하지 않는다.
 
-같은 실행 뒤 오프라인 점검에서 HTTP-first client가 요구된 browser-like 식별자 대신 이전 prototype UA를 계속 사용하고, redirect의 sanitized target/status/hop을 결과에서 버리는 구현 격차를 확인했다. client는 이제 `Mozilla/5.0` 호환 문자열 끝에 `NearbyJobsMap/0.1 bounded-manual-collection`을 명시하고 공개 페이지용 `Accept`, `Accept-Language`, `Cache-Control`만 전송한다. cookie, authorization, referer는 보내지 않는다. redirect는 최대 3 hop, HTTPS allowlist, 동일 posting ID를 강제하며 query를 제거한 host/path와 status만 보존한다. desktop↔mobile 동일-ID redirect, login, root, malformed/ID 변경을 분리한다. 이 교정은 mock 회귀 테스트만 통과했으며 승인된 실행을 반복하지 않았으므로 실제 성공 여부는 아직 미확인이다. 다음 실제 dry-run 전까지 write gate는 계속 닫혀 있다.
+같은 실행 뒤 오프라인 점검에서 HTTP-first client가 요구된 browser-like 식별자 대신 이전 prototype UA를 계속 사용하고, redirect의 sanitized target/status/hop을 결과에서 버리는 구현 격차를 확인했다. client는 이제 `Mozilla/5.0` 호환 문자열 끝에 `NearbyJobsMap/0.1 bounded-manual-collection`을 명시하고 공개 페이지용 `Accept`, `Accept-Language`, `Cache-Control`만 전송한다. cookie, authorization, referer는 보내지 않는다. redirect는 최대 3 hop, HTTPS allowlist, 동일 posting ID를 강제하며 query를 제거한 host/path와 status만 보존한다. desktop↔mobile 동일-ID redirect, login, root, malformed/ID 변경을 분리한다. 이후 승인된 실제 HTTP-first dry-run에서는 다섯 요청 모두 HTTP 200과 redirect 0회를 측정했지만 응답 본문이 login 페이지로 분류되어 상세 parser는 성공하지 못했다. 따라서 상세 transport 성공을 가장하지 않고 검증된 listing fallback으로 bounded write를 완료했다.

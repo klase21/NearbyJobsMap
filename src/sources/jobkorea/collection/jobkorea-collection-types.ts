@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 import type { UpsertAction } from "../../../db/repositories/job-repository";
-import type { JobKoreaListingClassificationMetadata, JobKoreaListingPageResult, JobKoreaSearchExecution } from "../transport/jobkorea-search-types";
+import type { JobKoreaListingCardFields, JobKoreaListingClassificationMetadata, JobKoreaListingPageResult, JobKoreaSearchExecution } from "../transport/jobkorea-search-types";
 import type { JobKoreaHttpClient } from "../transport/jobkorea-http-client";
 
 export interface JobKoreaCollectionOptions {
@@ -9,6 +9,7 @@ export interface JobKoreaCollectionOptions {
   maxDetails: number;
   mode: "dry-run" | "write";
   confirm: true;
+  allowListingFallback?: boolean;
 }
 
 export interface JobKoreaCollectionCandidate {
@@ -18,6 +19,7 @@ export interface JobKoreaCollectionCandidate {
   sourcePosition: number;
   observedLinkCount: number;
   listingClassification: JobKoreaListingClassificationMetadata;
+  listingFields: JobKoreaListingCardFields | null;
 }
 
 export type JobKoreaCollectedDetailStatus = "active" | "expired" | "closed" | "deleted" | "access_blocked" | "parse_failed" | "invalid_detail" | "transport_failed";
@@ -36,6 +38,7 @@ export interface JobKoreaCollectedDetailOutcome {
   databaseAction: UpsertAction | "not_stored";
   diagnosticCodes: string[];
   transport: "http" | "playwright";
+  dataCompleteness: "detail_complete" | "listing_only" | "none";
 }
 
 export interface JobKoreaCollectionResult {
@@ -61,6 +64,10 @@ export interface JobKoreaCollectionResult {
   actualInserts: number;
   actualUpdates: number;
   actualUnchanged: number;
+  listingOnlyRecords: number;
+  failedRecords: number;
+  predictedLowerCompletenessSkips: number;
+  actualLowerCompletenessSkips: number;
   totalSqliteJobs: number;
   details: JobKoreaCollectedDetailOutcome[];
   elapsedMs: number;

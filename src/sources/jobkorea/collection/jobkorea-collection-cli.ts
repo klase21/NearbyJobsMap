@@ -5,7 +5,7 @@ import type { JobKoreaCollectionOptions } from "./jobkorea-collection-types";
 export function parseJobKoreaCollectionArgs(argv: string[]): JobKoreaCollectionOptions {
   const values = new Map<string, string | true>();
   const valueFlags = new Set(["--search-url", "--pages", "--max-details"]);
-  const booleanFlags = new Set(["--confirm", "--dry-run", "--write"]);
+  const booleanFlags = new Set(["--confirm", "--dry-run", "--write", "--allow-listing-fallback"]);
   for (let index = 0; index < argv.length; index += 1) {
     const key = argv[index]!;
     if (booleanFlags.has(key)) { values.set(key, true); continue; }
@@ -23,5 +23,6 @@ export function parseJobKoreaCollectionArgs(argv: string[]): JobKoreaCollectionO
   if (!Number.isInteger(maxDetails) || maxDetails < 1 || maxDetails > 30) throw new JobKoreaTransportError("JOBKOREA_COLLECTION_MAX_DETAILS_INVALID", "--max-details는 1~30 정수여야 합니다.");
   const dryRun = values.has("--dry-run"); const write = values.has("--write");
   if (dryRun === write) throw new JobKoreaTransportError("JOBKOREA_COLLECTION_MODE_REQUIRED", "--dry-run 또는 --write 중 정확히 하나가 필요합니다.");
-  return { searchUrl: normalizeJobKoreaSearchUrl(candidate), pages: pages as 1 | 2 | 3, maxDetails, mode: write ? "write" : "dry-run", confirm: true };
+  return { searchUrl: normalizeJobKoreaSearchUrl(candidate), pages: pages as 1 | 2 | 3, maxDetails, mode: write ? "write" : "dry-run", confirm: true,
+    allowListingFallback: values.has("--allow-listing-fallback") };
 }
