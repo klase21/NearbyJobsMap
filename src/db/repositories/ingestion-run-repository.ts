@@ -12,12 +12,15 @@ export class IngestionRunRepository {
     this.database.prepare(`INSERT INTO ingestion_runs
       (id, source, ingestion_type, status, started_at, input_record_count, permission_status, listing_url, max_details,
        content_request_limit, preflight_request_limit, dry_run, selected_transport, search_page_count,
-       exclusion_keywords_json, exclusion_fields_json, exclusion_config_hash, created_at)
-      VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+       exclusion_keywords_json, exclusion_fields_json, exclusion_config_hash, saved_profile_id, saved_profile_name,
+       saved_profile_revision, saved_profile_configuration_hash, created_at)
+      VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, source, ingestionType, now, inputRecordCount, metadata?.permissionStatus ?? null, metadata?.listingUrl ?? null,
         metadata?.maxDetails ?? null, metadata?.contentRequestLimit ?? null, metadata?.preflightRequestLimit ?? null,
         metadata?.dryRun ? 1 : 0, metadata?.selectedTransport ?? null, metadata?.searchPageCount ?? 0,
-        JSON.stringify(metadata?.exclusionKeywords ?? []), JSON.stringify(metadata?.exclusionFields ?? []), metadata?.exclusionConfigHash ?? null, now);
+        JSON.stringify(metadata?.exclusionKeywords ?? []), JSON.stringify(metadata?.exclusionFields ?? []), metadata?.exclusionConfigHash ?? null,
+        metadata?.savedProfileId ?? null, metadata?.savedProfileName ?? null, metadata?.savedProfileRevision ?? null,
+        metadata?.savedProfileConfigurationHash ?? null, now);
     return id;
   }
 

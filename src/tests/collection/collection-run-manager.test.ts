@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import type { JobKoreaCollectionResult } from "../../sources/jobkorea/collection/jobkorea-collection-types";
 import { CollectionRunManager } from "../../server/collection-control/collection-run-manager";
+import type { SavedCollectionProfile } from "../../services/saved-collection-profile";
 
 const result = (mode: "dry-run" | "write"): JobKoreaCollectionResult => ({ runId: mode === "write" ? "db-run" : null, mode, status: "completed",
   presetId: "seoul-ai", presetLabel: "서울 AI 일자리", keyword: "AI", requestedRegions: ["seoul"], pageResults: [], listingPagesRequested: 1,
@@ -15,6 +16,7 @@ const result = (mode: "dry-run" | "write"): JobKoreaCollectionResult => ({ runId
   predictedLowerCompletenessSkips: 0, actualLowerCompletenessSkips: 0, totalSqliteJobs: mode === "write" ? 48 : 46, details: [], elapsedMs: 100 });
 
 const fakeDb = () => ({ close: vi.fn() }) as never;
+const profile = (revision=1): SavedCollectionProfile => ({ id:"123e4567-e89b-42d3-a456-426614174000", name:"서울 저장 프로필", source:"jobkorea", basePresetId:"seoul-ai", strategy:"jobkorea_keyword", keyword:"데이터 AI", regions:["seoul"], pages:2, maxCandidates:10, allowListingFallback:true, exclusion:{keywords:["강사"],fields:["title"]}, isFavorite:true, revision, configurationHash:`hash-${revision}`, createdAt:"2026-08-06T00:00:00Z", updatedAt:"2026-08-06T00:00:00Z", lastUsedAt:null });
 
 describe("CollectionRunManager", () => {
   it("dispatches Albamon presets to the shared source-aware manager and binds write authorization", async () => {
@@ -83,5 +85,26 @@ describe("CollectionRunManager", () => {
     await vi.waitFor(() => expect(manager.get(run.runId)?.status).toBe("failed"));
     expect(manager.get(run.runId)?.error).toEqual({ code: "COLLECTION_RUN_FAILED", message: "safe failure" });
     expect(manager.active()).toBeNull(); expect(manager.get("stale")).toBeNull();
+  });
+
+  it("runs from an immutable saved-profile snapshot and persists usage only on write start", async () => {
+    const stored=profile(); const markProfileUsed=vi.fn(); const runCollection=vi.fn(async(options)=>result(options.mode));
+    const manager=new CollectionRunManager({runCollection,openReadonly:fakeDb,openWritable:fakeDb,loadProfile:()=>stored,markProfileUsed});
+    const dry=manager.start({presetId:"seoul-ai",profileId:stored.id,pages:1,maxDetails:5,mode:"dry_run",exclusion:stored.exclusion});
+    expect(dry.savedProfile).toEqual({id:stored.id,name:stored.name,revision:1,configurationHash:"hash-1"});
+    await vi.waitFor(()=>expect(manager.get(dry.runId)?.status).toBe("completed")); expect(markProfileUsed).not.toHaveBeenCalled();
+    const token=manager.get(dry.runId)!.writeAuthorizationToken!;
+    const write=manager.start({presetId:"seoul-ai",profileId:stored.id,pages:1,maxDetails:5,mode:"write",exclusion:stored.exclusion,writeAuthorizationToken:token,confirmationPhrase:"WRITE seoul-ai"});
+    expect(write.savedProfile?.revision).toBe(1); expect(markProfileUsed).toHaveBeenCalledWith(stored.id);
+    await vi.waitFor(()=>expect(manager.get(write.runId)?.status).toBe("completed"));
+    expect(runCollection.mock.calls[0]?.[0]).toMatchObject({keyword:"데이터 AI",requestedRegions:["seoul"],savedProfile:{name:"서울 저장 프로필"}});
+  });
+
+  it("invalidates a dry-run authorization when the profile revision changes", async () => {
+    let stored=profile(); const manager=new CollectionRunManager({runCollection:vi.fn(async(options)=>result(options.mode)),openReadonly:fakeDb,openWritable:fakeDb,loadProfile:()=>stored,markProfileUsed:vi.fn()});
+    const dry=manager.start({presetId:"seoul-ai",profileId:stored.id,pages:1,maxDetails:5,mode:"dry_run",exclusion:stored.exclusion});
+    await vi.waitFor(()=>expect(manager.get(dry.runId)?.status).toBe("completed")); const token=manager.get(dry.runId)!.writeAuthorizationToken!;
+    stored=profile(2);
+    expect(()=>manager.start({presetId:"seoul-ai",profileId:stored.id,pages:1,maxDetails:5,mode:"write",exclusion:stored.exclusion,writeAuthorizationToken:token,confirmationPhrase:"WRITE seoul-ai"})).toThrow(/변경/);
   });
 });

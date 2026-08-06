@@ -6,6 +6,8 @@ export function listRecentCollectionRuns(database: Database.Database, limit = 10
   const safeLimit = Math.max(1, Math.min(10, Math.trunc(limit)));
   const rows = database.prepare(`SELECT r.id, r.started_at, r.completed_at, r.status, r.selected_detail_count,
     r.source, r.inserted_count, r.updated_count, r.unchanged_count, r.skipped_count, r.failed_count,
+    r.saved_profile_id, r.saved_profile_name, r.saved_profile_revision, r.saved_profile_configuration_hash,
+    CASE WHEN r.saved_profile_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM saved_collection_profiles p WHERE p.id=r.saved_profile_id) THEN 1 ELSE 0 END profile_deleted,
     MAX(j.collection_preset_id) AS preset_id, MAX(j.collection_preset_label) AS preset_label
     FROM ingestion_runs r
     LEFT JOIN ingestion_items i ON i.ingestion_run_id = r.id
@@ -18,6 +20,8 @@ export function listRecentCollectionRuns(database: Database.Database, limit = 10
       presetLabel: typeof row.preset_label === "string" ? row.preset_label : row.source === "albamon" ? "알바몬 수동 수집" : "잡코리아 수동 수집",
       attempted: Number(row.selected_detail_count ?? 0), inserted: Number(row.inserted_count ?? 0), updated: Number(row.updated_count ?? 0),
       unchanged: Number(row.unchanged_count ?? 0), skipped: Number(row.skipped_count ?? 0), failed: Number(row.failed_count ?? 0),
-      durationMs: completedAt ? Math.max(0, new Date(completedAt).getTime() - new Date(startedAt).getTime()) : null, status: String(row.status) };
+      durationMs: completedAt ? Math.max(0, new Date(completedAt).getTime() - new Date(startedAt).getTime()) : null, status: String(row.status),
+      savedProfile: typeof row.saved_profile_id === "string" ? { id: String(row.saved_profile_id), name: String(row.saved_profile_name), revision: Number(row.saved_profile_revision),
+        configurationHash: String(row.saved_profile_configuration_hash), deleted: Number(row.profile_deleted) === 1 } : null };
   });
 }

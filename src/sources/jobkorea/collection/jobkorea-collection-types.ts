@@ -18,6 +18,7 @@ export interface JobKoreaCollectionOptions {
   requestedRegions?: CollectionRegion[];
   exclusion?: CollectionExclusionConfig;
   exclusionConfigHash?: string | null;
+  savedProfile?: { id: string; name: string; revision: number; configurationHash: string } | null;
 }
 
 export interface JobKoreaCollectionCandidate {

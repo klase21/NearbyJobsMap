@@ -11,6 +11,7 @@ export interface CollectionControlConfig {
   pages: number;
   maxDetails: number;
   exclusion: CollectionExclusionConfig;
+  savedProfile?: { id: string; name: string; revision: number; configurationHash: string } | null;
 }
 
 export type CollectionRunSnapshot = Omit<JobKoreaCollectionProgress, "status"> & {
@@ -30,6 +31,7 @@ export type CollectionRunSnapshot = Omit<JobKoreaCollectionProgress, "status"> &
   error: { code: string; message: string } | null;
   writeAuthorizationToken: string | null;
   writeAuthorizationExpiresAt: string | null;
+  savedProfile: CollectionControlConfig["savedProfile"];
 };
 
 export interface RecentCollectionRun {
@@ -47,4 +49,5 @@ export interface RecentCollectionRun {
   failed: number;
   durationMs: number | null;
   status: string;
+  savedProfile: { id: string; name: string; revision: number; configurationHash: string; deleted: boolean } | null;
 }

@@ -1,7 +1,7 @@
 import type { CollectionControlConfig, CollectionControlMode } from "./contracts";
 
-export interface CollectionStartInput extends CollectionControlConfig { mode: CollectionControlMode; writeAuthorizationToken?: string; confirmationPhrase?: string }
-const ALLOWED_FIELDS = new Set(["presetId", "pages", "maxDetails", "mode", "exclusion", "writeAuthorizationToken", "confirmationPhrase"]);
+export interface CollectionStartInput extends CollectionControlConfig { profileId?: string; mode: CollectionControlMode; writeAuthorizationToken?: string; confirmationPhrase?: string }
+const ALLOWED_FIELDS = new Set(["presetId", "profileId", "pages", "maxDetails", "mode", "exclusion", "writeAuthorizationToken", "confirmationPhrase"]);
 
 export function parseCollectionStartBody(body: unknown): CollectionStartInput {
   if (!body || typeof body !== "object" || Array.isArray(body)) throw Object.assign(new Error("요청 본문이 올바르지 않습니다."), { code: "COLLECTION_REQUEST_INVALID", status: 400 });
@@ -19,5 +19,6 @@ export function parseCollectionStartBody(body: unknown): CollectionStartInput {
   return { presetId: record.presetId as CollectionControlConfig["presetId"], pages: record.pages, maxDetails: record.maxDetails, mode: record.mode,
     exclusion: { keywords: exclusionRecord.keywords as string[], fields: exclusionRecord.fields as CollectionControlConfig["exclusion"]["fields"] },
     ...(typeof record.writeAuthorizationToken === "string" ? { writeAuthorizationToken: record.writeAuthorizationToken } : {}),
+    ...(typeof record.profileId === "string" ? { profileId: record.profileId } : {}),
     ...(typeof record.confirmationPhrase === "string" ? { confirmationPhrase: record.confirmationPhrase } : {}) };
 }

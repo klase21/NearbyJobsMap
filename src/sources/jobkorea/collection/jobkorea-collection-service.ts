@@ -142,6 +142,8 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
     contentRequestLimit: options.pages + options.maxDetails * (JOBKOREA_MANUAL_DETAIL_REDIRECT_HOPS + 1), preflightRequestLimit: 0, dryRun: false,
     selectedTransport: "playwright", searchPageCount: options.pages,
     exclusionKeywords: exclusionConfig.keywords, exclusionFields: exclusionConfig.fields, exclusionConfigHash: options.exclusionConfigHash ?? exclusionConfigurationHash(exclusionConfig),
+    savedProfileId: options.savedProfile?.id ?? null, savedProfileName: options.savedProfile?.name ?? null, savedProfileRevision: options.savedProfile?.revision ?? null,
+    savedProfileConfigurationHash: options.savedProfile?.configurationHash ?? null,
   });
   const executionOptions: JobKoreaSearchOptions = { searchUrl: options.searchUrl, pages: options.pages, maxDetails: options.maxDetails,
     transport: "playwright", confirm: true, dryRun: options.mode === "dry-run", diagnostic: false };

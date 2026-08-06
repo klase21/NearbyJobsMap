@@ -360,3 +360,13 @@ npm.cmd run collect:albamon:once -- --preset albamon-capital-today --pages 2 --m
 Migration `0006` 이후 write run은 제외 keyword·field와 전후 후보 수를 집계할 수 있다. 대시보드는 사용 빈도가 높은 keyword 최대 10개와 지원 field 사용 수를 보여 준다. 이전 run에 저장되지 않은 preset, 제외 설정, 수율 분모 또는 timing은 `0`으로 꾸미지 않고 `정보 없음` 또는 `이전 형식`으로 표시한다.
 
 대시보드 데이터는 parameterized read-only SQLite 집계와 `GET /api/collection-dashboard`, `GET /api/collection-dashboard/runs/{runId}`에서 제공된다. 새로고침, 개요 탭 복귀, write 완료 시 한 번 새로 읽으며 active run이 없을 때 지속 polling하지 않는다. 대시보드를 표시하거나 필터링하는 동작은 JobKorea·Albamon source request나 SQLite write를 시작하지 않는다.
+
+## 저장된 수집 프로필
+
+`/collection`의 `수집 실행` 탭에서는 불변인 기본 프리셋을 SQLite 기반 저장 프로필로 복사할 수 있다. 저장 프로필은 이름, 승인된 source adapter와 base preset, 잡코리아 keyword 또는 알바몬 `오늘 등록` 전략, 서울·경기 범위, 페이지·후보 상한, 제외 keyword·field, 즐겨찾기를 보존한다. 임의 URL·host·명령·SQL·정규식·cookie·환경 변수는 저장하지 않으며, 페이지와 후보 수는 base preset의 기본값과 전역 5페이지·50건 상한을 늘릴 수 없다.
+
+기본 프리셋은 이름 변경·편집·삭제할 수 없고 저장 프로필만 편집·복제·삭제·즐겨찾기할 수 있다. 프로필 ID는 opaque UUID이고 이름은 NFKC·공백 정규화 및 영문 대소문자 무시 기준으로 고유하다. source와 base preset은 생성 후 불변이다. 구성 편집은 optimistic `expectedRevision`을 요구하고 revision과 SHA-256 configuration hash를 바꾼다. 이름과 즐겨찾기는 configuration hash에 포함되지 않으며, 즐겨찾기 전환은 revision이나 기존 dry-run 승인을 무효화하지 않는다. `lastUsedAt`은 엄격한 dry-run DB 무변경을 유지하기 위해 저장 프로필 write run이 시작될 때만 갱신한다.
+
+저장 프로필을 선택하면 기존 실행 화면에 구성이 채워진다. 페이지와 후보 수는 해당 실행에 한해 더 줄일 수 있고, `프로필에 저장`을 선택하면 expected revision을 사용해 영구 반영한다. 실행은 profile ID·name snapshot·revision·configuration hash를 immutable snapshot으로 고정한다. dry-run 이후 프로필 구성이 바뀌거나 삭제되면 기존 write authorization은 거부되고 새 dry-run이 필요하다. 실제 write run은 profile snapshot을 ingestion run에 저장하므로 나중에 프로필이 삭제되어도 과거 실행 이름·revision·hash를 표시할 수 있다. 프로필 삭제는 jobs, ingestion runs/items 또는 provenance를 삭제하지 않는다.
+
+프로필 CRUD API(`/api/collection-profiles`)도 수집 실행 API와 같은 localhost 및 `NEARBY_JOBS_ENABLE_COLLECTION_UI=1` 경계를 사용한다. `/collection` 개요에는 저장 프로필 전체·소스별·즐겨찾기·최근 30일 사용 수와 최근 사용 프로필을 표시하며, 실행 이력과 프로필을 서로 다른 데이터로 다룬다. 이 기능은 scheduler나 자동 실행을 추가하지 않는다. 구현 검증 중 JobKorea·Albamon source request는 수행하지 않는다.

@@ -5,7 +5,7 @@ import type { DataProvenanceKind, PermissionStatus } from "../domain/data-proven
 import type { CollectionRegion, NormalizedRegion, RegionNormalizationConfidence } from "../services/region-normalizer";
 import type { ExclusionField } from "../services/collection-exclusion";
 
-export const REQUIRED_MIGRATION_VERSION = "0006";
+export const REQUIRED_MIGRATION_VERSION = "0007";
 
 export type RecordKind = DataProvenanceKind;
 export type EvidenceType = "observed_html" | "observed_json_ld" | "observed_internal_json" | "fictional_demo" | "public_page_observation";
@@ -50,6 +50,10 @@ export interface TransportRunMetadata {
   exclusionKeywords?: string[];
   exclusionFields?: ExclusionField[];
   exclusionConfigHash?: string | null;
+  savedProfileId?: string | null;
+  savedProfileName?: string | null;
+  savedProfileRevision?: number | null;
+  savedProfileConfigurationHash?: string | null;
 }
 
 export interface TransportRunCompletion {

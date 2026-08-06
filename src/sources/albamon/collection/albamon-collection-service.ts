@@ -67,7 +67,9 @@ export async function collectAlbamonOnce(options: AlbamonCollectionOptions, depe
   if (options.mode === "write") runId = runs.begin("albamon", "albamon_listing_collection", options.maxDetails, { permissionStatus: "unverified",
     listingUrl: buildAlbamonListingUrl(1), maxDetails: options.maxDetails, contentRequestLimit: options.pages, preflightRequestLimit: 0,
     dryRun: false, selectedTransport: "playwright", searchPageCount: options.pages,
-    exclusionKeywords: exclusionConfig.keywords, exclusionFields: exclusionConfig.fields, exclusionConfigHash: options.exclusionConfigHash ?? exclusionConfigurationHash(exclusionConfig) });
+    exclusionKeywords: exclusionConfig.keywords, exclusionFields: exclusionConfig.fields, exclusionConfigHash: options.exclusionConfigHash ?? exclusionConfigurationHash(exclusionConfig),
+    savedProfileId: options.savedProfile?.id ?? null, savedProfileName: options.savedProfile?.name ?? null, savedProfileRevision: options.savedProfile?.revision ?? null,
+    savedProfileConfigurationHash: options.savedProfile?.configurationHash ?? null });
   try {
     emit({ status: "collecting_listings", message: `알바몬 목록 0/${options.pages} 페이지 수집 중` });
     const pageResults = await (dependencies.collectPages ?? collectAlbamonListingPages)(options.pages);

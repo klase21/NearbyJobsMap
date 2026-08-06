@@ -1,0 +1,23 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("server-only", () => ({}));
+import { createTestDatabase, type TestDatabase } from "../db/test-database";
+import { normalizeProfileName, validateSavedProfileInput, type SavedCollectionProfileInput } from "../../services/saved-collection-profile";
+import { savedProfileConfigurationHash } from "../../services/saved-collection-profile-hash.server";
+import { SavedCollectionProfileRepository } from "../../server/collection-profiles/repository";
+
+const databases: TestDatabase[]=[]; afterEach(()=>{databases.splice(0).forEach(db=>db.cleanup());});
+const input=(overrides:Partial<SavedCollectionProfileInput>={}):SavedCollectionProfileInput=>({name:"테스트 서울·경기 AI",source:"jobkorea",basePresetId:"capital-ai",strategy:"jobkorea_keyword",keyword:"AI",regions:["seoul","gyeonggi"],pages:2,maxCandidates:20,allowListingFallback:true,exclusion:{keywords:["전기","강사"],fields:["title","category"]},isFavorite:true,...overrides});
+const repo=()=>{const db=createTestDatabase();databases.push(db);return new SavedCollectionProfileRepository(db.database,()=>new Date("2026-08-06T00:00:00Z"));};
+
+describe("saved collection profiles",()=>{
+  it("normalizes Korean, NFKC, whitespace, and English identity",()=>{expect(normalizeProfileName("  ＡＩ   수집  ")).toEqual({name:"AI 수집",normalizedName:"ai 수집"});});
+  it("rejects invalid names and reserved built-in labels",()=>{expect(()=>normalizeProfileName("x")).toThrow();expect(()=>normalizeProfileName("서울·경기 AI 일자리")).toThrow();expect(()=>normalizeProfileName("a\u0000b")).toThrow();});
+  it("validates source-specific fields and preset limits",()=>{expect(validateSavedProfileInput(input()).keyword).toBe("AI");expect(validateSavedProfileInput(input({source:"albamon",basePresetId:"albamon-capital-today",strategy:"albamon_today",keyword:null,allowListingFallback:false})).keyword).toBeNull();expect(()=>validateSavedProfileInput(input({pages:6}))).toThrow();expect(()=>validateSavedProfileInput(input({source:"albamon"}))).toThrow();});
+  it("hashes normalized configuration and ignores name/favorite",()=>{const hash=(value:SavedCollectionProfileInput)=>savedProfileConfigurationHash({source:value.source,basePresetId:value.basePresetId,strategy:value.strategy,keyword:value.keyword,regions:value.regions,pages:value.pages,maxCandidates:value.maxCandidates,allowListingFallback:value.allowListingFallback,exclusion:value.exclusion});const first=hash(validateSavedProfileInput(input()));expect(hash(validateSavedProfileInput(input({name:"다른 이름",isFavorite:false})))).toBe(first);expect(hash(validateSavedProfileInput(input({keyword:"데이터 라벨링"})))).not.toBe(first);});
+  it("creates, reads, orders favorites, and records opaque IDs",()=>{const repository=repo();const created=repository.create(input());repository.create(input({name:"두 번째 프로필",isFavorite:false}));expect(created.id).toMatch(/^[0-9a-f-]{36}$/);expect(repository.count()).toBe(2);expect(repository.list()[0]?.isFavorite).toBe(true);});
+  it("updates configuration with optimistic revision and hash change",()=>{const repository=repo();const created=repository.create(input());const updated=repository.update(created.id,1,input({pages:1}));expect(updated.revision).toBe(2);expect(updated.configurationHash).not.toBe(created.configurationHash);expect(()=>repository.update(created.id,1,input())).toThrow(/다른 화면/);});
+  it("favorite is presentation metadata without revision or hash changes",()=>{const repository=repo();const created=repository.create(input({isFavorite:false}));const favorite=repository.setFavorite(created.id,1,true);expect(favorite.isFavorite).toBe(true);expect(favorite.revision).toBe(1);expect(favorite.configurationHash).toBe(created.configurationHash);});
+  it("duplicates with deterministic unique names and deletes only profiles",()=>{const repository=repo();const original=repository.create(input());const copy1=repository.duplicate(original.id);const copy2=repository.duplicate(original.id);expect(copy1.name).toBe(`${original.name} 복사본`);expect(copy2.name).toBe(`${original.name} 복사본 2`);repository.delete(copy1.id);expect(repository.count()).toBe(2);});
+  it("rejects case-insensitive duplicate names",()=>{const repository=repo();repository.create(input({name:"AI Profile"}));expect(()=>repository.create(input({name:"ai profile"}))).toThrow(/같은 이름/);});
+  it("updates last-used independently of revision",()=>{const repository=repo();const created=repository.create(input());repository.markLastUsed(created.id);const used=repository.get(created.id)!;expect(used.lastUsedAt).toBe("2026-08-06T00:00:00.000Z");expect(used.revision).toBe(1);});
+});

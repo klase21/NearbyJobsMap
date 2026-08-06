@@ -6,6 +6,8 @@ import type { CollectionRunSnapshot, RecentCollectionRun } from "../../server/co
 import type { CollectionPreset } from "../../sources/collection/collection-presets";
 import { canonicalizeExclusionConfig, DEFAULT_EXCLUSION_FIELDS, EXCLUSION_FIELDS, normalizeCollectionExclusionConfig, splitExclusionKeywordInput, type CollectionExclusionConfig, type ExclusionField } from "../../services/collection-exclusion";
 import { loadCollectionExclusionPreferences, saveCollectionExclusionPreferences } from "../../repositories/collection-exclusion-preferences";
+import type { SavedCollectionProfile } from "../../services/saved-collection-profile";
+import { SavedProfilesPanel } from "./SavedProfilesPanel";
 
 interface Props { enabled: boolean; presets: CollectionPreset[]; onWriteCompleted?: () => void; onRunChange?: (run: CollectionRunSnapshot | null) => void }
 type ApiError = { error?: { message?: string } };
@@ -13,6 +15,7 @@ const terminal = (run: CollectionRunSnapshot | null) => run?.status === "complet
 
 export function CollectionControl({ enabled, presets, onWriteCompleted, onRunChange }: Props) {
   const [selectedId, setSelectedId] = useState(presets[0]?.id ?? "seoul-ai");
+  const [selectedProfile, setSelectedProfile] = useState<SavedCollectionProfile | null>(null);
   const preset = useMemo(() => presets.find((item) => item.id === selectedId) ?? presets[0]!, [presets, selectedId]);
   const [pages, setPages] = useState<number>(preset.pages); const [maxDetails, setMaxDetails] = useState<number>(preset.maxDetails);
   const [run, setRun] = useState<CollectionRunSnapshot | null>(null); const [error, setError] = useState<string | null>(null);
@@ -22,9 +25,12 @@ export function CollectionControl({ enabled, presets, onWriteCompleted, onRunCha
   const [keywordInput, setKeywordInput] = useState(""); const [exclusionError, setExclusionError] = useState<string | null>(null);
   const busy = Boolean(run && !terminal(run));
   const expectedPhrase = `WRITE ${preset.id}`;
+  const profileExclusionMatches = !selectedProfile || canonicalizeExclusionConfig(exclusion) === canonicalizeExclusionConfig(selectedProfile.exclusion);
+  const profileHasOverrides = Boolean(selectedProfile && (pages !== selectedProfile.pages || maxDetails !== selectedProfile.maxCandidates || !profileExclusionMatches));
   const writeReady = Boolean(run?.mode === "dry_run" && run.status === "completed" && run.writeAuthorizationToken && run.presetId === preset.id
     && run.listingPagesRequested === pages && run.maxDetailsRequested === maxDetails
-    && canonicalizeExclusionConfig(run.exclusion ?? { keywords: [], fields: [] }) === canonicalizeExclusionConfig(exclusion));
+    && canonicalizeExclusionConfig(run.exclusion ?? { keywords: [], fields: [] }) === canonicalizeExclusionConfig(exclusion)
+    && (run.savedProfile?.id ?? null) === (selectedProfile?.id ?? null) && (run.savedProfile?.revision ?? null) === (selectedProfile?.revision ?? null));
 
   useEffect(() => { const saved = loadCollectionExclusionPreferences(window.localStorage); setExclusion(saved.keywords.length ? saved : { keywords: [], fields: DEFAULT_EXCLUSION_FIELDS }); }, []);
   useEffect(() => { saveCollectionExclusionPreferences(window.localStorage, exclusion); }, [exclusion]);
@@ -39,13 +45,19 @@ export function CollectionControl({ enabled, presets, onWriteCompleted, onRunCha
   }, 750); return () => window.clearInterval(timer); }, [busy, run, loadHistory, onWriteCompleted, onRunChange]);
   useEffect(() => { if (!busy) return; const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); }; window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn); }, [busy]);
 
-  const choosePreset = (next: CollectionPreset) => { setSelectedId(next.id); setPages(next.pages); setMaxDetails(next.maxDetails); setRun(null); setWritePhrase(""); setError(null); };
+  const choosePreset = (next: CollectionPreset) => { setSelectedProfile(null); setSelectedId(next.id); setPages(next.pages); setMaxDetails(next.maxDetails); setRun(null); setWritePhrase(""); setError(null); };
+  const chooseProfile = (profile: SavedCollectionProfile) => { const next = presets.find((item) => item.id === profile.basePresetId); if (!next) { setError("프로필의 기본 프리셋을 찾을 수 없습니다."); return; } setSelectedProfile(profile); setSelectedId(next.id); setPages(profile.pages); setMaxDetails(profile.maxCandidates); setExclusion(profile.exclusion); setRun(null); setWritePhrase(""); setError(null); };
   const changeConfig = (kind: "pages" | "details", value: number) => { if (kind === "pages") setPages(value); else setMaxDetails(value); setRun(null); setWritePhrase(""); };
   const changeExclusion = (next: CollectionExclusionConfig) => { setExclusion(next); setRun(null); setWritePhrase(""); setExclusionError(null); };
   const addKeywords = (raw: string) => { try { const next = normalizeCollectionExclusionConfig({ keywords: [...exclusion.keywords, ...splitExclusionKeywordInput(raw)], fields: exclusion.fields }); changeExclusion(next); setKeywordInput(""); }
     catch (cause) { setExclusionError(cause instanceof Error ? cause.message : "제외 키워드를 추가할 수 없습니다."); } };
+  const saveRuntimeOverride = async () => { if (!selectedProfile) return; setError(null); const response = await fetch(`/api/collection-profiles/${selectedProfile.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({
+    name: selectedProfile.name, source: selectedProfile.source, basePresetId: selectedProfile.basePresetId, strategy: selectedProfile.strategy, keyword: selectedProfile.keyword,
+    regions: selectedProfile.regions, pages, maxCandidates: maxDetails, allowListingFallback: selectedProfile.allowListingFallback, exclusion,
+    isFavorite: selectedProfile.isFavorite, expectedRevision: selectedProfile.revision }) }); const body = await response.json();
+    if (!response.ok) { setError(body.error?.message ?? "프로필 변경 사항을 저장하지 못했습니다."); return; } setSelectedProfile(body.profile); setRun(null); setWritePhrase(""); };
   const start = async (mode: "dry_run" | "write") => {
-    setError(null); const payload: Record<string, unknown> = { presetId: preset.id, pages, maxDetails, mode, exclusion };
+    setError(null); const payload: Record<string, unknown> = { presetId: preset.id, pages, maxDetails, mode, exclusion, ...(selectedProfile ? { profileId: selectedProfile.id } : {}) };
     if (mode === "write") { payload.writeAuthorizationToken = run?.writeAuthorizationToken; payload.confirmationPhrase = writePhrase; }
     const response = await fetch("/api/collection-runs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
     const body = await response.json() as CollectionRunSnapshot & ApiError; if (!response.ok) { setError(body.error?.message ?? "수집을 시작하지 못했습니다."); return; }
@@ -56,18 +68,20 @@ export function CollectionControl({ enabled, presets, onWriteCompleted, onRunCha
   return <div className="collection-control" aria-busy={busy}>
     {error && <div className="collection-error" role="alert">{error}</div>}
     <section aria-labelledby="preset-heading"><div className="section-heading"><h2 id="preset-heading">1. 프리셋 선택</h2><span className="badge">수동 실행</span></div>
-      <div className="preset-grid" role="radiogroup" aria-label="수집 프리셋">{presets.map((item) => <button key={item.id} type="button" role="radio" aria-checked={item.id === preset.id}
+      <p className="profile-kind-label">기본 프리셋 · 변경하거나 삭제할 수 없는 템플릿</p><div className="preset-grid" role="radiogroup" aria-label="수집 프리셋">{presets.map((item) => <button key={item.id} type="button" role="radio" aria-checked={!selectedProfile && item.id === preset.id}
         className={`preset-card ${item.id === preset.id ? "selected" : ""}`} onClick={() => choosePreset(item)} disabled={busy}>
         <strong>{item.label}</strong><span className={`badge source-${item.source}`}>{item.source === "albamon" ? "알바몬" : "잡코리아"}</span>
         <span>{item.source === "albamon" ? "오늘 등록 · 목록 정보" : `키워드 ${item.keyword}`}</span><span>{item.regions.map((r) => r === "seoul" ? "서울" : "경기").join(" + ")}</span>
         <small>기본 {item.pages}페이지 · 후보 {item.maxDetails}건 · 수동 실행 · 재시도 0</small></button>)}</div>
     </section>
+    <SavedProfilesPanel enabled={enabled} busy={busy} presets={presets} seed={{ preset, pages, maxCandidates: maxDetails, exclusion }} selectedProfileId={selectedProfile?.id ?? null} onSelect={chooseProfile} />
     <section className="collection-panel" aria-labelledby="config-heading"><h2 id="config-heading">2. 실행 범위</h2><div className="limit-grid">
       <label>목록 페이지<input type="number" min="1" max={preset.pages} value={pages} disabled={busy} onChange={(e) => changeConfig("pages", Number(e.target.value))} /></label>
       <label>최대 후보 수<input type="number" min="1" max={preset.maxDetails} value={maxDetails} disabled={busy} onChange={(e) => changeConfig("details", Number(e.target.value))} /></label></div>
-      <dl className="resolved-config"><div><dt>소스</dt><dd>{preset.source === "albamon" ? "알바몬" : "잡코리아"}</dd></div><div><dt>프리셋</dt><dd>{preset.label}</dd></div><div><dt>지역</dt><dd>{preset.regions.map((r) => r === "seoul" ? "서울" : "경기").join(" + ")}</dd></div><div><dt>동시성</dt><dd>{preset.source === "albamon" ? "상세 요청 없음" : "2"}</dd></div><div><dt>재시도</dt><dd>0</dd></div></dl>
+      <dl className="resolved-config"><div><dt>소스</dt><dd>{preset.source === "albamon" ? "알바몬" : "잡코리아"}</dd></div><div><dt>{selectedProfile?"저장 프로필":"프리셋"}</dt><dd>{selectedProfile?.name??preset.label}{selectedProfile&&` · r${selectedProfile.revision}`}</dd></div><div><dt>지역</dt><dd>{(selectedProfile?.regions??preset.regions).map((r) => r === "seoul" ? "서울" : "경기").join(" + ")}</dd></div><div><dt>키워드·전략</dt><dd>{selectedProfile?.keyword??(preset.source==="jobkorea"?preset.keyword:"오늘 등록")}</dd></div><div><dt>동시성</dt><dd>{preset.source === "albamon" ? "상세 요청 없음" : "2"}</dd></div><div><dt>재시도</dt><dd>0</dd></div></dl>
       <ExclusionControls config={exclusion} input={keywordInput} error={exclusionError} disabled={busy} onInput={setKeywordInput} onAdd={addKeywords} onChange={changeExclusion} />
-      {!confirmingDryRun ? <button type="button" className="button primary collection-primary" disabled={busy || pages < 1 || pages > preset.pages || maxDetails < 1 || maxDetails > preset.maxDetails} onClick={() => setConfirmingDryRun(true)}>드라이런 실행</button>
+      {selectedProfile && profileHasOverrides && <div className="inline-confirm" role="status"><p>{profileExclusionMatches ? "페이지·후보 수 축소는 이번 실행에만 적용할 수 있습니다." : "제외 설정 변경은 실행 전에 프로필에 저장해야 합니다."}</p><button type="button" className="button soft" onClick={() => void saveRuntimeOverride()}>프로필에 저장</button></div>}
+      {!confirmingDryRun ? <button type="button" className="button primary collection-primary" disabled={busy || !profileExclusionMatches || pages < 1 || pages > preset.pages || maxDetails < 1 || maxDetails > preset.maxDetails} onClick={() => setConfirmingDryRun(true)}>드라이런 실행</button>
         : <div className="inline-confirm" role="group" aria-label="드라이런 확인"><p><strong>{preset.label}</strong> · {pages}페이지 · 후보 {maxDetails}건<br />데이터베이스 쓰기: 없음</p><button className="button primary" onClick={() => void start("dry_run")}>확인하고 실행</button><button className="button soft" onClick={() => setConfirmingDryRun(false)}>취소</button></div>}
     </section>
     {run && <RunProgress run={run} />}

@@ -197,6 +197,17 @@
 - collection 실행 controls와 mutation API의 localhost·feature flag·one-active-run·dry-run binding 보호를 유지한다.
 - dashboard 검증을 위해 live source collection이나 추가 transport run을 실행하지 않는다.
 
+### Saved collection profiles
+
+- 저장 프로필은 기존 승인된 JobKorea·Albamon source adapter와 불변 built-in preset만 참조하며 arbitrary URL, host, command, SQL, JavaScript, regex, cookie, credential 또는 환경 변수를 저장하지 않는다.
+- built-in preset은 immutable template이고 saved profile만 편집·복제·삭제·즐겨찾기할 수 있다.
+- profile 구성 update는 expected revision을 요구하고 active run은 시작 시 profile ID·name·revision·configuration hash의 immutable snapshot을 사용한다.
+- profile 구성 편집은 기존 dry-run write authorization을 무효화한다. favorite는 presentation metadata로 configuration hash와 revision을 바꾸지 않는다.
+- profile 삭제는 과거 ingestion run, ingestion item, job 또는 provenance를 삭제하지 않으며 write run의 profile snapshot은 profile 삭제 뒤에도 남는다.
+- profile CRUD와 조회 API는 localhost 및 `NEARBY_JOBS_ENABLE_COLLECTION_UI=1` 경계를 유지하고 parameterized SQLite query만 사용한다.
+- profile 검증·CRUD·dashboard 조회는 source transport를 실행하지 않는다. profile 구현 검증 중 live JobKorea·Albamon run을 만들지 않는다.
+- dry-run의 collection-data 무변경 의미를 유지하기 위해 profile `lastUsedAt`은 saved-profile write run 시작 때만 갱신한다.
+
 ## Validation Policy
 
 모든 변경은 다음 명령을 통과해야 한다.

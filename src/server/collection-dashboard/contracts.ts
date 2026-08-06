@@ -40,6 +40,7 @@ export interface CollectionRunSummary {
   failed: number;
   excluded: number | null;
   durationMs: number | null;
+  savedProfile?: { id: string; name: string; revision: number; configurationHash: string; deleted: boolean } | null;
 }
 
 export interface CollectionDashboardData {
@@ -89,6 +90,15 @@ export interface CollectionDashboardData {
     fields: Array<{ field: ExclusionField; uses: number }>;
   };
   recentRuns: CollectionRunSummary[];
+  profiles?: {
+    total: number;
+    jobkorea: number;
+    albamon: number;
+    favorites: number;
+    usedLast30Days: number;
+    mostRecentlyUsed: { id: string; name: string; source: "jobkorea" | "albamon"; lastUsedAt: string } | null;
+    recent: Array<{ id: string; name: string; source: "jobkorea" | "albamon"; isFavorite: boolean; lastUsedAt: string | null }>;
+  };
 }
 
 export interface CollectionRunDetail extends CollectionRunSummary {

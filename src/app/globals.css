@@ -245,3 +245,29 @@ input:disabled { cursor: not-allowed; background: #f4f6f8; color: #8a94a3; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+.profile-kind-label { color: #607269; font-size: .84rem; }
+.saved-profile-panel > .section-heading { align-items: flex-start; }
+.profile-toolbar { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin: 14px 0; }
+.profile-toolbar label { display: grid; gap: 5px; font-size: .82rem; font-weight: 700; }
+.profile-toolbar input, .profile-toolbar select, .profile-form-grid input { min-height: 40px; border: 1px solid var(--line); border-radius: 9px; padding: 8px; }
+.saved-profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+.saved-profile-card { min-width: 0; border: 1px solid var(--line); border-radius: 14px; padding: 15px; }
+.saved-profile-card.selected { border: 2px solid var(--blue); background: #f8fbff; }
+.saved-profile-card h3 { margin: 0; overflow-wrap: anywhere; }
+.favorite-toggle { border: 0; background: transparent; color: #986500; font-size: 1.4rem; }
+.profile-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.profile-editor { position: fixed; z-index: 100; inset: 5vh max(16px,calc((100vw - 760px)/2)); max-height: 90vh; overflow: auto; border: 1px solid var(--line); border-radius: 18px; background: white; padding: 22px; box-shadow: 0 20px 60px rgba(20,27,39,.24); }
+.profile-editor::before { content: ""; position: fixed; z-index: -1; inset: 0; background: rgba(20,27,39,.35); }
+.profile-form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.profile-form-grid label { display: grid; gap: 6px; }
+.profile-editor textarea { width: 100%; min-height: 90px; margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.recent-profile-list { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.recent-profile-list article { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 12px; padding: 13px; }
+@media (max-width: 520px) {
+  .saved-profile-grid, .profile-form-grid, .recent-profile-list { grid-template-columns: 1fr; }
+  .profile-editor { inset: 12px; padding: 16px; }
+  .profile-actions .button { flex: 1; }
+  .profile-toolbar { display: grid; }
+  .profile-toolbar label { width: 100%; }
+}

@@ -36,6 +36,8 @@ function summary(row: Row): CollectionRunSummary {
     selectedCandidates: nullableNumber(row.selected_candidates), inserted: n(row.inserted_count), updated: n(row.updated_count),
     unchanged: n(row.unchanged_count), skipped: n(row.skipped_count), failed: n(row.failed_count),
     excluded: nullableNumber(row.excluded_candidates), durationMs: completedAt ? Math.max(0, new Date(completedAt).getTime() - new Date(startedAt).getTime()) : null,
+    savedProfile: typeof row.saved_profile_id === "string" ? { id: String(row.saved_profile_id), name: String(row.saved_profile_name), revision: n(row.saved_profile_revision),
+      configurationHash: String(row.saved_profile_configuration_hash), deleted: n(row.profile_deleted) === 1 } : null,
   };
 }
 
@@ -43,6 +45,16 @@ export class CollectionDashboardRepository {
   constructor(private readonly database: Database.Database, private readonly now: () => Date = () => new Date()) {}
 
   getDashboard(filters: CollectionDashboardFilters): CollectionDashboardData {
+    const profileRow = this.database.prepare(`SELECT COUNT(*) total, SUM(source='jobkorea') jobkorea, SUM(source='albamon') albamon,
+      SUM(is_favorite=1) favorites, SUM(last_used_at >= ?) used_30 FROM saved_collection_profiles`).get(new Date(this.now().getTime() - 30 * 86_400_000).toISOString()) as Row;
+    const profileRows = this.database.prepare(`SELECT id,name,source,is_favorite,last_used_at FROM saved_collection_profiles
+      ORDER BY CASE WHEN last_used_at IS NULL THEN 1 ELSE 0 END, last_used_at DESC, updated_at DESC LIMIT 5`).all() as Row[];
+    const recentProfiles = profileRows.map((row) => ({ id: String(row.id), name: String(row.name), source: row.source === "albamon" ? "albamon" as const : "jobkorea" as const,
+      isFavorite: n(row.is_favorite) === 1, lastUsedAt: nullableString(row.last_used_at) }));
+    const mostRecentlyUsedRow = profileRows.find((row) => row.last_used_at);
+    const profiles = { total: n(profileRow.total), jobkorea: n(profileRow.jobkorea), albamon: n(profileRow.albamon), favorites: n(profileRow.favorites), usedLast30Days: n(profileRow.used_30),
+      mostRecentlyUsed: mostRecentlyUsedRow ? { id: String(mostRecentlyUsedRow.id), name: String(mostRecentlyUsedRow.name), source: mostRecentlyUsedRow.source === "albamon" ? "albamon" as const : "jobkorea" as const, lastUsedAt: String(mostRecentlyUsedRow.last_used_at) } : null,
+      recent: recentProfiles };
     const inventoryRow = this.database.prepare(`SELECT COUNT(*) total_jobs,
       SUM(source='jobkorea') jobkorea_jobs, SUM(source='albamon') albamon_jobs,
       SUM(provenance_kind='fixture_derived') fixture_records, SUM(is_fictional=1) fictional_records,
@@ -90,6 +102,7 @@ export class CollectionDashboardRepository {
 
     const where = runWhere(filters, this.now());
     const runRows = this.database.prepare(`SELECT r.*,
+      CASE WHEN r.saved_profile_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM saved_collection_profiles p WHERE p.id=r.saved_profile_id) THEN 1 ELSE 0 END profile_deleted,
       CASE WHEN r.exclusion_config_hash IS NULL THEN NULL ELSE r.excluded_candidate_count END excluded_candidates,
       CASE WHEN r.exclusion_config_hash IS NULL THEN NULL ELSE r.selected_candidate_count_after_exclusion END selected_after_exclusion,
       COALESCE((SELECT MAX(j.collection_preset_id) FROM ingestion_items i JOIN jobs j ON j.id=i.canonical_job_id WHERE i.ingestion_run_id=r.id), NULL) preset_id,
@@ -130,11 +143,12 @@ export class CollectionDashboardRepository {
       fields: [...fieldUses].map(([field, uses]) => ({ field, uses })).sort((a, b) => b.uses - a.uses || a.field.localeCompare(b.field)) };
 
     const recentRuns = runRows.slice(0, 20).map((row) => summary({ ...row, selected_candidates: row.selected_after_exclusion ?? row.selected_detail_count }));
-    return { generatedAt: this.now().toISOString(), filters, inventory, sources, regions, completenessBySource, mapCoverage, effectiveness, exclusions, recentRuns };
+    return { generatedAt: this.now().toISOString(), filters, inventory, sources, regions, completenessBySource, mapCoverage, effectiveness, exclusions, recentRuns, profiles };
   }
 
   getRunDetail(runId: string): CollectionRunDetail | null {
     const row = this.database.prepare(`SELECT r.*,
+      CASE WHEN r.saved_profile_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM saved_collection_profiles p WHERE p.id=r.saved_profile_id) THEN 1 ELSE 0 END profile_deleted,
       CASE WHEN r.exclusion_config_hash IS NULL THEN NULL ELSE r.excluded_candidate_count END excluded_candidates,
       CASE WHEN r.exclusion_config_hash IS NULL THEN NULL ELSE r.selected_candidate_count_after_exclusion END selected_after_exclusion,
       (SELECT MAX(j.collection_preset_id) FROM ingestion_items i JOIN jobs j ON j.id=i.canonical_job_id WHERE i.ingestion_run_id=r.id) preset_id,
