@@ -18,7 +18,7 @@ try {
     } else {
       $files=@(Get-ChildItem -LiteralPath $script:ProjectRoot -File -Recurse | ForEach-Object { Get-RelativeReleasePath $script:ProjectRoot $_.FullName })
     }
-    $exclude='^(?:node_modules|\.next|data|artifacts|coverage|test-results|playwright-report|blob-report|\.git)(/|$)|(?:\.sqlite3?|\.db(?:-wal|-shm)?|\.zip|\.log|\.env\.local)$'
+    $exclude='^(?:node_modules|\.next|data|artifacts|coverage|test-results|playwright-report|blob-report|\.git)(/|$)|(?:\.sqlite3?|\.db(?:-wal|-shm)?|\.zip|\.log|\.tsbuildinfo|\.env\.local)$'
     $included=@($files|Where-Object{$_ -notmatch $exclude -and ($_ -eq ".env.example" -or $_ -notmatch '(^|/)\.env(?:\.|$)')})
     foreach($file in $included){$destination=Join-Path $stage $file;$parent=Split-Path -Parent $destination;if($parent){New-Item $parent -ItemType Directory -Force|Out-Null};Copy-Item -LiteralPath (Join-Path $script:ProjectRoot $file) -Destination $destination}
     $manifest=[ordered]@{format="nearby-jobs-source-release";version=$Version;createdAt=(Get-Date).ToUniversalTime().ToString("o");application="NearbyJobsMap";kind="windows-source";fileCount=$included.Count;excludes=@("runtime databases","backups","exports","node_modules","build output","environment files","Git history")}
