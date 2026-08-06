@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { SortOption, UiJobRecord, UserOrigin } from "../../domain/ui-job";
 import type { JobUserState,JobUserStateInput } from "../../services/job-user-state";
+import type{JobFreshness}from"../../services/job-freshness";
 import { SORT_LABELS } from "../../services/job-display";
 import { JobCard } from "./JobCard";
 
@@ -12,6 +13,7 @@ interface JobListProps {
   origin: UserOrigin;
   sort: SortOption;
   userStates: Record<string, JobUserState>;
+  freshness?:Record<string,JobFreshness>|undefined;
   onSortChange(sort: SortOption): void;
   onSelect(jobId: string): void;
   onMapFocus(jobId: string): void;
@@ -44,6 +46,7 @@ export function JobList(props: JobListProps) {
         ) : props.records.map((record, index) => (
           <JobCard key={record.job.id} record={record} rank={index + 1} selected={props.selectedJobId === record.job.id} origin={props.origin}
             {...(props.userStates[record.job.id]?{userState:props.userStates[record.job.id]}:{})} onSelect={() => props.onSelect(record.job.id)} onMapFocus={() => props.onMapFocus(record.job.id)}
+            {...(props.freshness?.[record.job.id]?{freshness:props.freshness[record.job.id]}:{})}
             onUserStateChange={(state) => props.onUserStateChange(record.job.id,state)}
             cardRef={(node) => { if (node) refs.current.set(record.job.id, node); else refs.current.delete(record.job.id); }} />
         ))}

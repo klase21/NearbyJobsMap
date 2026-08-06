@@ -5,6 +5,7 @@ import { validateCanonicalJob } from "../job-validation";
 import { IngestionRunRepository } from "../repositories/ingestion-run-repository";
 import { JobRepository, JobRepositoryError } from "../repositories/job-repository";
 import type { IngestionDiagnostic, IngestionRecord, IngestionResult, IngestionSource, IngestionType, TransportRunCompletion } from "../schema";
+import { JobObservationRepository } from "../../server/job-observations/repository";
 
 export interface IngestionExecutionOptions {
   runId?: string;
@@ -23,10 +24,12 @@ function safeSource(value: unknown): JobSource {
 export class IngestionService {
   private readonly jobs: JobRepository;
   private readonly runs: IngestionRunRepository;
+  private readonly observations:JobObservationRepository;
 
   constructor(private readonly database: Database.Database) {
     this.jobs = new JobRepository(database);
     this.runs = new IngestionRunRepository(database);
+    this.observations=new JobObservationRepository(database);
   }
 
   ingest(records: IngestionRecord[], input: { source: IngestionSource; ingestionType: IngestionType }, options: IngestionExecutionOptions = {}): IngestionResult {
@@ -68,6 +71,7 @@ export class IngestionService {
         try {
           const upsert = this.jobs.upsert(record.job, record.metadata);
           result[upsert.action] += 1;
+          if(upsert.action!=="skipped")this.observations.observe({jobId:upsert.jobId,runId,job:record.job,contentHash:upsert.contentHash,completeness:record.metadata.observationKind==="bounded_manual_collection"?"detail_complete":record.metadata.observationKind==="bounded_listing_collection"?"listing_only":"unknown",observedAt:record.metadata.observedAt??record.job.lastVerifiedAt});
           this.runs.recordItem({ runId, source, sourcePostingId, canonicalJobId: upsert.jobId, result: upsert.action, diagnosticCodes: [], contentHash: upsert.contentHash });
         } catch (error) {
           result.failed += 1;

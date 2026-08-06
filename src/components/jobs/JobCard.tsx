@@ -4,6 +4,7 @@ import type { UiJobRecord, UserOrigin,UserJobStatus } from "../../domain/ui-job"
 import { haversineDistanceKm } from "../../services/distance";
 import { formatDate, formatWon, LOCATION_LABELS, POSTING_STATUS_LABELS, SALARY_CONFIDENCE_LABELS, SOURCE_LABELS,USER_STATUS_LABELS } from "../../services/job-display";
 import { defaultJobUserState,JOB_WORKFLOW_LABELS,type JobUserState,type JobUserStateInput } from "../../services/job-user-state";
+import{freshnessLabel,type JobFreshness}from"../../services/job-freshness";
 import { useEffect,useMemo,useState } from "react";
 import { getJobDataLabel, getMapPositions, isMapEligible } from "../../services/job-search";
 
@@ -14,6 +15,7 @@ interface JobCardProps {
   origin: UserOrigin;
   userState?: JobUserState|undefined;
   userStatus?:UserJobStatus|undefined;
+  freshness?:JobFreshness|undefined;
   onSelect(): void;
   onMapFocus(): void;
   onUserStateChange?(state:JobUserStateInput):void;
@@ -23,7 +25,7 @@ interface JobCardProps {
 
 const isExact = (record: UiJobRecord) => record.job.locationAccuracy === "exact_coordinate" || record.job.locationAccuracy === "exact_address";
 
-export function JobCard({ record, rank, selected, origin, userState, userStatus, onSelect, onMapFocus, onUserStateChange=()=>{},onUserStatusChange, cardRef }: JobCardProps) {
+export function JobCard({ record, rank, selected, origin, userState, userStatus,freshness, onSelect, onMapFocus, onUserStateChange=()=>{},onUserStatusChange, cardRef }: JobCardProps) {
   const { job } = record;
   const state=useMemo(()=>userState??defaultJobUserState(job.id),[userState,job.id]);const[draft,setDraft]=useState(state);useEffect(()=>setDraft(state),[state]);
   const input=(next:JobUserState):JobUserStateInput=>({isFavorite:next.isFavorite,workflowStatus:next.workflowStatus,isHidden:next.isHidden,isArchived:next.isArchived,note:next.note,applicationDate:next.applicationDate,followUpAt:next.followUpAt,personalDeadline:next.personalDeadline,expectedUpdatedAt:state.updatedAt||null});
@@ -46,6 +48,7 @@ export function JobCard({ record, rank, selected, origin, userState, userStatus,
         <span className={`source-badge source-${job.source}`}>{SOURCE_LABELS[job.source as keyof typeof SOURCE_LABELS]}</span>
       </div>
       <div className="job-badges">
+        {freshness&&<span className="badge">{freshness.changedSincePrevious?"변경됨":freshness.observationCount===1?"신규":freshnessLabel(freshness.daysSinceLastSeen)}</span>}
         <span className={`badge ${record.isFictional ? "demo" : ""}`}>{getJobDataLabel(record)}</span>
         {record.observationKind === "bounded_listing_collection" && <span className="badge">목록 정보</span>}
         {record.observationKind === "bounded_manual_collection" && <span className="badge exact">상세 확인</span>}

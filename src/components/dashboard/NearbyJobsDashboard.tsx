@@ -11,6 +11,7 @@ import { MapPanel } from "../map/MapPanel";
 import { SummaryStrip } from "../summary/SummaryStrip";
 import { FirstRunOnboarding } from "../onboarding/FirstRunOnboarding";
 import { defaultJobUserState,type JobUserState,type JobUserStateInput,type JobWorkflowStatus } from "../../services/job-user-state";
+import type{JobFreshness}from"../../services/job-freshness";
 
 interface NearbyJobsDashboardProps { initialJobs: UiJobRecord[]; dataError?: string; dataWarning?: string | undefined }
 const REFERENCE_NOW = new Date("2026-08-05T12:00:00+09:00");
@@ -32,6 +33,7 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
   const [helpOpen,setHelpOpen]=useState(false);
   const [jobStates,setJobStates]=useState<Record<string,JobUserState>>({});
   const [workspaceView,setWorkspaceView]=useState<"all"|"favorite"|JobWorkflowStatus|"archived"|"hidden">("all");
+  const[freshness,setFreshness]=useState<Record<string,JobFreshness>>({});
   const hasOneShotObservation = initialJobs.some(({ provenanceKind }) => provenanceKind === "live_one_shot_observation");
   const listPanelRef = useRef<HTMLElement>(null);
   const mapSlotRef = useRef<HTMLDivElement>(null);
@@ -43,6 +45,7 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
     setHydrated(true);
   }, []);
   useEffect(()=>{void fetch("/api/job-user-state",{cache:"no-store"}).then(async r=>r.ok?(await r.json()).states:[]).then((states:JobUserState[])=>setJobStates(Object.fromEntries(states.map(s=>[s.jobId,s])))).catch(()=>{});},[]);
+  useEffect(()=>{void fetch("/api/job-observations",{cache:"no-store"}).then(async r=>r.ok?(await r.json()).freshness:[]).then((rows:JobFreshness[])=>setFreshness(Object.fromEntries(rows.map(row=>[row.jobId,row])))).catch(()=>{});},[]);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 900px)");
@@ -134,7 +137,7 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
         : initialJobs.length === 0 ? <div className="state-panel"><h2>불러온 공고가 없습니다</h2><p>sanitized fixture와 demo provider를 확인해 주세요.</p></div>
         : <div className={`dashboard-body ${mapVisible ? "" : "map-hidden"}`}>
           <section ref={listPanelRef} className={`list-panel ${mobileView === "map" ? "mobile-hidden" : ""}`} aria-label="통합 공고 목록 패널">
-            <JobList records={sorted} selectedJobId={selectedJobId} origin={origin} sort={sort} userStates={jobStates}
+            <JobList records={sorted} selectedJobId={selectedJobId} origin={origin} sort={sort} userStates={jobStates} freshness={freshness}
               onSortChange={setSort} onSelect={setSelectedJobId} onMapFocus={focusMapJob}
               onUserStateChange={(jobId,state)=>void updateJobState(jobId,state)}
               onResetFilters={() => setFilters({ ...DEFAULT_FILTERS, salaryThresholds: { ...DEFAULT_FILTERS.salaryThresholds } })} />
