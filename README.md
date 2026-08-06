@@ -143,6 +143,10 @@ docs/                Public installation, troubleshooting, and architecture guid
 
 Collection execution stays disabled unless `-EnableCollectionUI` is explicitly supplied.
 
+Chromium is needed only for browser-backed manual collection. If its download is unavailable, use `install.ps1 -SkipBrowserInstall`; the list, dashboard, profiles, workflow, and local database remain usable. Repair it later with `.\scripts\install-browser.ps1` and check readiness with `.\scripts\doctor.ps1`.
+
+For a GitHub issue, `.\scripts\support-bundle.ps1` can create a bounded diagnostic ZIP. Inspect it before sharing: it excludes databases, job and personal data, environment values, credentials, and local absolute paths, but does not guarantee anonymity.
+
 Manual npm setup remains available:
 
 ```powershell

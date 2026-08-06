@@ -101,6 +101,33 @@ npm.cmd run release:audit
 
 See [Troubleshooting](TROUBLESHOOTING.md) for common failures.
 
+## Playwright Chromium
+
+Chromium is required only for browser-backed manual collection. Installation reports the phase, bounded command, elapsed time, and result. The timeout defaults to 10 minutes and accepts 1–30 minutes:
+
+```powershell
+.\scripts\install.ps1 -BrowserInstallTimeoutMinutes 15
+```
+
+On browser-download failure, the default install continues so non-collection features remain usable. `-RequireBrowserInstall` makes failure blocking; `-SkipBrowserInstall` intentionally defers it. Repair or verify later:
+
+```powershell
+.\scripts\install-browser.ps1 -TimeoutMinutes 10
+.\scripts\install-browser.ps1 -CheckOnly
+.\scripts\doctor.ps1 -RequireCollectionReady
+```
+
+The timeout terminates only the Playwright installer process tree started by the script and never enables collection automatically.
+
+## Support bundle
+
+```powershell
+.\scripts\support-bundle.ps1
+npm.cmd run support:audit -- --file "artifacts\support\NearbyJobsMap-support-YYYYMMDD-HHmmss.zip"
+```
+
+The bundle contains versions, aggregate counts, bounded doctor/status results, boolean feature state, and hashes. It excludes database files, job/company/posting data, notes, profile names and keywords, environment values, credentials, browser state, screenshots, and backups. Inspect it before manually sharing.
+
 ## Uninstall
 
 1. Run `.\scripts\stop.ps1`.

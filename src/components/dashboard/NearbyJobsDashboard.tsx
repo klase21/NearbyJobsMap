@@ -13,11 +13,12 @@ import { FirstRunOnboarding } from "../onboarding/FirstRunOnboarding";
 import { defaultJobUserState,type JobUserState,type JobUserStateInput,type JobWorkflowStatus } from "../../services/job-user-state";
 import type{JobFreshness}from"../../services/job-freshness";
 import {SavedViewsBar} from "../saved-views/SavedViewsBar";
+import type { LocalReadiness } from "../../services/local-readiness";
 
-interface NearbyJobsDashboardProps { initialJobs: UiJobRecord[]; dataError?: string; dataWarning?: string | undefined }
+interface NearbyJobsDashboardProps { initialJobs: UiJobRecord[]; readiness?: LocalReadiness; dataError?: string; dataWarning?: string | undefined }
 const REFERENCE_NOW = new Date("2026-08-05T12:00:00+09:00");
 
-export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: NearbyJobsDashboardProps) {
+export function NearbyJobsDashboard({ initialJobs, readiness = {version:"0.1.1",databaseReady:true,migrationsReady:true,chromiumReady:false,collectionUiEnabled:false,localhostSafe:true,latestBackupAvailable:false}, dataError, dataWarning }: NearbyJobsDashboardProps) {
   const [filters, setFilters] = useState<JobFilterState>(DEFAULT_PREFERENCES.filters);
   const [sort, setSort] = useState<SortOption>(DEFAULT_PREFERENCES.sort);
   const [mapVisible, setMapVisible] = useState(DEFAULT_PREFERENCES.mapVisible);
@@ -117,7 +118,7 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
     <main className="app-shell">
       <AppHeader filters={filters} mapVisible={mapVisible} onFiltersChange={setFilters} onToggleFilters={() => setFiltersOpen(true)}
         onToggleMap={toggleMap} availableSources={availableSources} activeFilterCount={countActiveFilters(filters)} onOpenHelp={()=>setHelpOpen(true)} />
-      <FirstRunOnboarding forceOpen={helpOpen} onClose={()=>setHelpOpen(false)} />
+      <FirstRunOnboarding readiness={readiness} forceOpen={helpOpen} onClose={()=>setHelpOpen(false)} />
       <div className="notice-strip">
         <span><strong>{hasOneShotObservation ? "로컬 검증 데이터" : "fixture/demo 모드"}</strong> · {hasOneShotObservation ? "공개 페이지를 제한적으로 1회 확인한 데이터가 포함됩니다. 공식 제휴나 지속적인 실시간 연동이 아니며 원문을 최종 기준으로 확인하세요." : "실시간 수집 없이 정제 fixture와 가상 공고만 표시합니다."}</span>
         <span className="privacy-note">입력한 출발지와 화면 설정은 기본적으로 이 브라우저에만 저장됩니다. 브라우저 저장공간을 지우면 설정이 삭제될 수 있습니다.</span>

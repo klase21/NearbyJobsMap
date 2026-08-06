@@ -298,3 +298,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Backup files and manifests stay in ignored `data/backups`. Restore requires integrity/hash verification, exact `RESTORE DATABASE` confirmation, active-run rejection, and a pre-restore backup. Automated restore tests use temporary databases only.
 - Local feature validation must not contact JobKorea or Albamon and must not start a collection dry-run or write run.
 - The `수집 관리` navigation control remains 42px high, inline-flex, vertically and horizontally centered with controlled line-height; never align it with negative offsets or transforms.
+
+## First-user hardening protection
+
+- Support bundles contain bounded system metadata and aggregate counts only; exclude job/company/posting data, personal workflow state, profile names, exclusion keywords, source payloads, and browser state.
+- Never include environment values. Redact project, user-home, and temporary paths before diagnostic text can be shared.
+- Support bundle upload and issue submission remain manual; do not add telemetry, analytics, automatic upload, or automatic issue creation.
+- Browser-install timeouts terminate only the Playwright installer process tree they started; never broadly terminate Node processes.
+- The app remains usable without Chromium, while collection readiness is reported honestly. Diagnostic checks never contact source hosts or start collection.
+- v0.1.1 remains unreleased until owner review; hardening validation must not create a tag or release.

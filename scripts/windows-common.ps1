@@ -10,6 +10,16 @@ function Write-Pass([string]$Message) { Write-Host "PASS  $Message" -ForegroundC
 function Write-Warn([string]$Message) { Write-Host "WARN  $Message" -ForegroundColor Yellow }
 function Write-Fail([string]$Message) { Write-Host "FAIL  $Message" -ForegroundColor Red }
 
+function Protect-LocalText([string]$Text) {
+  if ([string]::IsNullOrEmpty($Text)) { return $Text }
+  $protected = $Text.Replace($script:ProjectRoot, "<PROJECT_ROOT>")
+  $userHome = [Environment]::GetFolderPath("UserProfile")
+  if (-not [string]::IsNullOrWhiteSpace($userHome)) { $protected = $protected.Replace($userHome, "<USER_HOME>") }
+  $temp = [IO.Path]::GetTempPath().TrimEnd('\')
+  if (-not [string]::IsNullOrWhiteSpace($temp)) { $protected = $protected.Replace($temp, "<TEMP>") }
+  return $protected
+}
+
 function Enter-ProjectRoot { Set-Location -LiteralPath $script:ProjectRoot }
 
 function Normalize-ProcessEnvironment {

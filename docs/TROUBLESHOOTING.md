@@ -76,6 +76,18 @@ Run `.\scripts\status.ps1` or `.\scripts\stop.ps1`. They remove stale runtime me
 
 Use `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\doctor.ps1` for one process. Do not permanently weaken system policy.
 
+## Chromium installation appears stuck
+
+The installer reports progress and stops only its own Playwright installation process tree after the configured timeout. A proxy, firewall, or slow network may prevent the official download; do not bypass organizational controls. Retry `.\scripts\install-browser.ps1`, or use `-SkipBrowserInstall` for non-collection usage. Use `-RequireBrowserInstall` only when collection readiness is mandatory.
+
+## Collection features unavailable
+
+Run `.\scripts\doctor.ps1`, confirm Chromium can launch, explicitly enable the collection UI, and use a loopback host. No login, cookie, CAPTCHA, or access-control bypass is provided. Non-collection features remain usable without Chromium.
+
+## Creating a support bundle
+
+Run `.\scripts\support-bundle.ps1`, audit the ZIP, and inspect every file. Attach it only when comfortable. Never attach the runtime DB, `.env`, cookies, credentials, raw source HTML, personal notes, or unsanitized screenshots. Nothing is uploaded automatically.
+
 ## Build or test failure
 
 Run commands individually and review the first error:

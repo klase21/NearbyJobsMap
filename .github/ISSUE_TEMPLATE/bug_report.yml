@@ -28,6 +28,25 @@ body:
       placeholder: .\scripts\start.ps1
     validations:
       required: true
+  - type: dropdown
+    id: install_mode
+    attributes:
+      label: Installation mode
+      options: ["Standard", "-SkipBrowserInstall", "-RequireBrowserInstall", "Manual npm commands", "Unknown"]
+    validations:
+      required: true
+  - type: dropdown
+    id: chromium
+    attributes:
+      label: Is Playwright Chromium installed?
+      options: ["Yes", "No", "Unknown"]
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Sanitized doctor summary
+      description: Paste PASS/WARN/FAIL labels only. A support bundle is optional; inspect it before attaching.
   - type: textarea
     id: expected
     attributes:
@@ -51,5 +70,12 @@ body:
     attributes:
       label: Was source collection explicitly enabled?
       options: ["No", "Yes", "Not sure"]
+    validations:
+      required: true
+  - type: dropdown
+    id: support_bundle
+    attributes:
+      label: Did you inspect and attach a support bundle?
+      options: ["No", "Yes", "Not applicable"]
     validations:
       required: true

@@ -4,9 +4,12 @@ param(
   [switch]$SkipValidation,
   [switch]$FreshDatabase,
   [switch]$SeedDemoData,
+  [ValidateRange(1, 30)][int]$BrowserInstallTimeoutMinutes = 10,
+  [switch]$RequireBrowserInstall,
   [string]$ResetConfirmation = ""
 )
 . (Join-Path $PSScriptRoot "windows-common.ps1")
+. (Join-Path $PSScriptRoot "playwright-browser.ps1")
 Enter-ProjectRoot
 try {
   $node = Assert-NodeVersion
@@ -22,8 +25,20 @@ try {
     Invoke-Npm @("run", "db:reset", "--", "--confirm", "--migrate")
   } else { Invoke-Npm @("run", "db:migrate") }
   if ($SeedDemoData) { Invoke-Npm @("run", "setup:local") }
-  if (-not $SkipBrowserInstall) { Write-Step "Playwright Chromium을 설치합니다."; & npx.cmd playwright install chromium; if ($LASTEXITCODE -ne 0) { throw "Chromium 설치 실패" } }
+  $browserReady = $false
+  if ($SkipBrowserInstall) {
+    Write-Warn "Chromium 설치를 건너뛰었습니다. 공고 목록과 로컬 작업 공간은 사용할 수 있지만 브라우저 수집 기능은 준비되지 않을 수 있습니다."
+  } else {
+    $browserResult = Invoke-PlaywrightChromiumInstall -TimeoutMinutes $BrowserInstallTimeoutMinutes
+    $browserReady = $browserResult.Succeeded -and (Test-PlaywrightChromiumLaunch)
+    if (-not $browserReady) {
+      $recovery = ".\scripts\install-browser.ps1 -TimeoutMinutes $BrowserInstallTimeoutMinutes"
+      if ($RequireBrowserInstall) { throw "Chromium 설치 또는 실행 확인에 실패했습니다. 복구 명령: $recovery" }
+      Write-Warn "Chromium 설치가 완료되지 않았습니다. 비수집 기능 설치는 계속됩니다. 복구 명령: $recovery"
+    }
+  }
   Invoke-Npm @("run", "db:status")
   if (-not $SkipValidation) { Invoke-Npm @("run", "typecheck") }
+  if ($browserReady) { Write-Pass "Chromium 수집 준비를 확인했습니다." }
   Write-Pass "설치가 완료되었습니다. 다음 명령: .\scripts\start.ps1"
 } catch { Write-Fail $_.Exception.Message; exit 1 }

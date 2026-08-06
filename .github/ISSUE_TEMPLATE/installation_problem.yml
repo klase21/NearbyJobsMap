@@ -1,0 +1,47 @@
+name: Windows installation problem
+description: Report a reproducible first-run or Chromium setup failure without private data.
+title: "[Install] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Run `./scripts/doctor.ps1` when possible. Support bundles are optional and must be inspected before sharing. Never attach databases, .env files, credentials, raw source HTML, personal notes, or private screenshots.
+  - type: input
+    id: windows
+    attributes: { label: Windows version, placeholder: "Windows 11 24H2" }
+    validations: { required: true }
+  - type: input
+    id: powershell
+    attributes: { label: PowerShell version, placeholder: "5.1 or 7.x" }
+    validations: { required: true }
+  - type: input
+    id: node
+    attributes: { label: Node.js version, placeholder: "22.x" }
+    validations: { required: true }
+  - type: input
+    id: command
+    attributes: { label: Exact install command used }
+    validations: { required: true }
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Failure phase
+      options: ["Prerequisite check", "npm dependencies", "database migrations", "Chromium installation", "validation", "start", "unknown"]
+    validations: { required: true }
+  - type: dropdown
+    id: collection_needed
+    attributes:
+      label: Do you need browser-backed collection now?
+      options: ["No", "Yes", "Not sure"]
+    validations: { required: true }
+  - type: textarea
+    id: doctor
+    attributes: { label: Sanitized doctor summary }
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized error lines
+      description: Remove usernames, absolute paths, environment values, credentials, cookies, personal data, and source HTML.
+      render: text
+    validations: { required: true }
