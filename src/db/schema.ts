@@ -4,11 +4,11 @@ import type { JobSource } from "../domain/job-source";
 import type { DataProvenanceKind, PermissionStatus } from "../domain/data-provenance";
 import type { CollectionRegion, NormalizedRegion, RegionNormalizationConfidence } from "../services/region-normalizer";
 
-export const REQUIRED_MIGRATION_VERSION = "0004";
+export const REQUIRED_MIGRATION_VERSION = "0005";
 
 export type RecordKind = DataProvenanceKind;
 export type EvidenceType = "observed_html" | "observed_json_ld" | "observed_internal_json" | "fictional_demo" | "public_page_observation";
-export type IngestionType = "sanitized_fixture" | "fictional_demo_seed" | "jobkorea_one_shot_transport";
+export type IngestionType = "sanitized_fixture" | "fictional_demo_seed" | "jobkorea_one_shot_transport" | "albamon_listing_collection";
 export type IngestionSource = "jobkorea" | "albamon" | "mixed" | "local_demo";
 export type IngestionItemResult = "inserted" | "updated" | "unchanged" | "skipped" | "failed";
 
@@ -33,7 +33,7 @@ export interface IngestionMetadata {
   requestedRegions?: CollectionRegion[];
   normalizedRegions?: NormalizedRegion[];
   regionConfidence?: RegionNormalizationConfidence;
-  detailAccessStatus?: "available" | "access_blocked" | "unavailable" | null;
+  detailAccessStatus?: "available" | "access_blocked" | "unavailable" | "not_attempted" | null;
   observedLinkCount?: number | null;
 }
 

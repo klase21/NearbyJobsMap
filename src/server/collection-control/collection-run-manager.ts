@@ -2,8 +2,11 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { getDatabasePath, openReadonlyDatabase, openWritableDatabase } from "../../db/connection";
 import { collectJobKoreaOnce } from "../../sources/jobkorea/collection/jobkorea-collection-service";
-import { buildJobKoreaKeywordSearchUrl, getJobKoreaCollectionPreset, type JobKoreaCollectionPreset } from "../../sources/jobkorea/collection/jobkorea-collection-presets";
+import { buildJobKoreaKeywordSearchUrl } from "../../sources/jobkorea/collection/jobkorea-collection-presets";
 import type { JobKoreaCollectionDependencies, JobKoreaCollectionProgress } from "../../sources/jobkorea/collection/jobkorea-collection-types";
+import { collectAlbamonOnce } from "../../sources/albamon/collection/albamon-collection-service";
+import type { AlbamonCollectionDependencies } from "../../sources/albamon/collection/albamon-collection-types";
+import { getCollectionPreset, type CollectionPreset } from "../../sources/collection/collection-presets";
 import type { CollectionControlConfig, CollectionControlMode, CollectionRunSnapshot } from "./contracts";
 
 const WRITE_AUTH_TTL_MS = 30 * 60_000;
@@ -11,22 +14,22 @@ const MAX_RETAINED_RUNS = 20;
 
 interface WriteAuthorization { token: string; configKey: string; dryRunId: string; expiresAt: number; used: boolean }
 interface StartRequest extends CollectionControlConfig { mode: CollectionControlMode; writeAuthorizationToken?: string; confirmationPhrase?: string }
-export interface CollectionRunManagerDependencies { runCollection?: typeof collectJobKoreaOnce; openReadonly?: typeof openReadonlyDatabase; openWritable?: typeof openWritableDatabase; now?: () => Date; collectionDependencies?: Partial<JobKoreaCollectionDependencies> }
+export interface CollectionRunManagerDependencies { runCollection?: typeof collectJobKoreaOnce; runAlbamonCollection?: typeof collectAlbamonOnce; openReadonly?: typeof openReadonlyDatabase; openWritable?: typeof openWritableDatabase; now?: () => Date; collectionDependencies?: Partial<JobKoreaCollectionDependencies>; albamonDependencies?: Partial<AlbamonCollectionDependencies> }
 
 const initialProgress = (pages: number): JobKoreaCollectionProgress => ({ status: "preparing", message: "수집 준비 중", listingPagesRequested: pages,
   listingPagesCompleted: 0, numericLinksExtracted: 0, uniquePostingIds: 0, regionMatchingCandidates: 0, selectedCandidates: 0,
   detailAttemptsCompleted: 0, detailAttemptsTotal: 0, successfulDetailParses: 0, listingFallbacks: 0, failedRecords: 0,
   predictedInserts: 0, predictedUpdates: 0, predictedUnchanged: 0, actualInserts: 0, actualUpdates: 0, actualUnchanged: 0, lowerCompletenessSkips: 0 });
 
-function configuration(presetId: string, pages: number, maxDetails: number): { preset: JobKoreaCollectionPreset; config: CollectionControlConfig } {
-  const preset = getJobKoreaCollectionPreset(presetId);
+function configuration(presetId: string, pages: number, maxDetails: number): { preset: CollectionPreset; config: CollectionControlConfig } {
+  const preset = getCollectionPreset(presetId);
   if (!preset) throw Object.assign(new Error("알 수 없는 수집 프리셋입니다."), { code: "COLLECTION_PRESET_INVALID", status: 400 });
   if (!Number.isInteger(pages) || pages < 1 || pages > preset.pages || pages > 5) throw Object.assign(new Error("페이지 수가 프리셋 한도를 벗어났습니다."), { code: "COLLECTION_PAGES_INVALID", status: 400 });
   if (!Number.isInteger(maxDetails) || maxDetails < 1 || maxDetails > preset.maxDetails || maxDetails > 50) throw Object.assign(new Error("후보 수가 프리셋 한도를 벗어났습니다."), { code: "COLLECTION_MAX_DETAILS_INVALID", status: 400 });
   return { preset, config: { presetId: preset.id, pages, maxDetails } };
 }
 
-const configKey = (config: CollectionControlConfig): string => `${config.presetId}:${config.pages}:${config.maxDetails}`;
+const configKey = (config: CollectionControlConfig): string => `${getCollectionPreset(config.presetId)?.source ?? "unknown"}:${config.presetId}:${config.pages}:${config.maxDetails}`;
 const safeError = (error: unknown) => ({ code: error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : "COLLECTION_RUN_FAILED",
   message: error instanceof Error ? error.message.slice(0, 500) : "수집 실행에 실패했습니다." });
 
@@ -42,7 +45,7 @@ export class CollectionRunManager {
     if (input.mode !== "dry_run" && input.mode !== "write") throw Object.assign(new Error("올바른 실행 모드가 아닙니다."), { code: "COLLECTION_MODE_INVALID", status: 400 });
     if (input.mode === "write") this.consumeWriteAuthorization(input, config);
     const now = (this.dependencies.now ?? (() => new Date()))(); const runId = randomUUID(); const progress = initialProgress(config.pages);
-    const snapshot: CollectionRunSnapshot = { ...progress, runId, mode: input.mode, presetId: preset.id, presetLabel: preset.label,
+    const snapshot: CollectionRunSnapshot = { ...progress, runId, mode: input.mode, presetId: preset.id, presetLabel: preset.label, source: preset.source,
       maxDetailsRequested: config.maxDetails, startedAt: now.toISOString(), updatedAt: now.toISOString(), elapsedMs: 0, result: null, error: null,
       writeAuthorizationToken: null, writeAuthorizationExpiresAt: null };
     this.runs.set(runId, snapshot); this.activeId = runId; this.trim(); void this.execute(runId, preset, config, input.mode); return { ...snapshot };
@@ -60,16 +63,20 @@ export class CollectionRunManager {
     auth.used = true;
   }
 
-  private async execute(runId: string, preset: JobKoreaCollectionPreset, config: CollectionControlConfig, mode: CollectionControlMode): Promise<void> {
+  private async execute(runId: string, preset: CollectionPreset, config: CollectionControlConfig, mode: CollectionControlMode): Promise<void> {
     const started = (this.dependencies.now ?? (() => new Date()))().getTime();
     const open = mode === "write" ? (this.dependencies.openWritable ?? openWritableDatabase) : (this.dependencies.openReadonly ?? openReadonlyDatabase);
     let database: ReturnType<typeof openReadonlyDatabase> | null = null;
     try {
       database = open(getDatabasePath());
-      const result = await (this.dependencies.runCollection ?? collectJobKoreaOnce)({ searchUrl: buildJobKoreaKeywordSearchUrl(preset.keyword), pages: config.pages as 1|2|3|4|5,
-        maxDetails: config.maxDetails, mode: mode === "write" ? "write" : "dry-run", confirm: true, allowListingFallback: preset.allowListingFallback,
-        presetId: preset.id, presetLabel: preset.label, keyword: preset.keyword, requestedRegions: preset.regions }, { ...this.dependencies.collectionDependencies, database,
-        onProgress: (progress) => { this.update(runId, progress, started); try { this.dependencies.collectionDependencies?.onProgress?.(progress); } catch { return; } } });
+      const onProgress = (progress: JobKoreaCollectionProgress) => { this.update(runId, progress, started); try { this.dependencies.collectionDependencies?.onProgress?.(progress); } catch { return; } };
+      const result = preset.source === "jobkorea"
+        ? await (this.dependencies.runCollection ?? collectJobKoreaOnce)({ searchUrl: buildJobKoreaKeywordSearchUrl(preset.keyword), pages: config.pages as 1|2|3|4|5,
+          maxDetails: config.maxDetails, mode: mode === "write" ? "write" : "dry-run", confirm: true, allowListingFallback: preset.allowListingFallback,
+          presetId: preset.id, presetLabel: preset.label, keyword: preset.keyword, requestedRegions: preset.regions }, { ...this.dependencies.collectionDependencies, database, onProgress })
+        : await (this.dependencies.runAlbamonCollection ?? collectAlbamonOnce)({ presetId: preset.id, presetLabel: preset.label,
+          pages: config.pages as 1|2|3|4|5, maxDetails: config.maxDetails, mode: mode === "write" ? "write" : "dry-run", confirm: true,
+          requestedRegions: preset.regions }, { ...this.dependencies.albamonDependencies, database, onProgress });
       const current = this.runs.get(runId)!; current.result = result; current.status = "completed"; current.message = "수집 완료";
       if (mode === "dry_run" && result.successfullyParsed + result.listingOnlyRecords > 0) {
         const token = randomUUID(); const expiresAt = (this.dependencies.now ?? (() => new Date()))().getTime() + WRITE_AUTH_TTL_MS;

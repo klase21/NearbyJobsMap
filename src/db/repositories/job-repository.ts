@@ -282,8 +282,8 @@ export class JobRepository {
     const normalizedRegions = stringArray<NormalizedRegion>(row, "normalized_regions_json", new Set(["seoul", "gyeonggi", "incheon", "other"]));
     const regionConfidence = requiredString(row, "region_normalization_confidence") as RegionNormalizationConfidence;
     if (!["exact", "mapped_city", "multiple", "unknown"].includes(regionConfidence)) throw new JobRepositoryError("INVALID_DATABASE_ROW", "region normalization confidence가 유효하지 않습니다.");
-    const detailAccessStatus = nullableString(row, "detail_access_status") as "available" | "access_blocked" | "unavailable" | null;
-    if (detailAccessStatus !== null && !["available", "access_blocked", "unavailable"].includes(detailAccessStatus)) throw new JobRepositoryError("INVALID_DATABASE_ROW", "detail access status가 유효하지 않습니다.");
+    const detailAccessStatus = nullableString(row, "detail_access_status") as "available" | "access_blocked" | "unavailable" | "not_attempted" | null;
+    if (detailAccessStatus !== null && !["available", "access_blocked", "unavailable", "not_attempted"].includes(detailAccessStatus)) throw new JobRepositoryError("INVALID_DATABASE_ROW", "detail access status가 유효하지 않습니다.");
     const job: CanonicalJob = {
       id, source, sourcePostingId: requiredString(row, "source_posting_id"), sourceUrl: requiredString(row, "source_url"), canonicalUrl: nullableString(row, "canonical_url"),
       title: requiredString(row, "title"), companyName: requiredString(row, "company_name"), normalizedCompanyName: nullableString(row, "normalized_company_name"),

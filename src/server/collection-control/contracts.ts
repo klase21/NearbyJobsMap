@@ -1,11 +1,12 @@
 import type { JobKoreaCollectionProgress, JobKoreaCollectionResult } from "../../sources/jobkorea/collection/jobkorea-collection-types";
-import type { JobKoreaCollectionPreset } from "../../sources/jobkorea/collection/jobkorea-collection-presets";
+import type { AlbamonCollectionResult } from "../../sources/albamon/collection/albamon-collection-types";
+import type { CollectionPreset } from "../../sources/collection/collection-presets";
 
 export type CollectionControlMode = "dry_run" | "write";
 export type CollectionRunStatus = JobKoreaCollectionProgress["status"] | "failed";
 
 export interface CollectionControlConfig {
-  presetId: JobKoreaCollectionPreset["id"];
+  presetId: CollectionPreset["id"];
   pages: number;
   maxDetails: number;
 }
@@ -14,13 +15,14 @@ export type CollectionRunSnapshot = Omit<JobKoreaCollectionProgress, "status"> &
   status: CollectionRunStatus;
   runId: string;
   mode: CollectionControlMode;
-  presetId: JobKoreaCollectionPreset["id"];
+  presetId: CollectionPreset["id"];
+  source: "jobkorea" | "albamon";
   presetLabel: string;
   maxDetailsRequested: number;
   startedAt: string;
   updatedAt: string;
   elapsedMs: number;
-  result: JobKoreaCollectionResult | null;
+  result: JobKoreaCollectionResult | AlbamonCollectionResult | null;
   error: { code: string; message: string } | null;
   writeAuthorizationToken: string | null;
   writeAuthorizationExpiresAt: string | null;
@@ -32,6 +34,7 @@ export interface RecentCollectionRun {
   completedAt: string | null;
   presetId: string | null;
   presetLabel: string;
+  source: "jobkorea" | "albamon";
   attempted: number;
   inserted: number;
   updated: number;

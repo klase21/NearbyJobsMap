@@ -1,0 +1,33 @@
+const ALLOWED_HOSTS = new Set(["www.albamon.com", "m.albamon.com"]);
+const DETAIL_PATH = /^\/jobs\/detail\/(\d+)\/?$/;
+
+function parseHttps(value: string, base = "https://www.albamon.com"): URL {
+  const url = new URL(value, base);
+  if (url.protocol !== "https:" || url.username || url.password || !ALLOWED_HOSTS.has(url.hostname.toLowerCase())) {
+    throw new Error("ALBAMON_URL_NOT_ALLOWED");
+  }
+  return url;
+}
+
+export function buildAlbamonListingUrl(page: number): string {
+  if (!Number.isInteger(page) || page < 1 || page > 5) throw new Error("ALBAMON_PAGE_INVALID");
+  const url = new URL("https://www.albamon.com/jobs/total");
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("sortType", "POSTED_DATE");
+  url.searchParams.set("size", "50");
+  url.searchParams.set("searchPeriodType", "TODAY");
+  return url.toString();
+}
+
+export function normalizeAlbamonListingUrl(value: string): string {
+  const url = parseHttps(value);
+  if (url.hostname !== "www.albamon.com" || url.pathname.replace(/\/$/, "") !== "/jobs/total") throw new Error("ALBAMON_LISTING_URL_INVALID");
+  return url.toString();
+}
+
+export function normalizeAlbamonDetailUrl(value: string): { postingId: string; canonicalUrl: string } {
+  const url = parseHttps(value);
+  const match = url.pathname.match(DETAIL_PATH);
+  if (!match) throw new Error("ALBAMON_DETAIL_URL_INVALID");
+  return { postingId: match[1]!, canonicalUrl: `https://www.albamon.com/jobs/detail/${match[1]}` };
+}

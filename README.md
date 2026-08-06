@@ -316,3 +316,20 @@ UI filter는 source, provenance(수동 수집·픽스처·데모), completeness(
 이 기능은 scheduler나 원격 queue가 아니다. 프로세스 안에서 한 번에 하나의 수동 실행만 유지하므로 개발 서버가 재시작되면 메모리의 진행 상태와 쓰기 승인이 사라질 수 있다. 이 경우 화면은 실행 상태를 찾을 수 없다고 표시하며 완료를 추정하지 않는다.
 
 2026-08-06 실제 UI 계약 검증은 `seoul-ai`, 1페이지, 후보 5건 드라이런으로 한 번 수행됐다. 명령 시작과 polling은 정상 동작했고 4.3초 내 구조화된 결과가 반환됐지만, 당시 공개 검색 페이지가 `unexpected_page`로 분류되어 숫자 링크와 유효 레코드는 0건이었다. SQLite SHA-256과 jobs 46, ingestion runs 10, ingestion items 114, provenance 66은 모두 그대로였다. 따라서 쓰기 승인은 발급되지 않았고 실제 쓰기 실행은 수행하지 않았다. 이 결과는 잡코리아 접근 제한이나 빈 검색 결과를 의미하지 않는다.
+
+## 알바몬 bounded 목록 수집
+
+알바몬 첫 live 수집 경계는 공개 browser-rendered `https://www.albamon.com/jobs/total` 목록만 사용한다. `/jobs/detail/{numeric-id}`는 identity와 안전한 source link로만 정규화하며 상세 페이지나 undocumented BFF는 요청하지 않는다. 각 페이지는 `page`, `sortType=POSTED_DATE`, `size=50`, `searchPeriodType=TODAY`를 `URLSearchParams`로 만들고 사용자가 정한 페이지 수를 정확히 방문한다. duplicate-only 또는 신규 ID 0개 페이지를 empty로 간주하거나 조기 종료하지 않는다.
+
+내장 preset은 `albamon-seoul-today`(3페이지·30건), `albamon-gyeonggi-today`(3페이지·30건), `albamon-capital-today`(5페이지·50건)다. CLI에서도 같은 source adapter와 collection service를 사용한다. `--max-details`는 호환성을 위해 유지한 이름이며 이 단계에서는 상세 요청 수가 아니라 최대 선택 listing record 수다.
+
+```powershell
+npm.cmd run collect:albamon:once -- --preset albamon-seoul-today --pages 1 --max-details 5 --dry-run --confirm
+npm.cmd run collect:albamon:once -- --preset albamon-capital-today --pages 2 --max-details 20 --write --confirm
+```
+
+카드는 numeric posting ID 하나만 포함하는 bounded row/card여야 하며 제목과 회사명이 모두 있어야 저장 후보가 된다. 원본 location은 보존하고 서울·경기 판정은 카드 추출 후 candidate cap 전에 로컬로 수행한다. 저장 레코드는 `bounded_listing_collection`, `listing_only`, detail access `not_attempted`, permission `unverified`로 구분되며 raw HTML·전체 card text·description·개인 연락처를 보존하지 않는다. 이후 detail-complete 데이터가 생겨도 listing-only 데이터가 이를 downgrade하지 않는다.
+
+`/collection`은 잡코리아와 알바몬 preset을 source-aware 카드로 함께 보여 주며 기존 로컬 전용 flag, one-active-run, 750ms polling, 30분 dry-run binding과 `WRITE <preset-id>` 확인을 그대로 사용한다. 최근 실제 수집에는 source badge가 표시되고, jobs 화면은 알바몬 레코드가 존재할 때 동적 source filter와 `알바몬`·`수동 수집`·`목록 정보` 표기를 사용한다. 좌표가 없는 목록 공고에는 marker를 만들지 않는다.
+
+2026-08-06 승인된 실제 `albamon-capital-today`, 2페이지, 후보 20건 UI dry-run은 로컬 run manager를 통해 한 번 실행되어 3.43초 안에 종료됐다. 두 listing navigation 모두 `transport_failed`였고 완료 페이지·숫자 링크·고유 ID·유효 listing record는 모두 0이었다. 따라서 write authorization은 발급되지 않았고 실제 write run은 실행하지 않았다. dry-run 전후 SQLite SHA-256은 `1FA4E0AD4CD2AAF1AEC3B83C7E4BFC9DD30EE3231DF039270CB9CBAF3181FD21`, jobs 46, ingestion runs 10, ingestion items 114, provenance rows 66으로 동일했다. 이 실측 뒤 navigation 예외가 민감한 메시지 없이 DNS/TLS/timeout/일반 실패 enum으로 남도록 오프라인 보강했으며 실요청은 반복하지 않았다.

@@ -139,6 +139,18 @@
 - preset hard cap은 listing 5페이지, detail 50건이고 explicit override는 preset 한도를 줄일 수만 있다.
 - UI source·provenance·completeness·region·status·map filter는 SQLite 데이터를 변경하지 않으며 versioned localStorage preference만 사용한다.
 
+### Bounded Albamon listing collection
+
+- Albamon 첫 live 경계는 공개 browser-rendered `/jobs/total` 목록만 사용하며 undocumented BFF나 상세 페이지를 호출하지 않는다.
+- 페이지는 명시적으로 요청된 1~5페이지만 각각의 `page` query로 방문한다. `addedCount === 0`이나 `uniqueNewPostingIdCount === 0`을 empty 또는 조기 종료 근거로 사용하지 않는다.
+- duplicate-only page는 정상 파싱 페이지이며 blocked, parser failure, unexpected page도 empty로 바꾸지 않는다.
+- 한 listing record는 하나의 bounded single-posting card에서만 추출하고 numeric `/jobs/detail/{id}`를 identity로 사용한다. page-level ancestor나 복수 posting ID card는 거부한다.
+- title과 company가 모두 있어야 listing-only CanonicalJob을 만들 수 있고 raw HTML, 전체 card text, description, 개인 연락처를 보존하지 않는다.
+- 서울·경기 판정은 원본 location을 보존한 채 card 추출 후 candidate cap 전에 로컬로 수행하며 누락·모호한 위치는 추측하지 않는다.
+- Albamon 목록 레코드는 `bounded_listing_collection`, `listing_only`, `not_attempted`, permission `unverified`로 표시하며 future detail-complete 데이터를 downgrade하지 않는다.
+- CLI와 로컬 collection UI는 같은 Albamon collection service를 사용한다. UI는 내장 preset만 받고 한 active run, 30분 dry-run binding, typed write confirmation을 그대로 적용한다.
+- Albamon 수집도 수동 실행만 허용하고 retry 0, 페이지 최대 5, 후보 최대 50을 유지하며 scheduler, recurring worker, 로그인·접근제어 우회를 추가하지 않는다.
+
 - 광고 판정에 `[class*="ad"]`, `className.includes("ad")`, `/ad/`처럼 짧은 부분 문자열을 사용하지 않는다.
 - 광고 class는 완전한 token 또는 근거가 있는 제한적 prefix pattern으로만 판정하며 `shadow`, `badge`, `header`, `gradient` 같은 utility token은 광고 근거가 아니다.
 - 광고 판정은 후보 anchor에서 최대 6단계의 가까운 ancestor로 제한하고 `BODY`·`MAIN`의 페이지 수준 라벨을 하위 후보에 전파하지 않는다.

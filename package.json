@@ -16,6 +16,7 @@
     "transport:jobkorea:once": "tsx scripts/jobkorea-one-shot.ts",
     "transport:jobkorea:search:once": "tsx scripts/jobkorea-search-one-shot.ts",
     "collect:jobkorea:once": "tsx scripts/jobkorea-collect-once.ts",
+    "collect:albamon:once": "tsx scripts/albamon-collect-once.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run"

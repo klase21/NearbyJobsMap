@@ -4,11 +4,19 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CollectionControl } from "../../components/collection/CollectionControl";
 import { JOBKOREA_COLLECTION_PRESETS } from "../../sources/jobkorea/collection/jobkorea-collection-presets";
+import { COLLECTION_PRESETS } from "../../sources/collection/collection-presets";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const presets = Object.values(JOBKOREA_COLLECTION_PRESETS);
 
 describe("CollectionControl", () => {
+  it("shows source-aware Albamon preset cards with listing-only operation", () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => new Response(JSON.stringify(url.includes("recent") ? { runs: [] } : { run: null }), { status: 200 })));
+    render(<CollectionControl enabled presets={Object.values(COLLECTION_PRESETS)} />);
+    const albamon = screen.getByRole("radio", { name: /^알바몬 서울·경기 오늘 등록/ });
+    expect(albamon).toHaveTextContent("알바몬"); expect(albamon).toHaveTextContent("오늘 등록 · 목록 정보");
+    fireEvent.click(albamon); expect(screen.getByText("상세 요청 없음")).toBeInTheDocument();
+  });
   it("explains the disabled local-only state", () => {
     render(<CollectionControl enabled={false} presets={presets} />);
     expect(screen.getByRole("status")).toHaveTextContent("NEARBY_JOBS_ENABLE_COLLECTION_UI=1");

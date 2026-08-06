@@ -9,12 +9,13 @@ export interface JobKoreaCollectionPreset {
   pages: 1 | 2 | 3 | 4 | 5;
   maxDetails: number;
   allowListingFallback: boolean;
+  source: "jobkorea";
 }
 
 export const JOBKOREA_COLLECTION_PRESETS: Readonly<Record<JobKoreaCollectionPreset["id"], JobKoreaCollectionPreset>> = {
-  "seoul-ai": { id: "seoul-ai", label: "서울 AI 일자리", keyword: "AI", regions: ["seoul"], pages: 3, maxDetails: 30, allowListingFallback: true },
-  "gyeonggi-ai": { id: "gyeonggi-ai", label: "경기 AI 일자리", keyword: "AI", regions: ["gyeonggi"], pages: 3, maxDetails: 30, allowListingFallback: true },
-  "capital-ai": { id: "capital-ai", label: "서울·경기 AI 일자리", keyword: "AI", regions: ["seoul", "gyeonggi"], pages: 5, maxDetails: 50, allowListingFallback: true },
+  "seoul-ai": { id: "seoul-ai", source: "jobkorea", label: "서울 AI 일자리", keyword: "AI", regions: ["seoul"], pages: 3, maxDetails: 30, allowListingFallback: true },
+  "gyeonggi-ai": { id: "gyeonggi-ai", source: "jobkorea", label: "경기 AI 일자리", keyword: "AI", regions: ["gyeonggi"], pages: 3, maxDetails: 30, allowListingFallback: true },
+  "capital-ai": { id: "capital-ai", source: "jobkorea", label: "서울·경기 AI 일자리", keyword: "AI", regions: ["seoul", "gyeonggi"], pages: 5, maxDetails: 50, allowListingFallback: true },
 };
 
 export function getJobKoreaCollectionPreset(value: string): JobKoreaCollectionPreset | null {

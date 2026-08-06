@@ -15,6 +15,20 @@ const result = (mode: "dry-run" | "write"): JobKoreaCollectionResult => ({ runId
 const fakeDb = () => ({ close: vi.fn() }) as never;
 
 describe("CollectionRunManager", () => {
+  it("dispatches Albamon presets to the shared source-aware manager and binds write authorization", async () => {
+    const runAlbamonCollection = vi.fn(async (options: { mode: "dry-run" | "write" }) => ({ ...result(options.mode), source: "albamon",
+      presetId: "albamon-capital-today", presetLabel: "알바몬 서울·경기 오늘 등록", keyword: "오늘 등록", details: [], pageResults: [],
+      detailPagesAttempted: 0, blockedDetails: 0, listingOnlyRecords: 3 }) as never);
+    const manager = new CollectionRunManager({ runAlbamonCollection, openReadonly: fakeDb, openWritable: fakeDb });
+    const dry = manager.start({ presetId: "albamon-capital-today", pages: 2, maxDetails: 20, mode: "dry_run" });
+    await vi.waitFor(() => expect(manager.get(dry.runId)?.status).toBe("completed"));
+    const completed = manager.get(dry.runId)!;
+    expect(completed.source).toBe("albamon"); expect(completed.writeAuthorizationToken).toBeTruthy();
+    const write = manager.start({ presetId: "albamon-capital-today", pages: 2, maxDetails: 20, mode: "write",
+      writeAuthorizationToken: completed.writeAuthorizationToken!, confirmationPhrase: "WRITE albamon-capital-today" });
+    await vi.waitFor(() => expect(manager.get(write.runId)?.status).toBe("completed"));
+    expect(runAlbamonCollection).toHaveBeenCalledTimes(2);
+  });
   it("runs a dry-run, retains progress, and issues a bound write authorization", async () => {
     const runCollection = vi.fn(async (options, dependencies) => {
       dependencies.onProgress?.({ status: "collecting_details", message: "상세 정보 2/5 확인 중", listingPagesRequested: 1, listingPagesCompleted: 1,

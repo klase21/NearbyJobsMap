@@ -11,14 +11,14 @@ describe("SQLite migration", () => {
   it("빈 데이터베이스에 초기 migration을 적용하고 버전을 기록한다", () => {
     testDatabase = createTestDatabase(false);
     const result = applyMigrations(testDatabase.database);
-    expect(result.applied).toEqual(["0001", "0002", "0003", "0004"]);
-    expect(listAppliedMigrations(testDatabase.database)).toEqual(["0001", "0002", "0003", "0004"]);
+    expect(result.applied).toEqual(["0001", "0002", "0003", "0004", "0005"]);
+    expect(listAppliedMigrations(testDatabase.database)).toEqual(["0001", "0002", "0003", "0004", "0005"]);
     expect(testDatabase.database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='jobs'").get()).toBeTruthy();
   });
 
   it("반복 실행은 schema를 다시 적용하지 않는다", () => {
     testDatabase = createTestDatabase();
-    expect(applyMigrations(testDatabase.database)).toMatchObject({ applied: [], alreadyApplied: ["0001", "0002", "0003", "0004"] });
+    expect(applyMigrations(testDatabase.database)).toMatchObject({ applied: [], alreadyApplied: ["0001", "0002", "0003", "0004", "0005"] });
   });
 
   it("실패한 migration은 성공으로 표시하지 않는다", () => {
