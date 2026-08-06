@@ -114,6 +114,16 @@ describe("JobKorea listing-only backfill service", () => {
       expect(test.database.prepare(`SELECT COUNT(*) count FROM ${table}`).get()).toEqual({ count: 0 });
     }
   });
+
+  it("rejects an unresolved parser-failure page before opening a write transaction", async () => {
+    const test = createTestDatabase(); databases.push(test); const invalid = candidate("93500001", 1);
+    invalid.listingFields = { ...invalid.listingFields!, title: null };
+    await expect(backfillJobKoreaListingsOnce(options("write", 1), { database: test.database,
+      createExecution: async () => execution([page(1, [invalid])]) })).rejects.toThrow(/WRITE_GATE_FAILED/);
+    for (const table of ["jobs", "ingestion_runs", "ingestion_items", "job_provenance_history", "job_observations"]) {
+      expect(test.database.prepare(`SELECT COUNT(*) count FROM ${table}`).get()).toEqual({ count: 0 });
+    }
+  });
 });
 
 describe("deterministic job data quality", () => {
