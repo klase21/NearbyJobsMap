@@ -12,6 +12,7 @@ import { SummaryStrip } from "../summary/SummaryStrip";
 import { FirstRunOnboarding } from "../onboarding/FirstRunOnboarding";
 import { defaultJobUserState,type JobUserState,type JobUserStateInput,type JobWorkflowStatus } from "../../services/job-user-state";
 import type{JobFreshness}from"../../services/job-freshness";
+import {SavedViewsBar} from "../saved-views/SavedViewsBar";
 
 interface NearbyJobsDashboardProps { initialJobs: UiJobRecord[]; dataError?: string; dataWarning?: string | undefined }
 const REFERENCE_NOW = new Date("2026-08-05T12:00:00+09:00");
@@ -125,6 +126,7 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
       {storageFailed && <div className="warning-banner" role="alert">브라우저 저장공간에 설정을 저장하지 못했습니다. 현재 화면에서는 계속 사용할 수 있습니다.</div>}
       {dataWarning && <div className="warning-banner" role="status">{dataWarning}</div>}
       <SummaryStrip {...summary} />
+      <SavedViewsBar filters={filters} onApply={setFilters} />
       <div className="workspace-quick-filters" aria-label="개인 지원 상태 빠른 보기">{([['all','전체'],['favorite','관심 공고'],['apply_planned','지원 예정'],['applied','지원 완료'],['waiting','연락 대기'],['interview','면접'],['archived','보관됨'],['hidden','숨김']] as const).map(([value,label])=><button key={value} className={workspaceView===value?"active":""} aria-pressed={workspaceView===value} onClick={()=>setWorkspaceView(value)}>{label}</button>)}</div>
       <p className="result-count-line" aria-live="polite">{initialJobs.length}개 중 {sorted.length}개 표시 · 지도 {mapVisibleCount}개</p>
       {filtersOpen && <FilterPanel filters={filters} jobs={initialJobs} onChange={setFilters} onClose={closeFilters} />}

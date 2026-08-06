@@ -26,9 +26,11 @@ export const DEFAULT_PREFERENCES: SavedPreferences = { filters: DEFAULT_FILTERS,
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
-function validFilters(value: unknown): value is JobFilterState {
+export function validateJobFilterState(value: unknown): value is JobFilterState {
   if (!isRecord(value) || !isRecord(value.salaryThresholds)) return false;
+  if (Object.keys(value).some((key) => !(key in DEFAULT_FILTERS))) return false;
   const salaryThresholds = value.salaryThresholds;
+  if (Object.keys(salaryThresholds).some((key) => !(key in DEFAULT_FILTERS.salaryThresholds))) return false;
   const strings = ["keyword", "source", "provenance", "completeness", "region", "mapEligibility", "city", "district", "category", "employmentType", "experienceRequirement", "educationRequirement", "salaryType", "postingStatus", "locationAccuracy", "locationMode", "deadline"];
   return strings.every((key) => typeof value[key] === "string") && typeof value.showDemo === "boolean"
     && Array.isArray(value.exclusionKeywords) && value.exclusionKeywords.every((item) => typeof item === "string")
@@ -52,7 +54,7 @@ function parsePreferences(raw: string): SavedPreferences | null {
       exclusionKeywords: Array.isArray(rawFilters.exclusionKeywords) ? [...new Set(rawFilters.exclusionKeywords.filter((item): item is string => typeof item === "string").map(normalizeExclusionText).filter((item) => item.length >= 2 && item.length <= 50))].slice(0, 30) : [],
       exclusionFields: Array.isArray(rawFilters.exclusionFields) ? rawFilters.exclusionFields.filter((item): item is ExclusionField => typeof item === "string" && EXCLUSION_FIELDS.includes(item as ExclusionField)) : DEFAULT_FILTERS.exclusionFields,
       salaryThresholds: isRecord(rawFilters.salaryThresholds) ? { ...DEFAULT_FILTERS.salaryThresholds, ...rawFilters.salaryThresholds } : DEFAULT_FILTERS.salaryThresholds } : null;
-    if (!validFilters(filters) || typeof value.sort !== "string" || !SORT_OPTIONS.has(value.sort as SortOption)
+    if (!validateJobFilterState(filters) || typeof value.sort !== "string" || !SORT_OPTIONS.has(value.sort as SortOption)
       || typeof value.mapVisible !== "boolean" || !validOrigin(value.origin) || !isRecord(value.userJobStatuses)) return null;
     const statuses = Object.fromEntries(Object.entries(value.userJobStatuses).filter((entry): entry is [string, UserJobStatus] => typeof entry[1] === "string" && USER_STATUSES.has(entry[1] as UserJobStatus)));
     return { filters, sort: value.sort as SortOption, mapVisible: value.mapVisible, origin: value.origin, userJobStatuses: statuses };
