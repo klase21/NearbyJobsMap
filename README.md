@@ -384,3 +384,13 @@ Migration `0006` 이후 write run은 제외 keyword·field와 전후 후보 수�
 비교 API `POST /api/collection-profile-comparison`은 다른 collection-control API와 같은 localhost·feature-flag·origin 경계를 사용하며 typed ID 배열만 받는다. parameterized SQLite read만 수행하고 collection 시작, source request, job/run/item/provenance write를 하지 않는다. 프로필 비교 구현 및 로컬 검증에서도 JobKorea·Albamon 요청이나 collection run은 수행하지 않았다.
 
 메인 화면의 `수집 관리` 링크는 inline anchor baseline이 `.button`의 높이 계약과 맞지 않아 글자가 위로 보이던 문제를 해결했다. 전용 `inline-flex`, 수직·수평 중앙 정렬, 일정한 line-height를 적용하되 기존 42px 최소 높이·padding·focus·responsive flex 동작은 그대로 유지한다. pixel offset이나 `translateY` 보정은 사용하지 않는다.
+
+## 저장 프로필 가져오기와 내보내기
+
+`/collection`의 `수집 실행` 탭에서 저장 프로필 하나, 선택한 여러 프로필 또는 전체 프로필을 JSON으로 내보낼 수 있다. 파일 형식은 `nearby-jobs-collection-profiles` version 1이며 UTF-8로 기록한다. 파일에는 이름, 승인된 source/base preset/strategy, JobKorea keyword, 지역, 페이지와 후보 한도, listing fallback, 제외 keyword·field, 즐겨찾기와 정보용 source revision/hash만 들어간다. 로컬 profile ID, 생성·수정·최근 사용 시각, jobs, ingestion history, provenance, 활성 run, write authorization, cookie·credential·DB 경로는 포함하지 않는다.
+
+가져오기는 최대 512 KiB, 100개 프로필의 JSON 파일 하나만 받는다. 첫 단계의 15분짜리 opaque 미리보기는 SQLite를 쓰지 않으며 각 행을 현재 프로필 생성 validator로 다시 정규화하고 hash를 계산한다. 미리보기는 새 프로필, 동일 프로필, 이름 충돌·다른 구성, 같은 구성·다른 이름, 오류 및 지원하지 않는 source/preset을 구분한다. 파일의 revision과 configuration hash는 진단 정보일 뿐 권위가 없고, 로컬 계산 hash가 항상 기준이다.
+
+확인 단계에서는 `새로 만들기`, `건너뛰기`, `이름을 바꿔 새로 만들기`, 이름 충돌 대상에 한정한 `기존 프로필 바꾸기`를 명시적으로 선택한다. 동일 항목은 기본적으로 건너뛰며 이름 충돌은 자동 덮어쓰지 않는다. 교체는 미리보기에 묶인 expected revision과 확인 checkbox를 요구하고 실행 중인 프로필은 거부한다. 선택한 create/replace는 하나의 transaction으로 적용되어 하나라도 충돌하면 전체가 rollback된다. 생성된 프로필은 새 opaque ID, revision 1, 새 시각, null `lastUsedAt`을 가지며 즐겨찾기와 정규화된 구성은 보존한다. 가져온 프로필은 즉시 실행 목록과 프로필 비교에서 사용할 수 있지만 실행 이력을 만들거나 수집을 자동 시작하지 않는다.
+
+가져오기·내보내기 API는 다른 수집 관리 API와 같이 localhost, `NEARBY_JOBS_ENABLE_COLLECTION_UI=1`, local origin을 모두 요구한다. 원격 URL, 파일 경로, 명령, SQL, JavaScript, 임의 source adapter는 입력으로 받지 않는다. 서버 재시작 시 메모리 미리보기 token은 사라지며 확인 전에 다시 미리보기해야 한다.

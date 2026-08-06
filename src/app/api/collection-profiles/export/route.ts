@@ -1,0 +1,9 @@
+import { NextResponse } from "next/server";
+import { getDatabasePath, openReadonlyDatabase } from "../../../../db/connection";
+import { assertLocalCollectionAccess, collectionControlError } from "../../../../server/collection-control/access";
+import { SavedCollectionProfileRepository } from "../../../../server/collection-profiles/repository";
+import { parseExportRequest } from "../../../../server/collection-profile-transfer/request-validation";
+import { safeExportFilename, serializeProfiles } from "../../../../server/collection-profile-transfer/serializer";
+import { normalizeProfileName } from "../../../../services/saved-collection-profile";
+export const dynamic="force-dynamic";
+export async function POST(request:Request){try{assertLocalCollectionAccess(request);const input=parseExportRequest(await request.json());const db=openReadonlyDatabase(getDatabasePath());try{const repo=new SavedCollectionProfileRepository(db);const profiles="allProfiles" in input?repo.list().sort((a,b)=>Number(b.isFavorite)-Number(a.isFavorite)||normalizeProfileName(a.name).normalizedName.localeCompare(normalizeProfileName(b.name).normalizedName,"ko")||a.id.localeCompare(b.id)):input.profileIds.map(id=>repo.require(id));if(!profiles.length)throw Object.assign(new Error("내보낼 저장 프로필이 없습니다."),{code:"PROFILE_EXPORT_EMPTY",status:400});const {json}=serializeProfiles(profiles);const filename=safeExportFilename(profiles);return new Response(json,{headers:{"content-type":"application/json; charset=utf-8","content-disposition":`attachment; filename="profiles.json"; filename*=UTF-8''${encodeURIComponent(filename)}`,"cache-control":"no-store"}});}finally{db.close();}}catch(error){const safe=collectionControlError(error);return NextResponse.json({error:{code:safe.code,message:safe.message}},{status:safe.status});}}

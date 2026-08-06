@@ -221,6 +221,18 @@
 - temporary comparison 검증을 위해 real database에 synthetic ingestion run을 만들거나 live JobKorea·Albamon source 요청을 수행하지 않는다.
 - primary navigation label은 flex alignment와 controlled line-height로 수직 중앙을 유지한다. 음수 margin, `top` pixel offset 또는 `translateY` hack으로 맞추지 않는다.
 
+### Saved profile import and export
+
+- 가져오기·내보내기는 저장 프로필 구성만 다루며 jobs, ingestion runs/items, provenance, authorization, active-run state 또는 source payload를 파일에 넣지 않는다.
+- 파일의 local profile ID는 내보내거나 복원하지 않는다. 생성 import는 새 opaque ID와 revision 1을 사용하며 imported revision/hash는 정보용일 뿐 현재 validator와 configuration hash 계산이 권위다.
+- import validation은 일반 saved-profile service의 name/source/preset/strategy/limit/exclusion 검증을 재사용하고 arbitrary URL, remote file, command, SQL, JavaScript, regex 또는 임의 adapter를 허용하지 않는다.
+- preview는 SQLite를 쓰지 않고 최대 512 KiB·100 profiles·15분·동시 5개 한도를 유지한다. opaque token에는 profile content나 DB 경로를 넣지 않는다.
+- confirmed import의 create/replace는 하나의 transaction에서 처리한다. name conflict를 자동 덮어쓰지 않고 replacement는 preview에 묶인 expected revision과 명시적 확인을 요구한다.
+- active run이 사용하는 saved profile은 replace할 수 없으며 import는 collection run 또는 source request를 시작하지 않는다.
+- import/export API도 localhost, collection UI feature flag, allowed origin 경계를 유지하고 stack trace나 database path를 노출하지 않는다.
+- `수집 관리` navigation은 42px 높이, inline-flex, 수직·수평 중앙 정렬과 controlled line-height를 유지하며 import/export UI 변경으로 회귀시키지 않는다.
+- import/export 구현 검증 중 live JobKorea·Albamon 요청이나 dry-run/write collection을 실행하지 않는다.
+
 ## Validation Policy
 
 모든 변경은 다음 명령을 통과해야 한다.

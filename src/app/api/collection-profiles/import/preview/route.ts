@@ -1,0 +1,8 @@
+import { NextResponse } from "next/server";
+import { getDatabasePath, openReadonlyDatabase } from "../../../../../db/connection";
+import { assertLocalCollectionAccess, collectionControlError } from "../../../../../server/collection-control/access";
+import { PROFILE_IMPORT_MAX_BYTES } from "../../../../../server/collection-profile-transfer/contracts";
+import { parseImportFile } from "../../../../../server/collection-profile-transfer/parser";
+import { createImportPreview } from "../../../../../server/collection-profile-transfer/service";
+export const dynamic="force-dynamic";
+export async function POST(request:Request){try{assertLocalCollectionAccess(request);const length=Number(request.headers.get("content-length")??0);if(length>PROFILE_IMPORT_MAX_BYTES+64*1024)throw Object.assign(new Error("가져오기 파일은 512 KiB를 넘을 수 없습니다."),{code:"PROFILE_IMPORT_TOO_LARGE",status:413});const form=await request.formData();if([...form.keys()].some(key=>key!=="file")||form.getAll("file").length!==1)throw Object.assign(new Error("파일 하나만 선택해 주세요."),{code:"PROFILE_IMPORT_FILE_INVALID",status:400});const file=form.get("file");if(!(file instanceof File))throw Object.assign(new Error("가져오기 JSON 파일이 필요합니다."),{code:"PROFILE_IMPORT_FILE_INVALID",status:400});const bytes=new Uint8Array(await file.arrayBuffer());const parsed=parseImportFile(bytes);const db=openReadonlyDatabase(getDatabasePath());try{return NextResponse.json(createImportPreview(db,parsed.profiles,{filename:file.name,fileSize:file.size,payloadHash:parsed.payloadHash}));}finally{db.close();}}catch(error){const safe=collectionControlError(error);return NextResponse.json({error:{code:safe.code,message:safe.message}},{status:safe.status});}}

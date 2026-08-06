@@ -252,6 +252,18 @@ input:disabled { cursor: not-allowed; background: #f4f6f8; color: #8a94a3; }
 .profile-toolbar { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin: 14px 0; }
 .profile-toolbar label { display: grid; gap: 5px; font-size: .82rem; font-weight: 700; }
 .profile-toolbar input, .profile-toolbar select, .profile-form-grid input { min-height: 40px; border: 1px solid var(--line); border-radius: 9px; padding: 8px; }
+.profile-export-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px; margin: 12px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--blue-soft); }
+.profile-export-toolbar p { margin: 3px 0 0; color: var(--muted); font-size: .82rem; }
+.profile-export-check { display: inline-flex; align-items: center; gap: 5px; font-size: .75rem; font-weight: 700; }
+.profile-import-dialog { width: min(920px, calc(100vw - 32px)); max-height: min(820px, calc(100vh - 32px)); overflow: auto; }
+.profile-drop-zone { display: grid; place-items: center; min-height: 140px; border: 2px dashed var(--line); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; }
+.profile-drop-zone:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.profile-drop-zone input { margin-top: 12px; max-width: 100%; }
+.import-file-meta { display: flex; gap: 10px; flex-wrap: wrap; justify-content: space-between; padding: 10px 0; overflow-wrap: anywhere; }
+.import-preview-list { display: grid; gap: 10px; max-height: 48vh; overflow: auto; padding-right: 4px; }
+.import-preview-card { border: 1px solid var(--line); border-radius: 12px; padding: 12px; overflow-wrap: anywhere; }
+.import-preview-card label { display: grid; gap: 5px; margin-top: 8px; font-size: .82rem; font-weight: 700; }
+.import-preview-card input, .import-preview-card select { min-height: 40px; max-width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 8px; }
 .saved-profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
 .saved-profile-card { min-width: 0; border: 1px solid var(--line); border-radius: 14px; padding: 15px; }
 .saved-profile-card.selected { border: 2px solid var(--blue); background: #f8fbff; }
@@ -272,5 +284,8 @@ input:disabled { cursor: not-allowed; background: #f4f6f8; color: #8a94a3; }
   .profile-actions .button { flex: 1; }
   .profile-toolbar { display: grid; }
   .profile-toolbar label { width: 100%; }
+  .profile-export-toolbar { align-items: stretch; flex-direction: column; }
+  .profile-export-toolbar .profile-actions { display: grid; grid-template-columns: 1fr; }
+  .profile-import-dialog { width: calc(100vw - 16px); max-height: calc(100vh - 16px); padding: 14px; }
   .comparison-profile-list,.comparison-grid{grid-template-columns:1fr}.comparison-actions{display:grid;align-items:stretch}.comparison-actions label,.comparison-actions select,.comparison-actions .button{width:100%}.comparison-table th,.comparison-table td{min-width:145px}.comparison-table th:first-child{min-width:130px}
 }
