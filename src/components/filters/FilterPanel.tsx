@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { JobFilterState, UiJobRecord } from "../../domain/ui-job";
 import { LOCATION_LABELS, POSTING_STATUS_LABELS, SALARY_TYPE_LABELS } from "../../services/job-display";
-import { DEFAULT_FILTERS, getRegionGroup } from "../../services/job-search";
+import { DEFAULT_FILTERS, getNormalizedRegions, isMapEligible } from "../../services/job-search";
 
 interface FilterPanelProps {
   filters: JobFilterState;
@@ -49,13 +49,21 @@ export function FilterPanel({ filters, jobs, onChange, onClose }: FilterPanelPro
     return () => { document.body.style.overflow = previousOverflow; };
   }, [isMobileDrawer]);
 
-  const regionalJobs = filters.region === "all" ? jobs : jobs.filter((record) => getRegionGroup(record) === filters.region);
+  const regionalJobs = filters.region === "all" ? jobs : jobs.filter((record) => {
+    const regions = getNormalizedRegions(record);
+    if (filters.region === "seoul" || filters.region === "gyeonggi") return regions.includes(filters.region);
+    if (filters.region === "unknown") return regions.length === 0;
+    return regions.includes("other") || regions.includes("incheon");
+  });
   const cities = unique(regionalJobs.map(({ job }) => job.city));
   const districts = unique(regionalJobs.filter(({ job }) => !filters.city || job.city === filters.city).map(({ job }) => job.district));
   const categories = unique(jobs.flatMap(({ job }) => job.categories));
   const employmentTypes = unique(jobs.flatMap(({ job }) => job.employmentTypes));
   const experience = unique(jobs.map(({ job }) => job.experienceRequirement));
   const education = unique(jobs.map(({ job }) => job.educationRequirement));
+  const count = (predicate: (record: UiJobRecord) => boolean) => jobs.filter(predicate).length;
+  const sources = [...new Set(jobs.map(({ job }) => job.source).filter((source) => source === "jobkorea" || source === "albamon"))];
+  const sourceOptions: Array<[string,string]> = [["all", `전체 (${jobs.length})`], ...sources.map((source) => [source, `${source === "jobkorea" ? "잡코리아" : "알바몬"} (${count((record) => record.job.source === source)})`] as [string,string])];
 
   const update = <K extends keyof JobFilterState>(key: K, value: JobFilterState[K]) => onChange({ ...filters, [key]: value });
   const setRegion = (region: JobFilterState["region"]) => onChange({ ...filters, region, city: "", district: "" });
@@ -83,7 +91,11 @@ export function FilterPanel({ filters, jobs, onChange, onClose }: FilterPanelPro
       <section id="filter-panel" ref={panelRef} className="filter-panel" role="dialog" aria-modal={isMobileDrawer} aria-labelledby="filter-title">
         <div className="filter-heading"><h2 id="filter-title">상세 필터</h2><button className="button compact" type="button" onClick={onClose}>닫기</button></div>
         <div className="filter-grid">
-          <SelectField ref={firstControlRef} label="서울·경기" value={filters.region} onChange={(value) => setRegion(value as JobFilterState["region"])} options={[["all","전체"],["서울","서울"],["경기","경기"]]} />
+          <SelectField ref={firstControlRef} label="출처" value={filters.source} onChange={(value) => update("source", value as JobFilterState["source"])} options={sourceOptions} />
+          <SelectField label="데이터 출처" value={filters.provenance} onChange={(value) => update("provenance", value as JobFilterState["provenance"])} options={[["all",`전체 (${jobs.length})`],["manual",`수동 수집 (${count((record) => record.observationKind === "bounded_manual_collection" || record.observationKind === "bounded_listing_collection")})`],["fixture",`픽스처 (${count((record) => record.provenanceKind === "fixture_derived")})`],["demo",`데모 (${count((record) => record.isFictional)})`]]} />
+          <SelectField label="정보 완성도" value={filters.completeness} onChange={(value) => update("completeness", value as JobFilterState["completeness"])} options={[["all",`전체 (${jobs.length})`],["listing_only",`목록 정보 (${count((record) => record.observationKind === "bounded_listing_collection")})`],["detail_complete",`상세 확인 (${count((record) => record.observationKind === "bounded_manual_collection")})`]]} />
+          <SelectField label="지역" value={filters.region} onChange={(value) => setRegion(value as JobFilterState["region"])} options={[["all",`전체 (${jobs.length})`],["seoul",`서울 (${count((record) => getNormalizedRegions(record).includes("seoul"))})`],["gyeonggi",`경기 (${count((record) => getNormalizedRegions(record).includes("gyeonggi"))})`],["other",`기타 (${count((record) => getNormalizedRegions(record).some((region) => region === "other" || region === "incheon"))})`],["unknown",`지역 미확인 (${count((record) => getNormalizedRegions(record).length === 0)})`]]} />
+          <SelectField label="지도 표시" value={filters.mapEligibility} onChange={(value) => update("mapEligibility", value as JobFilterState["mapEligibility"])} options={[["all",`전체 (${jobs.length})`],["map",`지도 표시 가능 (${count(isMapEligible)})`],["list_only",`목록만 (${count((record) => !isMapEligible(record))})`]]} />
           <SelectField label="시·도시" value={filters.city} onChange={setCity} options={[["","전체"], ...cities.map((value) => [value,value] as [string,string])]} />
           <SelectField label="구·지역" value={filters.district} onChange={(value) => update("district", value)} options={[["","전체"], ...districts.map((value) => [value,value] as [string,string])]} />
           <SelectField label="직종" value={filters.category} onChange={(value) => update("category", value)} options={[["","전체"], ...categories.map((value) => [value,value] as [string,string])]} />

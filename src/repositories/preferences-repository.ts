@@ -10,7 +10,10 @@ const SORT_OPTIONS = new Set<SortOption>(["newest", "deadline", "distance", "hou
 const USER_STATUSES = new Set<UserJobStatus>(["reviewing", "saved", "planned", "applied", "excluded"]);
 const FILTER_OPTIONS = {
   source: new Set(["all", "jobkorea", "albamon"]),
-  region: new Set(["all", "서울", "경기"]),
+  provenance: new Set(["all", "manual", "fixture", "demo"]),
+  completeness: new Set(["all", "listing_only", "detail_complete"]),
+  region: new Set(["all", "seoul", "gyeonggi", "other", "unknown"]),
+  mapEligibility: new Set(["all", "map", "list_only"]),
   salaryType: new Set(["all", "hourly", "daily", "weekly", "monthly", "annual", "per_task", "negotiable", "company_policy", "mixed", "unknown"]),
   postingStatus: new Set(["all", "active", "closing_soon", "expired", "closed", "removed", "unknown"]),
   locationAccuracy: new Set(["all", "exact_coordinate", "exact_address", "neighborhood", "district", "city", "station_area", "multiple_locations", "headquarters_only", "location_undecided", "unavailable"]),
@@ -25,7 +28,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 function validFilters(value: unknown): value is JobFilterState {
   if (!isRecord(value) || !isRecord(value.salaryThresholds)) return false;
   const salaryThresholds = value.salaryThresholds;
-  const strings = ["keyword", "source", "region", "city", "district", "category", "employmentType", "experienceRequirement", "educationRequirement", "salaryType", "postingStatus", "locationAccuracy", "locationMode", "deadline"];
+  const strings = ["keyword", "source", "provenance", "completeness", "region", "mapEligibility", "city", "district", "category", "employmentType", "experienceRequirement", "educationRequirement", "salaryType", "postingStatus", "locationAccuracy", "locationMode", "deadline"];
   return strings.every((key) => typeof value[key] === "string") && typeof value.showDemo === "boolean"
     && Object.entries(FILTER_OPTIONS).every(([key, options]) => options.has(value[key] as never))
     && ["hourly", "daily", "monthly", "annual", "normalizedMonthly"].every((key) => typeof salaryThresholds[key] === "number" && Number.isFinite(salaryThresholds[key]) && (salaryThresholds[key] as number) >= 0);
@@ -39,12 +42,14 @@ function validOrigin(value: unknown): value is UserOrigin {
 function parsePreferences(raw: string): SavedPreferences | null {
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.value)) return null;
+    if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== 2) || !isRecord(parsed.value)) return null;
     const value = parsed.value;
-    if (!validFilters(value.filters) || typeof value.sort !== "string" || !SORT_OPTIONS.has(value.sort as SortOption)
+    const filters = isRecord(value.filters) ? { ...DEFAULT_FILTERS, ...value.filters,
+      salaryThresholds: isRecord(value.filters.salaryThresholds) ? { ...DEFAULT_FILTERS.salaryThresholds, ...value.filters.salaryThresholds } : DEFAULT_FILTERS.salaryThresholds } : null;
+    if (!validFilters(filters) || typeof value.sort !== "string" || !SORT_OPTIONS.has(value.sort as SortOption)
       || typeof value.mapVisible !== "boolean" || !validOrigin(value.origin) || !isRecord(value.userJobStatuses)) return null;
     const statuses = Object.fromEntries(Object.entries(value.userJobStatuses).filter((entry): entry is [string, UserJobStatus] => typeof entry[1] === "string" && USER_STATUSES.has(entry[1] as UserJobStatus)));
-    return { filters: value.filters, sort: value.sort as SortOption, mapVisible: value.mapVisible, origin: value.origin, userJobStatuses: statuses };
+    return { filters, sort: value.sort as SortOption, mapVisible: value.mapVisible, origin: value.origin, userJobStatuses: statuses };
   } catch { return null; }
 }
 
@@ -59,7 +64,7 @@ export function createPreferencesRepository(storage: StorageLike | null) {
     },
     save(value: SavedPreferences): boolean {
       if (!storage) return false;
-      try { storage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify({ version: 1, value })); return true; } catch { return false; }
+      try { storage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify({ version: 2, value })); return true; } catch { return false; }
     },
     clear(): void { storage?.removeItem(PREFERENCES_STORAGE_KEY); },
   };

@@ -18,8 +18,8 @@ const collectionCandidate = (postingId: string, position: number, classification
   observedLinkCount, listingClassification: classification,
 });
 
-const listingCandidate = (postingId: string, position = 1): SnapshotCandidate => ({ ...collectionCandidate(postingId, position, "structurally_provisional", 3),
-  listingFields: { title: `목록 공고 ${postingId}`, companyName: `목록 회사 ${postingId}`, regionText: "서울 중구", salaryText: "연봉 4,000만원",
+const listingCandidate = (postingId: string, position = 1, regionText: string | null = "서울 중구"): SnapshotCandidate => ({ ...collectionCandidate(postingId, position, "structurally_provisional", 3),
+  listingFields: { title: `목록 공고 ${postingId}`, companyName: `목록 회사 ${postingId}`, regionText, salaryText: "연봉 4,000만원",
     employmentTypes: ["정규직"], experienceRequirement: null, educationRequirement: null, postedAt: "2026-08-05", deadlineText: null } });
 
 function page(number: number, candidates: SnapshotCandidate[]) {
@@ -59,11 +59,27 @@ function http(responses: Record<string, string | Error | { html: string; closed:
 }
 
 describe("JobKorea bounded collection CLI", () => {
-  it("requires confirmation, one mode, 1..3 pages and 1..30 details", () => {
+  it("requires confirmation, one mode, 1..5 pages and 1..50 details", () => {
     expect(() => parseJobKoreaCollectionArgs(["--search-url", "https://www.jobkorea.co.kr/Search?stext=AI", "--pages", "1", "--max-details", "5", "--dry-run"])).toThrow(/confirm/);
     expect(parseJobKoreaCollectionArgs(["--search-url", "https://www.jobkorea.co.kr/Search?stext=AI", "--pages", "3", "--max-details", "30", "--write", "--confirm"]).mode).toBe("write");
-    for (const pages of [0, 4]) expect(() => parseJobKoreaCollectionArgs(["--search-url", "https://www.jobkorea.co.kr/Search?stext=AI", "--pages", String(pages), "--max-details", "1", "--dry-run", "--confirm"])).toThrow();
-    for (const count of [0, 31, 1.5]) expect(() => parseJobKoreaCollectionArgs(["--search-url", "https://www.jobkorea.co.kr/Search?stext=AI", "--pages", "1", "--max-details", String(count), "--dry-run", "--confirm"])).toThrow();
+    for (const pages of [0, 6]) expect(() => parseJobKoreaCollectionArgs(["--search-url", "https://www.jobkorea.co.kr/Search?stext=AI", "--pages", String(pages), "--max-details", "1", "--dry-run", "--confirm"])).toThrow();
+    for (const count of [0, 51, 1.5]) expect(() => parseJobKoreaCollectionArgs(["--search-url", "https://www.jobkorea.co.kr/Search?stext=AI", "--pages", "1", "--max-details", String(count), "--dry-run", "--confirm"])).toThrow();
+  });
+
+  it("resolves built-in presets, reductions, regions, and fallback", () => {
+    const seoul = parseJobKoreaCollectionArgs(["--preset", "seoul-ai", "--dry-run", "--confirm"]);
+    expect(seoul).toMatchObject({ presetId: "seoul-ai", presetLabel: "서울 AI 일자리", keyword: "AI", requestedRegions: ["seoul"], pages: 3, maxDetails: 30, allowListingFallback: true });
+    expect(seoul.searchUrl).toContain("stext=AI"); expect(seoul.searchUrl).toContain("tabType=recruit");
+    expect(parseJobKoreaCollectionArgs(["--preset", "gyeonggi-ai", "--pages", "2", "--max-details", "20", "--write", "--confirm"])).toMatchObject({ requestedRegions: ["gyeonggi"], pages: 2, maxDetails: 20 });
+    expect(parseJobKoreaCollectionArgs(["--preset", "capital-ai", "--region", "seoul", "--dry-run", "--confirm"])).toMatchObject({ requestedRegions: ["seoul"], pages: 5, maxDetails: 50 });
+  });
+
+  it("rejects unknown/conflicting presets and limit increases", () => {
+    expect(() => parseJobKoreaCollectionArgs(["--preset", "unknown", "--dry-run", "--confirm"])).toThrow(/preset/);
+    expect(() => parseJobKoreaCollectionArgs(["--preset", "seoul-ai", "--search-url", "https://www.jobkorea.co.kr/Search?stext=AI", "--dry-run", "--confirm"])).toThrow(/함께/);
+    expect(() => parseJobKoreaCollectionArgs(["--preset", "seoul-ai", "--pages", "4", "--dry-run", "--confirm"])).toThrow(/줄일/);
+    expect(() => parseJobKoreaCollectionArgs(["--preset", "seoul-ai", "--region", "capital", "--dry-run", "--confirm"])).toThrow(/지역 범위/);
+    expect(() => parseJobKoreaCollectionArgs(["--preset", "capital-ai", "--max-details", "51", "--dry-run", "--confirm"])).toThrow(/1~50/);
   });
 });
 
@@ -82,6 +98,12 @@ describe("JobKorea collection candidate selection", () => {
     const kinds = ["explicit_promoted", "recommendation", "structurally_provisional", "unclassified_result_link"] as const;
     const selected = selectJobKoreaCollectionCandidates([page(1, kinds.map((kind, index) => collectionCandidate(String(50000100 + index), index + 1, kind)))], 30);
     expect(selected.candidates.map((item) => item.listingClassification)).toEqual(kinds);
+  });
+
+  it("filters regions before max-details while preserving page and source order", () => {
+    const selected = selectJobKoreaCollectionCandidates([page(1, [listingCandidate("50000201", 1, "부산"), listingCandidate("50000202", 2, "서울 강남구"), listingCandidate("50000203", 3, null), listingCandidate("50000204", 4, "경기 성남시"), listingCandidate("50000205", 5, "서울 서초구 / 경기 과천시")])], 2, ["seoul", "gyeonggi"]);
+    expect(selected.candidates.map((item) => item.sourcePostingId)).toEqual(["50000202", "50000204"]);
+    expect(selected).toMatchObject({ uniquePostingIds: 5, seoulMatches: 2, gyeonggiMatches: 2, multipleRegionMatches: 1, unknownRegionCandidates: 1, excludedByRegion: 2 });
   });
 });
 
@@ -108,7 +130,7 @@ describe("JobKorea bounded collection pipeline", () => {
     expect(testDb.database.prepare("SELECT COUNT(*) count FROM ingestion_runs").get()).toEqual({ count: 2 });
     expect(testDb.database.prepare("SELECT COUNT(*) count FROM ingestion_items").get()).toEqual({ count: 2 });
     const row = testDb.database.prepare("SELECT observation_kind, source_fixture_reference FROM jobs WHERE source_posting_id='50002001'").get() as Record<string, string>;
-    expect(row.observation_kind).toBe("bounded_manual_collection"); expect(row.source_fixture_reference).toContain("detail_http:1:1:structurally_provisional:3:50002001");
+    expect(row.observation_kind).toBe("bounded_manual_collection"); expect(row.source_fixture_reference).toContain("explicit:detail_http:1:1:structurally_provisional:3:50002001");
   });
 
   it("records a failed detail without replacement or job insertion", async () => {
@@ -191,5 +213,19 @@ describe("JobKorea bounded collection pipeline", () => {
       { database: testDb.database, createExecution: async () => execution([page(1, [invalid])]), httpClient: blocked });
     expect(result).toMatchObject({ listingOnlyRecords: 0, failedRecords: 1, actualInserts: 0 });
     expect(testDb.database.prepare("SELECT COUNT(*) count FROM ingestion_items").get()).toEqual({ count: 1 });
+  });
+
+  it("preset 지역 근거와 원문 위치를 저장하고 반복 실행은 멱등이다", async () => {
+    const testDb = createTestDatabase(); databases.push(testDb);
+    const candidate = listingCandidate("50006004", 1, "서울 강남구 / 경기 성남시");
+    const blocked = () => new JobKoreaHttpClient(async () => new Response("<!doctype html><a href='/login'>로그인이 필요합니다</a>", { status: 200, headers: { "content-type": "text/html" } }));
+    const options = { searchUrl: "https://www.jobkorea.co.kr/Search?stext=AI", pages: 1 as const, maxDetails: 1, mode: "write" as const, confirm: true as const,
+      allowListingFallback: true, presetId: "capital-ai", presetLabel: "서울·경기 AI 일자리", keyword: "AI", requestedRegions: ["seoul", "gyeonggi"] as Array<"seoul" | "gyeonggi"> };
+    const first = await collectJobKoreaOnce(options, { database: testDb.database, createExecution: async () => execution([page(1, [candidate])]), httpClient: blocked() });
+    const second = await collectJobKoreaOnce(options, { database: testDb.database, createExecution: async () => execution([page(1, [candidate])]), httpClient: blocked() });
+    expect(first.actualInserts).toBe(1); expect(second.actualUnchanged).toBe(1);
+    const row = testDb.database.prepare("SELECT address_original_text, collection_preset_id, collection_keyword, requested_regions_json, normalized_regions_json, region_normalization_confidence FROM jobs WHERE source_posting_id=?").get("50006004") as Record<string,string>;
+    expect(row).toMatchObject({ address_original_text: "서울 강남구 / 경기 성남시", collection_preset_id: "capital-ai", collection_keyword: "AI",
+      requested_regions_json: '["seoul","gyeonggi"]', normalized_regions_json: '["seoul","gyeonggi"]', region_normalization_confidence: "multiple" });
   });
 });

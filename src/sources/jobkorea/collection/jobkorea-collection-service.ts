@@ -17,23 +17,50 @@ import { JOBKOREA_PARSER_CONTRACT_VERSION, JOBKOREA_SANITIZER_VERSION, sanitizeJ
 import { normalizeJobKoreaUrl, sourcePostingIdFromUrl } from "../transport/jobkorea-url-policy";
 import type { JobKoreaHttpResponse } from "../transport/types";
 import type { JobKoreaCollectedDetailOutcome, JobKoreaCollectionCandidate, JobKoreaCollectionDependencies, JobKoreaCollectionOptions, JobKoreaCollectionResult } from "./jobkorea-collection-types";
+import { matchesCollectionRegions, normalizeRegionText, type CollectionRegion, type NormalizedRegion } from "../../../services/region-normalizer";
 
 export const JOBKOREA_COLLECTION_DETAIL_CONCURRENCY = 2;
 export const JOBKOREA_COLLECTION_DRY_RUN_DEADLINE_MS = 90_000;
 export const JOBKOREA_COLLECTION_WRITE_DEADLINE_MS = 8 * 60_000;
 
-export function selectJobKoreaCollectionCandidates(pages: JobKoreaCollectionResult["pageResults"], maximum: number): { candidates: JobKoreaCollectionCandidate[]; uniquePostingIds: number } {
+export interface JobKoreaCandidateSelection {
+  candidates: JobKoreaCollectionCandidate[];
+  uniquePostingIds: number;
+  seoulMatches: number;
+  gyeonggiMatches: number;
+  multipleRegionMatches: number;
+  unknownRegionCandidates: number;
+  excludedByRegion: number;
+  excludedRegionSamples: Array<{ sourcePostingId: string; reason: "nonmatching" | "unknown"; normalizedRegions: NormalizedRegion[] }>;
+}
+
+export function selectJobKoreaCollectionCandidates(pages: JobKoreaCollectionResult["pageResults"], maximum: number, requestedRegions: CollectionRegion[] = []): JobKoreaCandidateSelection {
   const seen = new Set<string>(); const all: JobKoreaCollectionCandidate[] = [];
+  let seoulMatches = 0, gyeonggiMatches = 0, multipleRegionMatches = 0, unknownRegionCandidates = 0, excludedByRegion = 0;
+  const excludedRegionSamples: JobKoreaCandidateSelection["excludedRegionSamples"] = [];
   for (const page of [...pages].sort((a, b) => a.pageNumber - b.pageNumber)) {
     for (const candidate of [...(page.collectionCandidates ?? [])].sort((a, b) => a.firstSourcePosition - b.firstSourcePosition)) {
       if (seen.has(candidate.postingId)) continue;
       seen.add(candidate.postingId);
+      const region = normalizeRegionText(candidate.listingFields?.regionText);
+      if (region.regions.includes("seoul")) seoulMatches += 1;
+      if (region.regions.includes("gyeonggi")) gyeonggiMatches += 1;
+      if (region.regions.length > 1) multipleRegionMatches += 1;
+      if (!region.regions.length) unknownRegionCandidates += 1;
+      if (!matchesCollectionRegions(region, requestedRegions)) {
+        excludedByRegion += 1;
+        if (excludedRegionSamples.length < 5) excludedRegionSamples.push({ sourcePostingId: candidate.postingId,
+          reason: region.regions.length ? "nonmatching" : "unknown", normalizedRegions: region.regions });
+        continue;
+      }
       all.push({ sourcePostingId: candidate.postingId, sourceUrl: candidate.canonicalUrl, pageNumber: page.pageNumber,
         sourcePosition: candidate.firstSourcePosition, observedLinkCount: candidate.observedLinkCount,
-        listingClassification: candidate.listingClassification, listingFields: candidate.listingFields ?? null });
+        listingClassification: candidate.listingClassification, listingFields: candidate.listingFields ?? null,
+        normalizedRegions: region.regions, regionConfidence: region.confidence });
     }
   }
-  return { candidates: all.slice(0, maximum), uniquePostingIds: seen.size };
+  return { candidates: all.slice(0, maximum), uniquePostingIds: seen.size, seoulMatches, gyeonggiMatches, multipleRegionMatches,
+    unknownRegionCandidates, excludedByRegion, excludedRegionSamples };
 }
 
 function listing(candidate: JobKoreaCollectionCandidate, capturedAt: string): JobKoreaListing {
@@ -52,14 +79,17 @@ const hasValidListingFallback = (candidate: JobKoreaCollectionCandidate): boolea
 function collectionRecord(candidate: JobKoreaCollectionCandidate, options: JobKoreaCollectionOptions, observedAt: string,
   job: ReturnType<typeof normalizeJobKorea>, completeness: "detail_complete" | "listing_only", detailUrl: string | null): IngestionRecord {
   const sourceReference = completeness === "detail_complete"
-    ? `bounded_manual_collection:detail_http:${candidate.pageNumber}:${candidate.sourcePosition}:${candidate.listingClassification}:${candidate.observedLinkCount}:${candidate.sourcePostingId}`
-    : `bounded_listing_collection:listing_playwright:${candidate.pageNumber}:${candidate.sourcePosition}:${candidate.listingClassification}:${candidate.observedLinkCount}:${candidate.sourcePostingId}`;
+    ? `bounded_manual_collection:${options.presetId ?? "explicit"}:detail_http:${candidate.pageNumber}:${candidate.sourcePosition}:${candidate.listingClassification}:${candidate.observedLinkCount}:${candidate.sourcePostingId}`
+    : `bounded_listing_collection:${options.presetId ?? "explicit"}:listing_playwright:${candidate.pageNumber}:${candidate.sourcePosition}:${candidate.listingClassification}:${candidate.observedLinkCount}:${candidate.sourcePostingId}`;
   return { job, metadata: { recordKind: "live_one_shot_observation", evidenceType: "public_page_observation",
     sourceFixtureReference: sourceReference, mapPosition: null, permissionStatus: "unverified", listingUrl: options.searchUrl,
     detailUrl, observedAt, sanitizerVersion: completeness === "detail_complete" ? JOBKOREA_SANITIZER_VERSION : "jobkorea-listing-card-v1",
     parserVersion: completeness === "detail_complete" ? JOBKOREA_PARSER_CONTRACT_VERSION : "jobkorea-listing-card-v1",
     observationKind: completeness === "detail_complete" ? "bounded_manual_collection" : "bounded_listing_collection",
-    observationTransport: "playwright", pageNumber: candidate.pageNumber, listingPosition: candidate.sourcePosition } };
+    observationTransport: "playwright", pageNumber: candidate.pageNumber, listingPosition: candidate.sourcePosition,
+    collectionPresetId: options.presetId ?? null, collectionPresetLabel: options.presetLabel ?? null, collectionKeyword: options.keyword ?? "",
+    requestedRegions: options.requestedRegions ?? [], normalizedRegions: candidate.normalizedRegions, regionConfidence: candidate.regionConfidence,
+    detailAccessStatus: completeness === "detail_complete" ? "available" : "access_blocked", observedLinkCount: candidate.observedLinkCount } };
 }
 
 function detailStatus(status: PostingStatus): "active" | "expired" | "closed" {
@@ -99,7 +129,7 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
   try {
     execution = await (dependencies.createExecution ?? createJobKoreaSearchExecution)(executionOptions);
     const blockedPages = execution.pages.filter((page) => page.blocked).length;
-    const selection = selectJobKoreaCollectionCandidates(execution.pages, options.maxDetails);
+    const selection = selectJobKoreaCollectionCandidates(execution.pages, options.maxDetails, options.requestedRegions ?? []);
     const records: IngestionRecord[] = []; const outcomes = await concurrentMap(selection.candidates, JOBKOREA_COLLECTION_DETAIL_CONCURRENCY, async (candidate) => {
       if (performance.now() - started >= deadline) return { sourcePostingId: candidate.sourcePostingId, requestedUrl: candidate.sourceUrl,
         finalUrl: null, httpStatus: null, redirectCount: null, redirectClassification: "not_observed", redirectChain: [],
@@ -169,8 +199,11 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
     }
     const parsed = outcomes.filter((item) => item.parserResult === "parsed");
     const result: JobKoreaCollectionResult = { runId, mode: options.mode, status: blockedPages && !parsed.length ? "blocked" : failed || execution.pages.length < options.pages ? "partial" : "completed",
+      presetId: options.presetId ?? null, presetLabel: options.presetLabel ?? null, keyword: options.keyword ?? "", requestedRegions: options.requestedRegions ?? [],
       pageResults: execution.pages, listingPagesRequested: options.pages, listingPagesCompleted: execution.pages.length,
       numericLinksExtracted: execution.pages.reduce((sum, page) => sum + (page.extractedCount ?? 0), 0), uniquePostingIds: selection.uniquePostingIds,
+      seoulMatches: selection.seoulMatches, gyeonggiMatches: selection.gyeonggiMatches, multipleRegionMatches: selection.multipleRegionMatches,
+      unknownRegionCandidates: selection.unknownRegionCandidates, excludedByRegion: selection.excludedByRegion, excludedRegionSamples: selection.excludedRegionSamples,
       candidatesSelected: selection.candidates.length, detailPagesAttempted: outcomes.length, successfullyParsed: parsed.length,
       activeJobs: parsed.filter((item) => item.status === "active").length, expiredOrClosedJobs: parsed.filter((item) => item.status === "expired" || item.status === "closed").length,
       transportFailures: outcomes.filter((item) => item.status === "transport_failed").length, blockedDetails: outcomes.filter((item) => item.status === "access_blocked").length,

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JobFilterState, SavedPreferences, SortOption, UserJobStatus, UiJobRecord, UserOrigin } from "../../domain/ui-job";
 import { createPreferencesRepository, DEFAULT_PREFERENCES } from "../../repositories/preferences-repository";
-import { filterJobs, DEFAULT_FILTERS, reconcileSelectedJobId, sortJobs } from "../../services/job-search";
+import { countActiveFilters, filterJobs, DEFAULT_FILTERS, isMapEligible, reconcileSelectedJobId, sortJobs } from "../../services/job-search";
 import { FilterPanel } from "../filters/FilterPanel";
 import { AppHeader } from "../header/AppHeader";
 import { JobList } from "../jobs/JobList";
@@ -55,6 +55,8 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
   const filtered = useMemo(() => filterJobs(initialJobs, filters, REFERENCE_NOW), [filters, initialJobs]);
   const sorted = useMemo(() => sortJobs(filtered, sort, origin), [filtered, origin, sort]);
   const visibleIds = useMemo(() => sorted.map(({ job }) => job.id), [sorted]);
+  const availableSources = useMemo(() => [...new Set(initialJobs.map(({ job }) => job.source).filter((source): source is "jobkorea" | "albamon" => source === "jobkorea" || source === "albamon"))], [initialJobs]);
+  const mapVisibleCount = useMemo(() => sorted.filter(isMapEligible).length, [sorted]);
   useEffect(() => {
     if (!hydrated) return;
     setSelectedJobId((current) => reconcileSelectedJobId(current, visibleIds));
@@ -103,7 +105,7 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
   return (
     <main className="app-shell">
       <AppHeader filters={filters} mapVisible={mapVisible} onFiltersChange={setFilters} onToggleFilters={() => setFiltersOpen(true)}
-        onToggleMap={toggleMap} />
+        onToggleMap={toggleMap} availableSources={availableSources} activeFilterCount={countActiveFilters(filters)} />
       <div className="notice-strip">
         <span><strong>{hasOneShotObservation ? "로컬 검증 데이터" : "fixture/demo 모드"}</strong> · {hasOneShotObservation ? "공개 페이지를 제한적으로 1회 확인한 데이터가 포함됩니다. 공식 제휴나 지속적인 실시간 연동이 아니며 원문을 최종 기준으로 확인하세요." : "실시간 수집 없이 정제 fixture와 가상 공고만 표시합니다."}</span>
         <span className="privacy-note">입력한 출발지와 화면 설정은 기본적으로 이 브라우저에만 저장됩니다. 브라우저 저장공간을 지우면 설정이 삭제될 수 있습니다.</span>
@@ -112,6 +114,7 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
       {storageFailed && <div className="warning-banner" role="alert">브라우저 저장공간에 설정을 저장하지 못했습니다. 현재 화면에서는 계속 사용할 수 있습니다.</div>}
       {dataWarning && <div className="warning-banner" role="status">{dataWarning}</div>}
       <SummaryStrip {...summary} />
+      <p className="result-count-line" aria-live="polite">{initialJobs.length}개 중 {sorted.length}개 표시 · 지도 {mapVisibleCount}개</p>
       {filtersOpen && <FilterPanel filters={filters} jobs={initialJobs} onChange={setFilters} onClose={closeFilters} />}
       <div className="mobile-view-switch" aria-label="모바일 화면 전환">
         <button type="button" className={mobileView === "list" ? "active" : ""} onClick={() => showMobileView("list")} aria-pressed={mobileView === "list"}>목록</button>

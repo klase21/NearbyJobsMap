@@ -2,14 +2,19 @@ import type Database from "better-sqlite3";
 import type { UpsertAction } from "../../../db/repositories/job-repository";
 import type { JobKoreaListingCardFields, JobKoreaListingClassificationMetadata, JobKoreaListingPageResult, JobKoreaSearchExecution } from "../transport/jobkorea-search-types";
 import type { JobKoreaHttpClient } from "../transport/jobkorea-http-client";
+import type { CollectionRegion, NormalizedRegion, RegionNormalizationConfidence } from "../../../services/region-normalizer";
 
 export interface JobKoreaCollectionOptions {
   searchUrl: string;
-  pages: 1 | 2 | 3;
+  pages: 1 | 2 | 3 | 4 | 5;
   maxDetails: number;
   mode: "dry-run" | "write";
   confirm: true;
   allowListingFallback?: boolean;
+  presetId?: string | null;
+  presetLabel?: string | null;
+  keyword?: string;
+  requestedRegions?: CollectionRegion[];
 }
 
 export interface JobKoreaCollectionCandidate {
@@ -20,6 +25,8 @@ export interface JobKoreaCollectionCandidate {
   observedLinkCount: number;
   listingClassification: JobKoreaListingClassificationMetadata;
   listingFields: JobKoreaListingCardFields | null;
+  normalizedRegions: NormalizedRegion[];
+  regionConfidence: RegionNormalizationConfidence;
 }
 
 export type JobKoreaCollectedDetailStatus = "active" | "expired" | "closed" | "deleted" | "access_blocked" | "parse_failed" | "invalid_detail" | "transport_failed";
@@ -45,11 +52,21 @@ export interface JobKoreaCollectionResult {
   runId: string | null;
   mode: JobKoreaCollectionOptions["mode"];
   status: "completed" | "partial" | "failed" | "blocked";
+  presetId: string | null;
+  presetLabel: string | null;
+  keyword: string;
+  requestedRegions: CollectionRegion[];
   pageResults: JobKoreaListingPageResult[];
   listingPagesRequested: number;
   listingPagesCompleted: number;
   numericLinksExtracted: number;
   uniquePostingIds: number;
+  seoulMatches: number;
+  gyeonggiMatches: number;
+  multipleRegionMatches: number;
+  unknownRegionCandidates: number;
+  excludedByRegion: number;
+  excludedRegionSamples: Array<{ sourcePostingId: string; reason: "nonmatching" | "unknown"; normalizedRegions: NormalizedRegion[] }>;
   candidatesSelected: number;
   detailPagesAttempted: number;
   successfullyParsed: number;

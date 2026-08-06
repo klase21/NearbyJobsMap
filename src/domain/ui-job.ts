@@ -3,9 +3,12 @@ import type { LocationAccuracy } from "./location";
 import type { PostingStatus } from "./posting-status";
 import type { SalaryType } from "./salary";
 import type { DataProvenanceKind } from "./data-provenance";
+import type { NormalizedRegion, RegionNormalizationConfidence } from "../services/region-normalizer";
 
 export type ActiveJobSource = "jobkorea" | "albamon";
-export type RegionGroup = "서울" | "경기";
+export type RegionFilter = "all" | "seoul" | "gyeonggi" | "other" | "unknown";
+export type ProvenanceFilter = "all" | "manual" | "fixture" | "demo";
+export type CompletenessFilter = "all" | "listing_only" | "detail_complete";
 export type UserJobStatus = "reviewing" | "saved" | "planned" | "applied" | "excluded";
 export type SortOption = "newest" | "deadline" | "distance" | "hourly" | "daily" | "monthly" | "annual" | "normalized_monthly" | "company";
 
@@ -20,6 +23,11 @@ export interface UiJobRecord {
   provenanceKind?: DataProvenanceKind;
   observedAt?: string | null;
   observationKind?: "bounded_public_browser_observation" | "bounded_manual_collection" | "bounded_listing_collection" | null;
+  collectionPresetId?: string | null;
+  collectionPresetLabel?: string | null;
+  collectionKeyword?: string | null;
+  normalizedRegions?: NormalizedRegion[];
+  regionConfidence?: RegionNormalizationConfidence;
 }
 
 export interface SalaryThresholds { hourly: number; daily: number; monthly: number; annual: number; normalizedMonthly: number }
@@ -27,7 +35,10 @@ export interface SalaryThresholds { hourly: number; daily: number; monthly: numb
 export interface JobFilterState {
   keyword: string;
   source: "all" | ActiveJobSource;
-  region: "all" | RegionGroup;
+  provenance: ProvenanceFilter;
+  completeness: CompletenessFilter;
+  region: RegionFilter;
+  mapEligibility: "all" | "map" | "list_only";
   city: string;
   district: string;
   category: string;

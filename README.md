@@ -289,3 +289,21 @@ npm.cmd run collect:jobkorea:once -- `
 별도 승인된 HTTP-first 실제 dry-run도 page 1의 numeric link 90개와 고유 posting ID 26개에서 동일한 앞 5개를 선택했다. 명령은 6.171초에 종료됐고 다섯 canonical desktop 상세 URL 모두 첫 HTTP redirect에서 `JOBKOREA_LOGIN_REDIRECT`로 분류됐다. 유효 상세 body가 없었으므로 parser·normalizer·canonical validation은 실행되지 않았고 예상 insert/update/unchanged는 모두 0이었다. dry-run 전후 DB SHA-256과 jobs 16, ingestion runs 8, provenance 16, ingestion items 64, one-shot records 0은 동일했다. 이 결과는 **그 anonymous HTTP 요청 계약의 로그인 redirect**를 뜻하며 공개 browser 상세의 일반 접근 가능성까지 부정하지 않는다.
 
 같은 실행 뒤 오프라인 점검에서 HTTP-first client가 요구된 browser-like 식별자 대신 이전 prototype UA를 계속 사용하고, redirect의 sanitized target/status/hop을 결과에서 버리는 구현 격차를 확인했다. client는 이제 `Mozilla/5.0` 호환 문자열 끝에 `NearbyJobsMap/0.1 bounded-manual-collection`을 명시하고 공개 페이지용 `Accept`, `Accept-Language`, `Cache-Control`만 전송한다. cookie, authorization, referer는 보내지 않는다. redirect는 최대 3 hop, HTTPS allowlist, 동일 posting ID를 강제하며 query를 제거한 host/path와 status만 보존한다. desktop↔mobile 동일-ID redirect, login, root, malformed/ID 변경을 분리한다. 이후 승인된 실제 HTTP-first dry-run에서는 다섯 요청 모두 HTTP 200과 redirect 0회를 측정했지만 응답 본문이 login 페이지로 분류되어 상세 parser는 성공하지 못했다. 따라서 상세 transport 성공을 가장하지 않고 검증된 listing fallback으로 bounded write를 완료했다.
+
+## 잡코리아 지역 preset과 UI 필터
+
+수동 collection preset은 공개 keyword search를 사용한 뒤 listing card의 원본 location을 로컬에서 정규화한다. JobKorea의 undocumented region query parameter에는 의존하지 않는다. `seoul-ai`는 서울·3페이지·30건, `gyeonggi-ai`는 경기·3페이지·30건, `capital-ai`는 서울과 경기·5페이지·50건이며 모두 listing fallback을 활성화한다. hard cap은 5페이지·50건, detail 동시성 2, retry 0이다. override는 preset 한도를 줄일 수만 있다.
+
+```powershell
+npm.cmd run collect:jobkorea:once -- --preset seoul-ai --dry-run --confirm
+npm.cmd run collect:jobkorea:once -- --preset gyeonggi-ai --write --confirm
+npm.cmd run collect:jobkorea:once -- --preset capital-ai --pages 2 --max-details 20 --write --confirm
+```
+
+서울의 직접 표기와 25개 자치구, 경기의 직접 표기와 31개 시·군을 명시적 mapping으로 판정한다. 복수 location은 일치하는 모든 region을 보존하고 어느 하나가 요청 region과 일치하면 포함한다. 누락·모호한 location은 `unknown`이며 서울/경기 preset에서 제외된다. original location은 덮어쓰지 않고 normalized region, confidence, preset ID·label, keyword, requested region, 관찰 시각을 provenance metadata로 보존한다. 기존 30개 listing observation 중 원본 location으로 결정 가능한 20개는 이번 preset write에서 서울 10개·경기 10개로 갱신됐고, location이 없는 10개는 unknown으로 남았다.
+
+2026-08-06 승인된 `capital-ai --pages 2 --max-details 20` 실제 dry-run은 2페이지에서 numeric link 156개와 region filter 전 unique posting ID 44개를 측정했다. 서울 27개, 경기 13개, 복수 0개, unknown 4개였고 unknown 4개를 제외한 뒤 앞의 20개를 선택했다. detail은 login 19개와 verification 1개로 모두 차단됐지만 title/company가 검증된 listing fallback 20개가 기존 identity의 update로 예측됐으며 DB SHA-256과 46 jobs·9 runs·94 items·46 provenance는 변하지 않았다.
+
+이어진 단 한 번의 write도 2페이지·20개 후보로 완료됐다. detail parse는 0개, listing-only fallback은 20개, insert/update/unchanged는 0/20/0이었다. 최종 SQLite는 46 jobs, 10 ingestion runs, 114 ingestion items, 66 provenance rows이며 duplicate source identity는 0개다. 이는 공식 API나 source-provided region filter가 아니며 permission은 계속 `unverified`다.
+
+UI filter는 source, provenance(수동 수집·픽스처·데모), completeness(목록 정보·상세 확인), region(서울·경기·기타·지역 미확인), posting status, map eligibility를 제공한다. category 간에는 AND로 결합하고 keyword search는 title·company·location·employment type·source를 포함한다. 결과는 `전체 중 표시 · 지도 가능` 수로 요약되며 reset은 기본값을 복원한다. preference는 version 2 localStorage에 저장되고 이전 version 1 값은 안전하게 보완하며 알 수 없는 stale 값은 무시한다. 실제 46개 데이터에서 잡코리아+수동 수집+목록 정보 조합은 서울 10개, 경기 10개, 지역 미확인 10개이고 좌표가 없어 map-eligible은 0개다. reset 결과는 46개 목록과 8개 marker다.

@@ -11,7 +11,7 @@ export type JobKoreaSearchPageClassification =
 
 export interface JobKoreaSearchOptions {
   searchUrl: string;
-  pages: 1 | 2 | 3;
+  pages: 1 | 2 | 3 | 4 | 5;
   maxDetails: number;
   transport: JobKoreaSearchTransportChoice;
   confirm: true;

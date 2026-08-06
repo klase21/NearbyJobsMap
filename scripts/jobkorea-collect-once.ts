@@ -9,8 +9,10 @@ import { JobKoreaTransportError } from "../src/sources/jobkorea/transport/jobkor
 async function main(): Promise<void> {
   const options = parseJobKoreaCollectionArgs(process.argv.slice(2));
   console.log("잡코리아 수동 bounded 수집 사전 요약");
-  console.log(`Search URL: ${options.searchUrl}`); console.log(`Listing pages: ${options.pages}/3`);
-  console.log(`Detail pages: ${options.maxDetails}/30`); console.log(`Detail concurrency: ${JOBKOREA_COLLECTION_DETAIL_CONCURRENCY}/2`);
+  console.log(`Preset: ${options.presetId ?? "explicit-url"}${options.presetLabel ? ` (${options.presetLabel})` : ""}`);
+  console.log(`Keyword: ${options.keyword || "(없음)"}`); console.log(`Regions: ${options.requestedRegions?.join(", ") || "all"}`);
+  console.log(`Search URL: ${options.searchUrl}`); console.log(`Listing pages: ${options.pages}/5`);
+  console.log(`Detail pages: ${options.maxDetails}/50`); console.log(`Detail concurrency: ${JOBKOREA_COLLECTION_DETAIL_CONCURRENCY}/2`);
   console.log("Retries/direct endpoint/cookies/login/profile/stealth: disabled"); console.log(`Database writes: ${options.mode === "write" ? "enabled" : "disabled"}`);
   console.log(`Listing fallback: ${options.allowListingFallback ? "enabled" : "disabled"}`);
   const database = options.mode === "write" ? openWritableDatabase(getDatabasePath()) : openReadonlyDatabase(getDatabasePath());

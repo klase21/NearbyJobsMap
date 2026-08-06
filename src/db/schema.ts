@@ -2,8 +2,9 @@ import type { MapPosition } from "../domain/ui-job";
 import type { CanonicalJob } from "../domain/canonical-job";
 import type { JobSource } from "../domain/job-source";
 import type { DataProvenanceKind, PermissionStatus } from "../domain/data-provenance";
+import type { CollectionRegion, NormalizedRegion, RegionNormalizationConfidence } from "../services/region-normalizer";
 
-export const REQUIRED_MIGRATION_VERSION = "0003";
+export const REQUIRED_MIGRATION_VERSION = "0004";
 
 export type RecordKind = DataProvenanceKind;
 export type EvidenceType = "observed_html" | "observed_json_ld" | "observed_internal_json" | "fictional_demo" | "public_page_observation";
@@ -26,6 +27,14 @@ export interface IngestionMetadata {
   observationTransport?: "playwright" | "direct" | null;
   pageNumber?: number | null;
   listingPosition?: number | null;
+  collectionPresetId?: string | null;
+  collectionPresetLabel?: string | null;
+  collectionKeyword?: string | null;
+  requestedRegions?: CollectionRegion[];
+  normalizedRegions?: NormalizedRegion[];
+  regionConfidence?: RegionNormalizationConfidence;
+  detailAccessStatus?: "available" | "access_blocked" | "unavailable" | null;
+  observedLinkCount?: number | null;
 }
 
 export interface TransportRunMetadata {

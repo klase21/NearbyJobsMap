@@ -21,7 +21,7 @@ describe("UI 공고 필터", () => {
   ];
   it("키워드", () => expect(filterJobs(jobs, filters({ keyword: "한결" }), now).map((item) => item.job.id)).toEqual(["albamon:2"]));
   it("소스", () => expect(filterJobs(jobs, filters({ source: "jobkorea" }), now)).toHaveLength(1));
-  it("서울·경기", () => expect(filterJobs(jobs, filters({ region: "경기" }), now)[0]?.job.id).toBe("albamon:2"));
+  it("서울·경기", () => expect(filterJobs(jobs, filters({ region: "gyeonggi" }), now)[0]?.job.id).toBe("albamon:2"));
   it("직종", () => expect(filterJobs(jobs, filters({ category: "물류" }), now)).toHaveLength(1));
   it("고용형태", () => expect(filterJobs(jobs, filters({ employmentType: "정규직" }), now)).toHaveLength(1));
   it("공고 상태", () => expect(filterJobs(jobs, filters({ postingStatus: "closing_soon" }), now)).toHaveLength(1));
@@ -32,6 +32,28 @@ describe("UI 공고 필터", () => {
     expect(filterJobs(locations, filters({ locationAccuracy: "location_undecided" }), now)[0]?.job.id).toBe("undecided");
   });
   it("가상 공고 숨김", () => expect(filterJobs(jobs, filters({ showDemo: false }), now).map((item) => item.job.id)).toEqual(["jobkorea:1"]));
+  it("provenance와 완성도", () => {
+    const manual = { ...jobs[0]!, provenanceKind: "live_one_shot_observation" as const, observationKind: "bounded_listing_collection" as const };
+    expect(filterJobs([manual, jobs[1]!], filters({ provenance: "manual" }), now)).toEqual([manual]);
+    expect(filterJobs([manual, jobs[1]!], filters({ completeness: "listing_only" }), now)).toEqual([manual]);
+    expect(filterJobs([manual, jobs[1]!], filters({ completeness: "detail_complete" }), now)).toEqual([]);
+  });
+  it("기타·미확인 지역", () => {
+    const other = record({ id: "other", addressOriginalText: "부산 해운대구" });
+    const unknown = record({ id: "unknown", addressOriginalText: null, city: null, district: null, workplaces: [] });
+    expect(filterJobs([other, unknown], filters({ region: "other" }), now).map(({ job }) => job.id)).toEqual(["other"]);
+    expect(filterJobs([other, unknown], filters({ region: "unknown" }), now).map(({ job }) => job.id)).toEqual(["unknown"]);
+  });
+  it("지도 가능 여부와 AND 결합", () => {
+    const mapped = record({ id: "mapped", source: "jobkorea", addressOriginalText: "서울 강남구" }, false, [37.5, 127]);
+    const listOnly = record({ id: "list", source: "jobkorea", addressOriginalText: "서울 강남구" });
+    expect(filterJobs([mapped, listOnly], filters({ source: "jobkorea", region: "seoul", mapEligibility: "map" }), now).map(({ job }) => job.id)).toEqual(["mapped"]);
+    expect(filterJobs([mapped, listOnly], filters({ mapEligibility: "list_only" }), now).map(({ job }) => job.id)).toEqual(["list"]);
+  });
+  it("키워드는 고용형태와 source label도 검색", () => {
+    expect(filterJobs(jobs, filters({ keyword: "정규직" }), now)).toHaveLength(1);
+    expect(filterJobs(jobs, filters({ keyword: "알바몬" }), now)).toHaveLength(1);
+  });
 });
 
 describe("급여 단위 필터와 정렬", () => {

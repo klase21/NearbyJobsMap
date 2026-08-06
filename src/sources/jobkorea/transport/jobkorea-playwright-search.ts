@@ -136,7 +136,7 @@ export class JobKoreaPlaywrightSearchExecution implements JobKoreaSearchExecutio
         page.on("requestfailed", (request) => this.failedResourceInputs.push(failedResourceInputFromRequest(request)));
         page.on("request", (request) => { observedDirect ??= observeDirectRequest(request); });
         await runBoundedLifecyclePhase(`page-${pageNumber}-navigation`, NAVIGATION_TIMEOUT_MS + 250,
-          () => page!.goto(jobKoreaSearchPageUrl(this.options.searchUrl, pageNumber as 1 | 2 | 3), { waitUntil: "commit", timeout: NAVIGATION_TIMEOUT_MS }).then(() => undefined),
+          () => page!.goto(jobKoreaSearchPageUrl(this.options.searchUrl, pageNumber as 1 | 2 | 3 | 4 | 5), { waitUntil: "commit", timeout: NAVIGATION_TIMEOUT_MS }).then(() => undefined),
           this.lifecycleDiagnostics);
         const readiness = await runBoundedLifecyclePhase(`page-${pageNumber}-readiness`, READINESS_TIMEOUT_MS + 250, async () => {
           await page!.waitForFunction(() => {

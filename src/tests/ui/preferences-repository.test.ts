@@ -26,4 +26,15 @@ describe("버전형 로컬 설정 저장소", () => {
     const storage = new MemoryStorage(); storage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify({ version: 1, value: { ...DEFAULT_PREFERENCES, filters: { ...DEFAULT_PREFERENCES.filters, source: "work24" } } }));
     expect(createPreferencesRepository(storage).load()).toEqual({ value: DEFAULT_PREFERENCES, corrupted: true });
   });
+  it("이전 version 1 설정에는 새 필터 기본값을 안전하게 보완한다", () => {
+    const storage = new MemoryStorage();
+    const legacy = { ...DEFAULT_PREFERENCES, filters: Object.fromEntries(Object.entries(DEFAULT_PREFERENCES.filters).filter(([key]) => !["provenance","completeness","mapEligibility"].includes(key))) };
+    storage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify({ version: 1, value: legacy }));
+    expect(createPreferencesRepository(storage).load()).toMatchObject({ corrupted: false, value: { filters: { provenance: "all", completeness: "all", mapEligibility: "all" } } });
+  });
+  it("새 필터 선택을 저장하고 복원한다", () => {
+    const storage = new MemoryStorage(); const repository = createPreferencesRepository(storage);
+    repository.save({ ...DEFAULT_PREFERENCES, filters: { ...DEFAULT_PREFERENCES.filters, provenance: "manual", completeness: "listing_only", region: "seoul", mapEligibility: "list_only" } });
+    expect(repository.load()).toMatchObject({ corrupted: false, value: { filters: { provenance: "manual", completeness: "listing_only", region: "seoul", mapEligibility: "list_only" } } });
+  });
 });

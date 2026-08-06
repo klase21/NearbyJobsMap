@@ -1,10 +1,11 @@
 import type { LocationAccuracy } from "../domain/location";
 import type { SalaryType } from "../domain/salary";
-import type { JobFilterState, MapPosition, RegionGroup, SortOption, UiJobRecord, UserOrigin } from "../domain/ui-job";
+import type { JobFilterState, MapPosition, SortOption, UiJobRecord, UserOrigin } from "../domain/ui-job";
 import { haversineDistanceKm } from "./distance";
+import { normalizeRegionText, type NormalizedRegion as RegionValue } from "./region-normalizer";
 
 export const DEFAULT_FILTERS: JobFilterState = {
-  keyword: "", source: "all", region: "all", city: "", district: "", category: "", employmentType: "",
+  keyword: "", source: "all", provenance: "all", completeness: "all", region: "all", mapEligibility: "all", city: "", district: "", category: "", employmentType: "",
   experienceRequirement: "", educationRequirement: "", salaryType: "all",
   salaryThresholds: { hourly: 0, daily: 0, monthly: 0, annual: 0, normalizedMonthly: 0 },
   postingStatus: "all", locationAccuracy: "all", locationMode: "all", deadline: "all", showDemo: true,
@@ -32,11 +33,23 @@ const distanceFromOrigin = (record: UiJobRecord, origin: UserOrigin): number | n
   return distances.length ? Math.min(...distances) : null;
 };
 
-export function getRegionGroup(record: UiJobRecord): RegionGroup | null {
-  const text = `${record.job.addressOriginalText ?? ""} ${record.job.city ?? ""}`;
-  if (/서울/.test(text)) return "서울";
-  if (/경기|(?:수원|성남|안양|군포|의왕|용인|화성|파주|고양|부천|광명|구리|남양주)시/.test(text)) return "경기";
-  return null;
+export function getNormalizedRegions(record: UiJobRecord): RegionValue[] {
+  if (record.normalizedRegions?.length) return record.normalizedRegions;
+  const evidence = [record.job.addressOriginalText, record.job.city, record.job.district, ...record.job.workplaces.map((item) => item.originalText)].filter(Boolean).join(" ");
+  return normalizeRegionText(evidence).regions;
+}
+
+export function getRegionGroup(record: UiJobRecord): "서울" | "경기" | null {
+  const regions = getNormalizedRegions(record);
+  return regions.includes("seoul") ? "서울" : regions.includes("gyeonggi") ? "경기" : null;
+}
+
+export function countActiveFilters(filters: JobFilterState): number {
+  return [filters.keyword.trim(), filters.source !== "all", filters.provenance !== "all", filters.completeness !== "all", filters.region !== "all",
+    filters.mapEligibility !== "all", filters.city, filters.district, filters.category, filters.employmentType, filters.experienceRequirement,
+    filters.educationRequirement, filters.salaryType !== "all", filters.postingStatus !== "all", filters.locationAccuracy !== "all",
+    filters.locationMode !== "all", filters.deadline !== "all", !filters.showDemo,
+    Object.values(filters.salaryThresholds).some((value) => value > 0)].filter(Boolean).length;
 }
 
 function salaryThresholdMatches(record: UiJobRecord, filters: JobFilterState): boolean {
@@ -70,7 +83,18 @@ export function filterJobs(records: UiJobRecord[], filters: JobFilterState, now:
     const job = record.job;
     if (!filters.showDemo && record.isFictional) return false;
     if (filters.source !== "all" && job.source !== filters.source) return false;
-    if (filters.region !== "all" && getRegionGroup(record) !== filters.region) return false;
+    if (filters.provenance === "manual" && record.observationKind !== "bounded_manual_collection" && record.observationKind !== "bounded_listing_collection") return false;
+    if (filters.provenance === "fixture" && record.provenanceKind !== "fixture_derived") return false;
+    if (filters.provenance === "demo" && !record.isFictional) return false;
+    if (filters.completeness === "listing_only" && record.observationKind !== "bounded_listing_collection") return false;
+    if (filters.completeness === "detail_complete" && record.observationKind !== "bounded_manual_collection") return false;
+    const normalizedRegions = getNormalizedRegions(record);
+    if (filters.region === "seoul" && !normalizedRegions.includes("seoul")) return false;
+    if (filters.region === "gyeonggi" && !normalizedRegions.includes("gyeonggi")) return false;
+    if (filters.region === "other" && !normalizedRegions.some((region) => region === "other" || region === "incheon")) return false;
+    if (filters.region === "unknown" && normalizedRegions.length > 0) return false;
+    if (filters.mapEligibility === "map" && !isMapEligible(record)) return false;
+    if (filters.mapEligibility === "list_only" && isMapEligible(record)) return false;
     if (filters.city && job.city !== filters.city) return false;
     if (filters.district && job.district !== filters.district) return false;
     if (filters.category && !job.categories.includes(filters.category)) return false;
@@ -84,7 +108,8 @@ export function filterJobs(records: UiJobRecord[], filters: JobFilterState, now:
     if (filters.locationMode === "estimated" && !ESTIMATED_LOCATION.has(job.locationAccuracy)) return false;
     if (!salaryThresholdMatches(record, filters) || !deadlineMatches(record, filters.deadline, now)) return false;
     if (query) {
-      const values = [job.title, job.companyName, job.addressOriginalText, job.city, job.district, job.neighborhood, job.nearestStation, ...job.categories];
+      const values = [job.title, job.companyName, job.addressOriginalText, job.city, job.district, job.neighborhood, job.nearestStation,
+        ...job.categories, ...job.employmentTypes, job.source, job.source === "jobkorea" ? "잡코리아" : job.source === "albamon" ? "알바몬" : ""];
       if (!values.some((value) => (value ?? "").toLocaleLowerCase("ko").includes(query))) return false;
     }
     return true;

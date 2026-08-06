@@ -15,14 +15,26 @@ afterEach(() => {
 });
 
 const record = (city: string, district: string): UiJobRecord => ({
-  job: canonicalJob({ city, district }), isFictional: true, safeSourceUrl: null, mapPosition: null,
+  job: canonicalJob({
+    city,
+    district,
+    addressOriginalText: `${city} ${district}`,
+    roadAddress: null,
+    parcelAddress: null,
+    neighborhood: null,
+    workplaces: [],
+    workplaceCount: 0,
+  }),
+  isFictional: true,
+  safeSourceUrl: null,
+  mapPosition: null,
 });
 
 describe("상세 필터 포커스 처리", () => {
   it("첫 필터에 초점을 두고 Escape로 닫는다", () => {
     const onClose = vi.fn();
     render(<FilterPanel filters={DEFAULT_FILTERS} jobs={[]} onChange={() => undefined} onClose={onClose} />);
-    expect(screen.getByLabelText("서울·경기")).toHaveFocus();
+    expect(screen.getByLabelText("출처")).toHaveFocus();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalledOnce();
   });
@@ -49,6 +61,16 @@ describe("상세 필터 포커스 처리", () => {
     render(<FilterPanel filters={filters} jobs={[]} onChange={onChange} onClose={() => undefined} />);
     fireEvent.change(screen.getByLabelText("급여 유형"), { target: { value: "annual" } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ salaryType: "annual", salaryThresholds: expect.objectContaining({ hourly: 0 }) }));
+  });
+
+  it("출처·완성도·지역·지도 필터의 실제 건수를 표시하고 초기화한다", () => {
+    const onChange = vi.fn();
+    const jobs = [record("서울", "강남구"), { ...record("안양시", "동안구"), observationKind: "bounded_listing_collection" as const }];
+    render(<FilterPanel filters={{ ...DEFAULT_FILTERS, region: "seoul" }} jobs={jobs} onChange={onChange} onClose={() => undefined} />);
+    expect(screen.getByRole("option", { name: "목록 정보 (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "서울 (1)" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "필터 초기화" }));
+    expect(onChange).toHaveBeenCalledWith(DEFAULT_FILTERS);
   });
 
   it("닫힌 뒤 필터 트리거로 초점을 돌려보낸다", () => {

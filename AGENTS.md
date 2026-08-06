@@ -48,7 +48,7 @@
 - 알려진 검색 result root 안의 정규화 가능한 숫자 posting ID는 listing classification과 무관하게 상세 검증 후보가 될 수 있다.
 - listing classification은 provenance metadata이며 상세 방문의 필수 gate가 아니다.
 - JobKorea 상세 페이지의 ID·parser·normalizer·canonical 검증이 수동 수집의 최종 저장 경계다.
-- JobKorea 수동 수집은 목록 3페이지·상세 30건·상세 동시성 2를 넘지 않는다.
+- JobKorea 수동 preset 수집은 목록 5페이지·상세 50건·상세 동시성 2를 넘지 않는다.
 - JobKorea 수동 수집은 retry를 수행하지 않으며 실패 후보를 다른 후보로 대체하지 않는다.
 - JobKorea collection은 수동 명령으로만 실행하며 scheduler나 background worker에 연결하지 않는다.
 - 인증, 쿠키·프로필 재사용 또는 접근 제어 우회를 수집 경계에 추가하지 않는다.
@@ -119,6 +119,12 @@
 - dry-run은 SQLite에 쓰지 않고 write mode는 `--write`와 `--confirm`을 모두 요구한다.
 - 인증, cookie/session/profile 재사용, stealth 또는 접근 제어 우회는 금지한다.
 - fixture, fictional demo, 상세 확인 수집, 목록 정보 수집 provenance와 UI 표시는 서로 구분한다.
+- JobKorea preset은 수동 명령으로만 실행하며 source의 undocumented region parameter를 사용하지 않는다.
+- preset 지역 판정은 listing card 추출 뒤, `maxDetails` 후보 선택 전에 로컬에서 수행한다.
+- 원본 location 문자열을 보존하고 서울·경기 normalization은 파생 metadata로만 기록한다.
+- 누락되거나 모호한 location은 `unknown`으로 유지하며 서울·경기로 추측하지 않는다.
+- preset hard cap은 listing 5페이지, detail 50건이고 explicit override는 preset 한도를 줄일 수만 있다.
+- UI source·provenance·completeness·region·status·map filter는 SQLite 데이터를 변경하지 않으며 versioned localStorage preference만 사용한다.
 
 - 광고 판정에 `[class*="ad"]`, `className.includes("ad")`, `/ad/`처럼 짧은 부분 문자열을 사용하지 않는다.
 - 광고 class는 완전한 token 또는 근거가 있는 제한적 prefix pattern으로만 판정하며 `shadow`, `badge`, `header`, `gradient` 같은 utility token은 광고 근거가 아니다.

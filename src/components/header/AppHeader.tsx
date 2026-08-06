@@ -8,9 +8,11 @@ interface AppHeaderProps {
   onFiltersChange(filters: JobFilterState): void;
   onToggleFilters(): void;
   onToggleMap(): void;
+  availableSources: Array<"jobkorea" | "albamon">;
+  activeFilterCount: number;
 }
 
-export function AppHeader({ filters, mapVisible, onFiltersChange, onToggleFilters, onToggleMap }: AppHeaderProps) {
+export function AppHeader({ filters, mapVisible, onFiltersChange, onToggleFilters, onToggleMap, availableSources, activeFilterCount }: AppHeaderProps) {
   const setSource = (source: JobFilterState["source"]) => onFiltersChange({ ...filters, source });
   return (
     <header className="app-header">
@@ -26,14 +28,14 @@ export function AppHeader({ filters, mapVisible, onFiltersChange, onToggleFilter
             onChange={(event) => onFiltersChange({ ...filters, keyword: event.target.value })} placeholder="직무, 회사명, 지역 검색" />
         </div>
         <nav className="source-tabs" aria-label="채용공고 출처">
-          {([ ["all", "전체"], ["jobkorea", "잡코리아"], ["albamon", "알바몬"] ] as const).map(([value, label]) => (
+          {([ ["all", "전체"], ...availableSources.map((source) => [source, source === "jobkorea" ? "잡코리아" : "알바몬"] as const) ] as const).map(([value, label]) => (
             <button key={value} type="button" className={`source-tab ${filters.source === value ? "active" : ""}`}
               aria-pressed={filters.source === value} onClick={() => setSource(value)}>{label}</button>
           ))}
           <span className="roadmap-tab" aria-label="고용24는 추후 지원 예정">고용24 · 추후 지원</span>
         </nav>
         <div className="header-actions">
-          <button type="button" className="button" onClick={onToggleFilters} aria-haspopup="dialog" aria-controls="filter-panel">필터</button>
+          <button type="button" className="button" onClick={onToggleFilters} aria-haspopup="dialog" aria-controls="filter-panel">필터{activeFilterCount ? ` ${activeFilterCount}` : ""}</button>
           <button type="button" className={`button ${mapVisible ? "primary" : "soft"}`} onClick={onToggleMap} aria-pressed={mapVisible} aria-controls="dashboard-map">
             {mapVisible ? "지도 접기" : "지도 보기"}
           </button>
