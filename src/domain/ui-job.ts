@@ -3,7 +3,7 @@ import type { LocationAccuracy } from "./location";
 import type { PostingStatus } from "./posting-status";
 import type { SalaryType } from "./salary";
 import type { DataProvenanceKind } from "./data-provenance";
-import type { NormalizedRegion, RegionNormalizationConfidence } from "../services/region-normalizer";
+import type { NormalizedRegion, RegionEvidenceSource, RegionNormalizationConfidence } from "../services/region-normalizer";
 import type { ExclusionField } from "../services/collection-exclusion";
 
 export type ActiveJobSource = "jobkorea" | "albamon";
@@ -29,6 +29,8 @@ export interface UiJobRecord {
   collectionKeyword?: string | null;
   normalizedRegions?: NormalizedRegion[];
   regionConfidence?: RegionNormalizationConfidence;
+  regionEvidenceSource?: RegionEvidenceSource;
+  sourceAreaCode?: string | null;
 }
 
 export interface SalaryThresholds { hourly: number; daily: number; monthly: number; annual: number; normalizedMonthly: number }

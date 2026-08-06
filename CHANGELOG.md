@@ -8,7 +8,8 @@ All notable changes are documented here. Version 0.1.1 remains unreleased.
 - Added bounded Chromium installation, a repair command, richer doctor checks, and sanitized support bundles.
 - Added in-app help, installation readiness, first-user troubleshooting, and issue intake guidance.
 - Restored the bounded Albamon public-listing URL contract (`excludeBar=true`), sanitized transport classification, canonical HTTPS redirect checks, bounded rendering stabilization, and active-result empty-page semantics.
-- Prevented title/company text from being used as an Albamon location fallback. The bounded validation reached HTTP 200 and isolated 100 cards, but its one write was rolled back after detecting a title-derived location; live Albamon inventory remains zero pending a separately approved confirmation run.
+- Verified the recorded Albamon area mapping (`I000` Seoul, `B000` Gyeonggi), made displayed location optional, and persisted source-filter evidence separately from original location.
+- Rejected title/company/card-wide location contamination and explicit region conflicts before the candidate cap. A bounded two-page Seoul dry-run selected 20 of 100 valid cards and the matching write inserted 20 listing-only records, 20 observations, and no failures or duplicates; no BFF or detail request was made.
 
 ## Unreleased
 

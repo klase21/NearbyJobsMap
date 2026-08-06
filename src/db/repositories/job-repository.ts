@@ -31,7 +31,7 @@ const JOB_COLUMNS = [
   "provenance_kind", "permission_status", "provenance_evidence_type", "provenance_listing_url", "provenance_detail_url", "observed_at", "sanitizer_version", "parser_version",
   "observation_kind", "observation_transport", "observation_page_number", "observation_listing_position",
   "collection_preset_id", "collection_preset_label", "collection_keyword", "requested_regions_json", "normalized_regions_json",
-  "region_normalization_confidence", "detail_access_status", "observed_link_count",
+  "region_normalization_confidence", "region_evidence_source", "source_area_code", "displayed_location_present", "detail_access_status", "observed_link_count",
   "content_hash", "created_at", "updated_at",
 ] as const;
 
@@ -70,6 +70,8 @@ function parameters(job: CanonicalJob, metadata: IngestionMetadata, contentHash:
     collection_preset_id: metadata.collectionPresetId ?? null, collection_preset_label: metadata.collectionPresetLabel ?? null,
     collection_keyword: metadata.collectionKeyword ?? null, requested_regions_json: JSON.stringify(metadata.requestedRegions ?? []),
     normalized_regions_json: JSON.stringify(metadata.normalizedRegions ?? []), region_normalization_confidence: metadata.regionConfidence ?? "unknown",
+    region_evidence_source: metadata.regionEvidenceSource ?? "unknown", source_area_code: metadata.sourceAreaCode ?? null,
+    displayed_location_present: metadata.displayedLocationPresent === undefined || metadata.displayedLocationPresent === null ? null : booleanToSql(metadata.displayedLocationPresent),
     detail_access_status: metadata.detailAccessStatus ?? null, observed_link_count: metadata.observedLinkCount ?? null,
     content_hash: contentHash, created_at: createdAt, updated_at: updatedAt,
   };
@@ -168,8 +170,9 @@ export class JobRepository {
     this.database.prepare(`INSERT INTO job_provenance_history
       (job_id, provenance_kind, evidence_type, source_reference, permission_status, listing_url, detail_url, observed_at, sanitizer_version, parser_version,
        observation_kind, observation_transport, page_number, listing_position, collection_preset_id, collection_preset_label, collection_keyword,
-       requested_regions_json, normalized_regions_json, region_normalization_confidence, detail_access_status, observed_link_count, first_seen_at, last_seen_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        requested_regions_json, normalized_regions_json, region_normalization_confidence, region_evidence_source, source_area_code,
+        displayed_location_present, detail_access_status, observed_link_count, first_seen_at, last_seen_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(job_id, provenance_kind, source_reference) DO UPDATE SET
         permission_status = excluded.permission_status, listing_url = excluded.listing_url, detail_url = excluded.detail_url,
         observed_at = excluded.observed_at, sanitizer_version = excluded.sanitizer_version, parser_version = excluded.parser_version,
@@ -178,6 +181,8 @@ export class JobRepository {
         collection_preset_id = excluded.collection_preset_id, collection_preset_label = excluded.collection_preset_label,
         collection_keyword = excluded.collection_keyword, requested_regions_json = excluded.requested_regions_json,
         normalized_regions_json = excluded.normalized_regions_json, region_normalization_confidence = excluded.region_normalization_confidence,
+        region_evidence_source = excluded.region_evidence_source, source_area_code = excluded.source_area_code,
+        displayed_location_present = excluded.displayed_location_present,
         detail_access_status = excluded.detail_access_status, observed_link_count = excluded.observed_link_count,
         last_seen_at = excluded.last_seen_at`)
       .run(jobId, metadata.recordKind, metadata.evidenceType, metadata.sourceFixtureReference, metadata.permissionStatus ?? null,
@@ -185,7 +190,9 @@ export class JobRepository {
         metadata.parserVersion ?? null, metadata.observationKind ?? null, metadata.observationTransport ?? null,
         metadata.pageNumber ?? null, metadata.listingPosition ?? null, metadata.collectionPresetId ?? null, metadata.collectionPresetLabel ?? null,
         metadata.collectionKeyword ?? null, JSON.stringify(metadata.requestedRegions ?? []), JSON.stringify(metadata.normalizedRegions ?? []),
-        metadata.regionConfidence ?? "unknown", metadata.detailAccessStatus ?? null, metadata.observedLinkCount ?? null, now, now);
+        metadata.regionConfidence ?? "unknown", metadata.regionEvidenceSource ?? "unknown", metadata.sourceAreaCode ?? null,
+        metadata.displayedLocationPresent === undefined || metadata.displayedLocationPresent === null ? null : booleanToSql(metadata.displayedLocationPresent),
+        metadata.detailAccessStatus ?? null, metadata.observedLinkCount ?? null, now, now);
   }
 
   previewUpsert(job: CanonicalJob, metadata: IngestionMetadata): UpsertResult {
@@ -227,13 +234,16 @@ export class JobRepository {
           this.database.prepare(`UPDATE jobs SET provenance_kind = ?, permission_status = ?, provenance_evidence_type = ?, provenance_listing_url = ?, provenance_detail_url = ?,
             observed_at = ?, sanitizer_version = ?, parser_version = ?, observation_kind = ?, observation_transport = ?, observation_page_number = ?,
             observation_listing_position = ?, collection_preset_id = ?, collection_preset_label = ?, collection_keyword = ?, requested_regions_json = ?,
-            normalized_regions_json = ?, region_normalization_confidence = ?, detail_access_status = ?, observed_link_count = ?,
+            normalized_regions_json = ?, region_normalization_confidence = ?, region_evidence_source = ?, source_area_code = ?,
+            displayed_location_present = ?, detail_access_status = ?, observed_link_count = ?,
             evidence_type = ?, source_fixture_reference = ?, last_verified_at = ? WHERE id = ?`)
             .run(metadata.recordKind, metadata.permissionStatus ?? null, metadata.evidenceType, metadata.listingUrl ?? null, metadata.detailUrl ?? null,
               metadata.observedAt ?? null, metadata.sanitizerVersion ?? null, metadata.parserVersion ?? null, metadata.observationKind ?? null,
               metadata.observationTransport ?? null, metadata.pageNumber ?? null, metadata.listingPosition ?? null,
               metadata.collectionPresetId ?? null, metadata.collectionPresetLabel ?? null, metadata.collectionKeyword ?? null,
               JSON.stringify(metadata.requestedRegions ?? []), JSON.stringify(metadata.normalizedRegions ?? []), metadata.regionConfidence ?? "unknown",
+              metadata.regionEvidenceSource ?? "unknown", metadata.sourceAreaCode ?? null,
+              metadata.displayedLocationPresent === undefined || metadata.displayedLocationPresent === null ? null : booleanToSql(metadata.displayedLocationPresent),
               metadata.detailAccessStatus ?? null, metadata.observedLinkCount ?? null, legacyEvidenceType(metadata.evidenceType),
               metadata.sourceFixtureReference, job.lastVerifiedAt, persistedId);
           return;
@@ -281,7 +291,9 @@ export class JobRepository {
     const requestedRegions = stringArray<CollectionRegion>(row, "requested_regions_json", new Set(["seoul", "gyeonggi"]));
     const normalizedRegions = stringArray<NormalizedRegion>(row, "normalized_regions_json", new Set(["seoul", "gyeonggi", "incheon", "other"]));
     const regionConfidence = requiredString(row, "region_normalization_confidence") as RegionNormalizationConfidence;
-    if (!["exact", "mapped_city", "multiple", "unknown"].includes(regionConfidence)) throw new JobRepositoryError("INVALID_DATABASE_ROW", "region normalization confidence가 유효하지 않습니다.");
+    if (!["exact", "mapped_city", "multiple", "exact_source_filter", "unknown"].includes(regionConfidence)) throw new JobRepositoryError("INVALID_DATABASE_ROW", "region normalization confidence가 유효하지 않습니다.");
+    const regionEvidenceSource = requiredString(row, "region_evidence_source") as NonNullable<IngestionMetadata["regionEvidenceSource"]>;
+    if (!["displayed_location", "mapped_displayed_location", "source_filter", "unknown"].includes(regionEvidenceSource)) throw new JobRepositoryError("INVALID_DATABASE_ROW", "region evidence source가 유효하지 않습니다.");
     const detailAccessStatus = nullableString(row, "detail_access_status") as "available" | "access_blocked" | "unavailable" | "not_attempted" | null;
     if (detailAccessStatus !== null && !["available", "access_blocked", "unavailable", "not_attempted"].includes(detailAccessStatus)) throw new JobRepositoryError("INVALID_DATABASE_ROW", "detail access status가 유효하지 않습니다.");
     const job: CanonicalJob = {
@@ -310,6 +322,8 @@ export class JobRepository {
         pageNumber: nullableNumber(row, "observation_page_number"), listingPosition: nullableNumber(row, "observation_listing_position"),
         collectionPresetId: nullableString(row, "collection_preset_id"), collectionPresetLabel: nullableString(row, "collection_preset_label"),
         collectionKeyword: nullableString(row, "collection_keyword"), requestedRegions, normalizedRegions, regionConfidence,
+        regionEvidenceSource, sourceAreaCode: nullableString(row, "source_area_code"),
+        displayedLocationPresent: sqlBoolean(row, "displayed_location_present", true),
         detailAccessStatus, observedLinkCount: nullableNumber(row, "observed_link_count") },
       contentHash: requiredString(row, "content_hash"), createdAt: requiredString(row, "created_at"), updatedAt: requiredString(row, "updated_at"),
     };
@@ -339,6 +353,7 @@ export class JobRepository {
         observationKind: metadata.observationKind ?? null,
         collectionPresetId: metadata.collectionPresetId ?? null, collectionPresetLabel: metadata.collectionPresetLabel ?? null,
         collectionKeyword: metadata.collectionKeyword ?? null, normalizedRegions: metadata.normalizedRegions ?? [], regionConfidence: metadata.regionConfidence ?? "unknown",
+        regionEvidenceSource: metadata.regionEvidenceSource ?? "unknown", sourceAreaCode: metadata.sourceAreaCode ?? null,
       })),
       diagnostics: result.diagnostics,
     };

@@ -12,27 +12,45 @@ import type { AlbamonCandidateSelection, AlbamonCollectionDependencies, AlbamonC
 import type { JobKoreaCollectionProgress } from "../../jobkorea/collection/jobkorea-collection-types";
 import { applyCandidateExclusions, normalizeCollectionExclusionConfig } from "../../../services/collection-exclusion";
 import { exclusionConfigurationHash } from "../../../services/collection-exclusion-hash.server";
+import { resolveAlbamonSingleRegionFilter } from "./albamon-region-evidence";
 
 export function selectAlbamonCandidates(pageResults: AlbamonListingPageResult[], maximum: number, requestedRegions: AlbamonCollectionOptions["requestedRegions"], exclusionInput = normalizeCollectionExclusionConfig()): AlbamonCandidateSelection {
   const seen = new Set<string>(); const matching: AlbamonSelectedCandidate[] = [];
   let seoulMatches = 0, gyeonggiMatches = 0, multipleRegionMatches = 0, unknownRegionCandidates = 0, excludedByRegion = 0;
+  let displayedLocationRecords = 0, sourceFilterOnlyRecords = 0, regionConflicts = 0, titleLocationContaminationRejections = 0;
   for (const page of [...pageResults].sort((a, b) => a.pageNumber - b.pageNumber)) {
     for (const candidate of [...page.candidates].sort((a, b) => a.firstSourcePosition - b.firstSourcePosition)) {
       if (seen.has(candidate.sourcePostingId)) continue; seen.add(candidate.sourcePostingId);
-      const region = normalizeRegionText(candidate.regionText);
+      const displayed = normalizeRegionText(candidate.regionText);
+      if (candidate.regionText) displayedLocationRecords += 1;
+      if (candidate.locationContaminationRejected) titleLocationContaminationRejections += 1;
+      const sourceFilterRegion = page.sourceFilterRegion ?? null;
+      if (sourceFilterRegion && displayed.regions.length && (displayed.regions.length !== 1 || displayed.regions[0] !== sourceFilterRegion)) {
+        regionConflicts += 1; excludedByRegion += 1; continue;
+      }
+      const region = sourceFilterRegion && !displayed.regions.length
+        ? { originalText: displayed.originalText, regions: [sourceFilterRegion], confidence: "exact_source_filter" as const }
+        : displayed;
+      if (sourceFilterRegion && !candidate.regionText) sourceFilterOnlyRecords += 1;
       if (region.regions.includes("seoul")) seoulMatches += 1;
       if (region.regions.includes("gyeonggi")) gyeonggiMatches += 1;
       if (region.regions.length > 1) multipleRegionMatches += 1;
       if (!region.regions.length) unknownRegionCandidates += 1;
       if (!matchesCollectionRegions(region, requestedRegions)) { excludedByRegion += 1; continue; }
-      matching.push({ ...candidate, pageNumber: page.pageNumber, normalizedRegions: region.regions, regionConfidence: region.confidence });
+      const regionEvidenceSource = sourceFilterRegion && !displayed.regions.length ? "source_filter"
+        : displayed.confidence === "mapped_city" ? "mapped_displayed_location"
+          : displayed.regions.length ? "displayed_location" : "unknown";
+      matching.push({ ...candidate, pageNumber: page.pageNumber, normalizedRegions: region.regions,
+        regionConfidence: region.confidence, regionEvidenceSource, sourceAreaCode: page.sourceAreaCode ?? null });
     }
   }
   const exclusion = applyCandidateExclusions(matching, exclusionInput, (candidate) => ({ postingId: candidate.sourcePostingId,
     listingPage: candidate.pageNumber, sourcePosition: candidate.firstSourcePosition, title: candidate.title, company: candidate.companyName,
     location: candidate.regionText, categories: candidate.categoryLabels, employmentTypes: candidate.employmentTypes,
     workSchedule: [candidate.workDaysText, candidate.workHoursText].filter((value): value is string => Boolean(value)) }));
-  return { candidates: exclusion.candidates.slice(0, maximum), uniquePostingIds: seen.size, seoulMatches, gyeonggiMatches, multipleRegionMatches, unknownRegionCandidates, excludedByRegion, exclusion: exclusion.summary };
+  return { candidates: exclusion.candidates.slice(0, maximum), uniquePostingIds: seen.size, seoulMatches, gyeonggiMatches,
+    multipleRegionMatches, unknownRegionCandidates, excludedByRegion, displayedLocationRecords, sourceFilterOnlyRecords,
+    regionConflicts, titleLocationContaminationRejections, exclusion: exclusion.summary };
 }
 
 function recordFor(candidate: AlbamonSelectedCandidate, options: AlbamonCollectionOptions, observedAt: string): IngestionRecord | null {
@@ -45,12 +63,14 @@ function recordFor(candidate: AlbamonSelectedCandidate, options: AlbamonCollecti
     postingStatus: "unknown" as const, collectedAt: observedAt, lastVerifiedAt: observedAt, rawPayloadReference: null };
   if (validateCanonicalJob(job).length) return null;
   return { job, metadata: { recordKind: "live_one_shot_observation", evidenceType: "public_page_observation", mapPosition: null,
-    sourceFixtureReference: `bounded_listing_collection:${options.presetId}:listing_playwright:${candidate.pageNumber}:${candidate.firstSourcePosition}:${candidate.observedLinkCount}:${candidate.sourcePostingId}`,
-    permissionStatus: "unverified", listingUrl: buildAlbamonListingUrl(candidate.pageNumber), detailUrl: null, observedAt,
+    sourceFixtureReference: `bounded_listing_collection:${options.presetId}:listing_playwright:${candidate.sourceAreaCode ?? "no-area"}:${candidate.pageNumber}:${candidate.firstSourcePosition}:${candidate.observedLinkCount}:${candidate.sourcePostingId}`,
+    permissionStatus: "unverified", listingUrl: buildAlbamonListingUrl(candidate.pageNumber, candidate.sourceAreaCode), detailUrl: null, observedAt,
     sanitizerVersion: "albamon-listing-card-v1", parserVersion: "albamon-listing-card-v1", observationKind: "bounded_listing_collection",
     observationTransport: "playwright", pageNumber: candidate.pageNumber, listingPosition: candidate.firstSourcePosition,
     collectionPresetId: options.presetId, collectionPresetLabel: options.presetLabel, collectionKeyword: "오늘 등록",
     requestedRegions: options.requestedRegions, normalizedRegions: candidate.normalizedRegions, regionConfidence: candidate.regionConfidence,
+    regionEvidenceSource: candidate.regionEvidenceSource, sourceAreaCode: candidate.sourceAreaCode,
+    displayedLocationPresent: candidate.regionText !== null,
     detailAccessStatus: "not_attempted", observedLinkCount: candidate.observedLinkCount } };
 }
 
@@ -64,8 +84,9 @@ export async function collectAlbamonOnce(options: AlbamonCollectionOptions, depe
     predictedInserts: 0, predictedUpdates: 0, predictedUnchanged: 0, actualInserts: 0, actualUpdates: 0, actualUnchanged: 0, lowerCompletenessSkips: 0 };
   const emit = (patch: Partial<JobKoreaCollectionProgress>) => { Object.assign(progress, patch); try { dependencies.onProgress?.({ ...progress }); } catch { /* observer isolation */ } };
   let runId: string | null = null; const runs = new IngestionRunRepository(dependencies.database); const jobs = new JobRepository(dependencies.database);
+  const sourceFilter = resolveAlbamonSingleRegionFilter(options.requestedRegions);
   if (options.mode === "write") runId = runs.begin("albamon", "albamon_listing_collection", options.maxDetails, { permissionStatus: "unverified",
-    listingUrl: buildAlbamonListingUrl(1), maxDetails: options.maxDetails, contentRequestLimit: options.pages, preflightRequestLimit: 0,
+    listingUrl: buildAlbamonListingUrl(1, sourceFilter?.areaCode ?? null), maxDetails: options.maxDetails, contentRequestLimit: options.pages, preflightRequestLimit: 0,
     dryRun: false, selectedTransport: "playwright", searchPageCount: options.pages,
     exclusionKeywords: exclusionConfig.keywords, exclusionFields: exclusionConfig.fields, exclusionConfigHash: options.exclusionConfigHash ?? exclusionConfigurationHash(exclusionConfig),
     savedProfileId: options.savedProfile?.id ?? null, savedProfileName: options.savedProfile?.name ?? null, savedProfileRevision: options.savedProfile?.revision ?? null,
@@ -73,8 +94,12 @@ export async function collectAlbamonOnce(options: AlbamonCollectionOptions, depe
   try {
     emit({ status: "collecting_listings", message: `알바몬 목록 0/${options.pages} 페이지 수집 중` });
     const pageResults = dependencies.collectPages
-      ? await dependencies.collectPages(options.pages)
-      : await collectAlbamonListingPages(options.pages, { diagnostic: options.diagnostic === true });
+      ? await dependencies.collectPages(options.pages, { sourceFilterRegion: sourceFilter?.region ?? null })
+      : await collectAlbamonListingPages(options.pages, { diagnostic: options.diagnostic === true, sourceFilterRegion: sourceFilter?.region ?? null });
+    for (const page of pageResults) {
+      page.sourceFilterRegion ??= sourceFilter?.region ?? null;
+      page.sourceAreaCode ??= sourceFilter?.areaCode ?? null;
+    }
     const completed = pageResults.filter((page) => page.classification === "valid_results" || page.classification === "valid_empty").length;
     const numericLinks = pageResults.reduce((sum, page) => sum + page.extractedNumericLinkCount, 0);
     const validListingCards = pageResults.reduce((sum, page) => sum + page.candidates.length, 0);
@@ -114,6 +139,8 @@ export async function collectAlbamonOnce(options: AlbamonCollectionOptions, depe
       uniquePostingIds: selection.uniquePostingIds, validListingCards, invalidListingCards,
       seoulMatches: selection.seoulMatches, gyeonggiMatches: selection.gyeonggiMatches,
       multipleRegionMatches: selection.multipleRegionMatches, unknownRegionCandidates: selection.unknownRegionCandidates, excludedByRegion: selection.excludedByRegion,
+      displayedLocationRecords: selection.displayedLocationRecords, sourceFilterOnlyRecords: selection.sourceFilterOnlyRecords,
+      regionConflicts: selection.regionConflicts, titleLocationContaminationRejections: selection.titleLocationContaminationRejections,
       ...selection.exclusion,
       candidatesSelected: selection.candidates.length, detailPagesAttempted: 0, successfullyParsed: 0, activeJobs: 0, expiredOrClosedJobs: 0,
       transportFailures, blockedDetails: 0, parseFailures: invalid, predictedInserts, predictedUpdates, predictedUnchanged,

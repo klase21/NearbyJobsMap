@@ -148,6 +148,9 @@
 - title과 company가 모두 있어야 listing-only CanonicalJob을 만들 수 있고 raw HTML, 전체 card text, description, 개인 연락처를 보존하지 않는다.
 - 서울·경기 판정은 원본 location을 보존한 채 card 추출 후 candidate cap 전에 로컬로 수행하며 누락·모호한 위치는 추측하지 않는다.
 - Albamon location fallback은 title·company와 동일한 값이나 title/company를 함께 포함한 card 전체 text를 사용할 수 없다. 제목의 지역명·지점명을 실제 표시 location으로 추론하지 않는다.
+- 기록으로 검증된 Albamon 단일-region area mapping은 `I000=서울`, `B000=경기`다. 이를 바꾸거나 다른 코드를 추가하려면 별도의 역사적·관찰 근거가 필요하다.
+- 단일-region source filter는 표시 location과 분리된 `source_filter` evidence로만 저장한다. 원문 location이 없으면 `null`을 유지하고 title, company, 지역명 또는 card 전체 text로 채우지 않는다.
+- source filter와 신뢰 가능한 표시 location이 충돌하면 `region_conflict`로 candidate cap 전에 제외하며 쓰지 않는다.
 - Albamon empty는 active result region의 보이는 명시적 no-result evidence만 허용한다. 숨겨진 template 문구, duplicate-only page, zero-new-ID page, blocked/parser/transport failure는 empty가 아니다.
 - Albamon 공개 listing URL은 `excludeBar=true`를 포함하고 `DOMContentLoaded` 뒤 최대 15회 bounded scroll과 두 번의 안정된 card count로 정리한다. 허용된 HTTPS Albamon host의 `/jobs/total` canonical redirect 외에는 성공으로 처리하지 않는다.
 - Albamon 목록 레코드는 `bounded_listing_collection`, `listing_only`, `not_attempted`, permission `unverified`로 표시하며 future detail-complete 데이터를 downgrade하지 않는다.

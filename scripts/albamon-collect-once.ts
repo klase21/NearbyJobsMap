@@ -23,6 +23,7 @@ async function main(): Promise<void> {
     console.log(`숫자 링크: ${result.numericLinksExtracted} · 고유 ID: ${result.uniquePostingIds} · 선택: ${result.candidatesSelected}`);
     console.log(`유효 카드: ${result.validListingCards} · 무효 카드: ${result.invalidListingCards}`);
     console.log(`서울: ${result.seoulMatches} · 경기: ${result.gyeonggiMatches} · 지역 미확인: ${result.unknownRegionCandidates} · 지역 제외: ${result.excludedByRegion}`);
+    console.log(`표시 위치: ${result.displayedLocationRecords} · source-filter 전용: ${result.sourceFilterOnlyRecords} · 지역 충돌: ${result.regionConflicts} · title/company 위치 오염 거절: ${result.titleLocationContaminationRejections}`);
     console.log(`Exclusion before/excluded/after: ${result.candidatesBeforeExclusion}/${result.candidatesExcluded}/${result.candidatesAfterExclusion}`);
     if (result.candidatesExcluded) {
       console.log(`Exclusion keywords: ${Object.entries(result.exclusionReasonCounts.byKeyword).map(([key, count]) => `${key}=${count}`).join(", ")}`);

@@ -2,10 +2,10 @@ import type { MapPosition } from "../domain/ui-job";
 import type { CanonicalJob } from "../domain/canonical-job";
 import type { JobSource } from "../domain/job-source";
 import type { DataProvenanceKind, PermissionStatus } from "../domain/data-provenance";
-import type { CollectionRegion, NormalizedRegion, RegionNormalizationConfidence } from "../services/region-normalizer";
+import type { CollectionRegion, NormalizedRegion, RegionEvidenceSource, RegionNormalizationConfidence } from "../services/region-normalizer";
 import type { ExclusionField } from "../services/collection-exclusion";
 
-export const REQUIRED_MIGRATION_VERSION = "0007";
+export const REQUIRED_MIGRATION_VERSION = "0011";
 
 export type RecordKind = DataProvenanceKind;
 export type EvidenceType = "observed_html" | "observed_json_ld" | "observed_internal_json" | "fictional_demo" | "public_page_observation";
@@ -34,6 +34,9 @@ export interface IngestionMetadata {
   requestedRegions?: CollectionRegion[];
   normalizedRegions?: NormalizedRegion[];
   regionConfidence?: RegionNormalizationConfidence;
+  regionEvidenceSource?: RegionEvidenceSource;
+  sourceAreaCode?: string | null;
+  displayedLocationPresent?: boolean | null;
   detailAccessStatus?: "available" | "access_blocked" | "unavailable" | "not_attempted" | null;
   observedLinkCount?: number | null;
 }

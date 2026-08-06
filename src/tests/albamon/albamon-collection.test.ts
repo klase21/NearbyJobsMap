@@ -7,6 +7,7 @@ import { ALBAMON_LISTING_EVALUATOR_SOURCE, toAlbamonListingPageResult } from "..
 import type { AlbamonListingCandidate, AlbamonListingPageResult } from "../../sources/albamon/collection/albamon-collection-types";
 import { buildAlbamonListingUrl, normalizeAlbamonDetailUrl, normalizeAlbamonListingUrl } from "../../sources/albamon/collection/albamon-url-policy";
 import { classifyAlbamonNavigationFailure, sanitizeAlbamonTransportError, settleAlbamonListingPage } from "../../sources/albamon/collection/albamon-listing-browser";
+import { ALBAMON_AREA_CODE_BY_REGION, getAlbamonAreaCode } from "../../sources/albamon/collection/albamon-region-evidence";
 import { createTestDatabase, type TestDatabase } from "../db/test-database";
 
 const databases: TestDatabase[] = [];
@@ -42,6 +43,11 @@ describe("Albamon public URL policy and presets", () => {
     expect(normalizeAlbamonListingUrl(buildAlbamonListingUrl(1))).toContain("/jobs/total?");
     expect(normalizeAlbamonListingUrl("https://m.albamon.com/jobs/total?page=1")).toBe("https://m.albamon.com/jobs/total?page=1");
     expect(normalizeAlbamonDetailUrl("/jobs/detail/123456?tracking=secret")).toEqual({ postingId: "123456", canonicalUrl: "https://www.albamon.com/jobs/detail/123456" });
+    expect(ALBAMON_AREA_CODE_BY_REGION).toEqual({ seoul: "I000", gyeonggi: "B000" });
+    expect(buildAlbamonListingUrl(2, getAlbamonAreaCode("seoul"))).toBe("https://www.albamon.com/jobs/total?page=2&sortType=POSTED_DATE&size=50&searchPeriodType=TODAY&excludeBar=true&areas=I000");
+    expect(buildAlbamonListingUrl(1, getAlbamonAreaCode("gyeonggi"))).toContain("areas=B000");
+    expect(new URL(buildAlbamonListingUrl(1, "I000")).searchParams.getAll("areas")).toEqual(["I000"]);
+    expect(() => getAlbamonAreaCode("other" as never)).toThrow("ALBAMON_REGION_MAPPING_UNKNOWN");
     for (const value of ["http://www.albamon.com/jobs/total", "https://evil.example/jobs/detail/1", "https://user:pass@www.albamon.com/jobs/detail/1", "/jobs/detail/not-id"]) expect(() => value.includes("total") ? normalizeAlbamonListingUrl(value) : normalizeAlbamonDetailUrl(value)).toThrow();
   });
   it("provides three bounded presets and only permits reductions", () => {
@@ -84,6 +90,15 @@ describe("Albamon card-isolated evaluator", () => {
     </ul></main>`);
     expect(toAlbamonListingPageResult(raw, 1, buildAlbamonListingUrl(1)).candidates[0]?.regionText).toBeNull();
   });
+  it("accepts only a dedicated location field and rejects title-parent contamination", async () => {
+    const raw = await evaluateHtml(`<!doctype html><main><ul class="job-list">
+      <li><div class="location"><a href="/jobs/detail/22001">서울 운영 보조</a><span class="company">새봄데이터</span></div></li>
+      <li><a href="/jobs/detail/22002">데이터 정리</a><span class="company">한빛로컬랩</span><span class="workplace-location">서울 마포구</span></li>
+    </ul></main>`);
+    const result = toAlbamonListingPageResult(raw, 1, buildAlbamonListingUrl(1));
+    expect(result.candidates[0]).toMatchObject({ regionText: null, locationContaminationRejected: true });
+    expect(result.candidates[1]).toMatchObject({ regionText: "서울 마포구", locationContaminationRejected: false });
+  });
   it("uses bounded scrolling and stops after the card count stabilizes", async () => {
     const browser = await chromium.launch({ headless: true });
     try {
@@ -103,6 +118,15 @@ describe("Albamon bounded listing collection", () => {
     expect(selection.candidates.map((item) => item.sourcePostingId)).toEqual(["2", "3"]);
     expect(selection).toMatchObject({ uniquePostingIds: 4, seoulMatches: 1, gyeonggiMatches: 1, unknownRegionCandidates: 1, excludedByRegion: 2 });
   });
+  it("uses verified source-filter evidence for null locations and rejects contradictory displayed regions before the cap", () => {
+    const sourcePage = page(1, [candidate("30", 1, null), candidate("31", 2, "경기 성남시"), candidate("32", 3, "서울 마포구")], {
+      sourceFilterRegion: "seoul", sourceAreaCode: "I000",
+    });
+    const selection = selectAlbamonCandidates([sourcePage], 2, ["seoul"]);
+    expect(selection.candidates.map((item) => item.sourcePostingId)).toEqual(["30", "32"]);
+    expect(selection.candidates[0]).toMatchObject({ normalizedRegions: ["seoul"], regionConfidence: "exact_source_filter", regionEvidenceSource: "source_filter", sourceAreaCode: "I000", regionText: null });
+    expect(selection).toMatchObject({ sourceFilterOnlyRecords: 1, displayedLocationRecords: 2, regionConflicts: 1, excludedByRegion: 1 });
+  });
   it("does not treat a duplicate-only page as empty and dry-run writes nothing", async () => {
     const db = createTestDatabase(); databases.push(db); const pages = [page(1, [candidate("10", 1, "서울 강남구")]), page(2, [candidate("10", 1, "서울 강남구")], { uniqueNewPostingIdCount: 0 })];
     const result = await collectAlbamonOnce({ presetId: "albamon-seoul-today", presetLabel: "알바몬 서울 오늘 등록", pages: 2, maxDetails: 5, mode: "dry-run", confirm: true, requestedRegions: ["seoul"] }, { database: db.database, collectPages: async () => pages });
@@ -119,5 +143,32 @@ describe("Albamon bounded listing collection", () => {
     expect(db.database.prepare("SELECT COUNT(*) count FROM jobs WHERE source='albamon' AND source_posting_id='20'").get()).toEqual({ count: 1 });
     expect(db.database.prepare("SELECT COUNT(*) count FROM ingestion_items").get()).toEqual({ count: 2 });
     expect(db.database.prepare("SELECT observation_kind, detail_access_status FROM jobs WHERE source_posting_id='20'").get()).toEqual({ observation_kind: "bounded_listing_collection", detail_access_status: "not_attempted" });
+  });
+  it("persists source-filter evidence separately while leaving original location null", async () => {
+    const db = createTestDatabase(); databases.push(db);
+    const pages = [page(1, [candidate("40", 1, null)], { sourceFilterRegion: "seoul", sourceAreaCode: "I000" })];
+    const options = { presetId: "albamon-seoul-today", presetLabel: "알바몬 서울 오늘 등록", pages: 1 as const, maxDetails: 1,
+      mode: "write" as const, confirm: true as const, requestedRegions: ["seoul"] as Array<"seoul"> };
+    const first = await collectAlbamonOnce(options, { database: db.database, collectPages: async () => pages });
+    const second = await collectAlbamonOnce(options, { database: db.database, collectPages: async () => pages });
+    expect(first.actualInserts).toBe(1); expect(second.actualUnchanged).toBe(1);
+    expect(db.database.prepare("SELECT address_original_text, normalized_regions_json, region_normalization_confidence, region_evidence_source, source_area_code, displayed_location_present FROM jobs WHERE source_posting_id=?").get("40"))
+      .toEqual({ address_original_text: null, normalized_regions_json: '["seoul"]', region_normalization_confidence: "exact_source_filter", region_evidence_source: "source_filter", source_area_code: "I000", displayed_location_present: 0 });
+    expect(db.database.prepare("SELECT COUNT(*) count FROM job_observations WHERE job_id=?").get("albamon:40")).toEqual({ count: 2 });
+    expect(db.database.prepare("SELECT COUNT(*) count FROM job_provenance_history WHERE job_id=? AND region_evidence_source='source_filter' AND source_area_code='I000'").get("albamon:40")).toEqual({ count: 1 });
+    const displayedPages = [page(1, [candidate("40", 1, "서울 마포구")], { sourceFilterRegion: "seoul", sourceAreaCode: "I000" })];
+    const third = await collectAlbamonOnce(options, { database: db.database, collectPages: async () => displayedPages });
+    expect(third.actualUpdates).toBe(1);
+    expect(db.database.prepare("SELECT address_original_text, region_evidence_source, displayed_location_present FROM jobs WHERE source_posting_id=?").get("40"))
+      .toEqual({ address_original_text: "서울 마포구", region_evidence_source: "displayed_location", displayed_location_present: 1 });
+    expect(db.database.prepare("SELECT COUNT(*) count FROM job_change_events WHERE job_id=?").get("albamon:40")).toEqual({ count: 1 });
+  });
+  it("does not create a job for a source-filter conflict", async () => {
+    const db = createTestDatabase(); databases.push(db);
+    const pages = [page(1, [candidate("50", 1, "경기 성남시")], { sourceFilterRegion: "seoul", sourceAreaCode: "I000" })];
+    const result = await collectAlbamonOnce({ presetId: "albamon-seoul-today", presetLabel: "알바몬 서울 오늘 등록", pages: 1, maxDetails: 1,
+      mode: "write", confirm: true, requestedRegions: ["seoul"] }, { database: db.database, collectPages: async () => pages });
+    expect(result).toMatchObject({ regionConflicts: 1, candidatesSelected: 0, actualInserts: 0 });
+    expect(db.database.prepare("SELECT COUNT(*) count FROM jobs").get()).toEqual({ count: 0 });
   });
 });

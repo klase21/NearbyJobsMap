@@ -13,8 +13,8 @@ NearbyJobsMap is a local-first Korean job discovery and application workspace. I
 
 - Collection is manual only. There is no scheduler, recurring worker, automated login, CAPTCHA bypass, cookie reuse, stealth, or proxy rotation.
 - JobKorea public search-page listing collection and listing-only fallback are implemented. Anonymous detail responses may return login or verification content, so many collected records remain explicitly labeled as listing-only.
-- The Albamon listing adapter's public transport reached `/jobs/total` successfully in the August 2026 bounded validation (HTTP 200, 100 isolated cards across two explicit pages). The validation also found that a title containing a district name could be mistaken for a location; that write was rolled back, title/company field fallbacks are now excluded, and the runtime database still has no live Albamon rows. A future separately approved run must confirm visible location extraction before ingestion. This project does not call undocumented Albamon BFF endpoints or crawl Albamon detail pages.
-- Seoul and Gyeonggi classification is performed locally from visible listing locations. Unknown locations are not guessed.
+- The Albamon listing adapter uses public browser-rendered `/jobs/total` pages only. A bounded August 2026 Seoul run used the historically recorded public area mapping `I000 → Seoul` (`B000 → Gyeonggi`), isolated 100 cards across two explicit pages, selected 20, and wrote 20 listing-only records with no failures. Displayed location is optional: when absent, the single-region source filter is stored as separate region evidence and the original location remains `null`. This project does not call undocumented Albamon BFF endpoints or crawl Albamon detail pages.
+- Seoul and Gyeonggi classification uses trustworthy displayed location or a verified single-region source filter. A contradictory displayed region is rejected, and unknown locations are never guessed or copied from title/company text.
 - Source permission is `unverified`; the project does not grant collection permission.
 - Work24 integration is deferred.
 
@@ -197,7 +197,7 @@ Never use reset when you intend to preserve an existing database.
 
 - Manual initiation only; no scheduler or automatic retries
 - JobKorea listing maximum 5 pages and candidate maximum 50; detail concurrency maximum 2
-- Albamon listing maximum 5 explicit pages and candidate maximum 50; public `/jobs/total` rendering uses `DOMContentLoaded`, bounded scrolling, local region filtering, and no detail or undocumented BFF requests
+- Albamon listing maximum 5 explicit pages and candidate maximum 50; public `/jobs/total` rendering uses `DOMContentLoaded`, bounded scrolling, verified single-region area filters (`I000` Seoul, `B000` Gyeonggi), local conflict checks, and no detail or undocumented BFF requests
 - No authentication, cookie/session reuse, access-control bypass, CAPTCHA solving, or stealth
 - Dry-run writes no collection run, item, provenance, or job data
 - Write requires the matching recent dry-run and exact confirmation

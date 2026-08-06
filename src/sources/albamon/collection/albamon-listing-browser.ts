@@ -2,6 +2,8 @@ import { chromium, type Browser, type BrowserContext, type BrowserServer, type P
 import { ALBAMON_LISTING_EVALUATOR_SOURCE, toAlbamonListingPageResult } from "./albamon-listing-evaluator";
 import { buildAlbamonListingUrl, normalizeAlbamonListingUrl } from "./albamon-url-policy";
 import type { AlbamonListingPageResult, AlbamonTransportDiagnostic } from "./albamon-collection-types";
+import { resolveAlbamonSingleRegionFilter } from "./albamon-region-evidence";
+import type { CollectionRegion } from "../../../services/region-normalizer";
 
 const NAVIGATION_TIMEOUT_MS = 15_000;
 const READINESS_TIMEOUT_MS = 10_000;
@@ -94,7 +96,9 @@ async function closeWithStatus(close: () => Promise<unknown>): Promise<"complete
   try { await close(); return "completed"; } catch { return "failed"; }
 }
 
-export async function collectAlbamonListingPages(pages: 1 | 2 | 3 | 4 | 5, _options: { diagnostic?: boolean } = {}): Promise<AlbamonListingPageResult[]> {
+export async function collectAlbamonListingPages(pages: 1 | 2 | 3 | 4 | 5, options: { diagnostic?: boolean; sourceFilterRegion?: CollectionRegion | null } = {}): Promise<AlbamonListingPageResult[]> {
+  const sourceFilter = resolveAlbamonSingleRegionFilter(options.sourceFilterRegion ? [options.sourceFilterRegion] : []);
+  const listingUrl = (pageNumber: number) => buildAlbamonListingUrl(pageNumber, sourceFilter?.areaCode ?? null);
   let server: BrowserServer | null = null; let browser: Browser | null = null; let context: BrowserContext | null = null;
   const results: AlbamonListingPageResult[] = []; const seen = new Set<string>(); const diagnostics: AlbamonTransportDiagnostic[] = [];
   try {
@@ -103,7 +107,7 @@ export async function collectAlbamonListingPages(pages: 1 | 2 | 3 | 4 | 5, _opti
       browser = await chromium.connect(server.wsEndpoint(), { timeout: 10_000 });
     } catch (error) {
       for (let pageNumber = 1; pageNumber <= pages; pageNumber += 1) {
-        const requestedUrl = buildAlbamonListingUrl(pageNumber); const diagnostic = diagnosticFor(requestedUrl); diagnostics.push(diagnostic);
+        const requestedUrl = listingUrl(pageNumber); const diagnostic = diagnosticFor(requestedUrl); diagnostics.push(diagnostic);
         results.push(failedPage(pageNumber, requestedUrl, error, diagnostic));
       }
       return results;
@@ -113,14 +117,14 @@ export async function collectAlbamonListingPages(pages: 1 | 2 | 3 | 4 | 5, _opti
       context = await browser.newContext({ locale: "ko-KR", viewport: { width: 1440, height: 1000 } });
     } catch (error) {
       for (let pageNumber = 1; pageNumber <= pages; pageNumber += 1) {
-        const requestedUrl = buildAlbamonListingUrl(pageNumber); const diagnostic = diagnosticFor(requestedUrl);
+        const requestedUrl = listingUrl(pageNumber); const diagnostic = diagnosticFor(requestedUrl);
         diagnostic.browserLaunchStatus = "completed"; diagnostic.contextCreationStatus = "failed"; diagnostics.push(diagnostic);
         results.push(failedPage(pageNumber, requestedUrl, error, diagnostic));
       }
       return results;
     }
     for (let pageNumber = 1; pageNumber <= pages; pageNumber += 1) {
-      const requestedUrl = buildAlbamonListingUrl(pageNumber); const diagnostic = diagnosticFor(requestedUrl);
+      const requestedUrl = listingUrl(pageNumber); const diagnostic = diagnosticFor(requestedUrl);
       diagnostic.browserLaunchStatus = "completed"; diagnostic.contextCreationStatus = "completed"; diagnostics.push(diagnostic);
       let page: Page | null = null; const navigationStarted = performance.now();
       try {
@@ -132,6 +136,8 @@ export async function collectAlbamonListingPages(pages: 1 | 2 | 3 | 4 | 5, _opti
         validateRedirects(response); diagnostic.finalUrl = normalizeAlbamonListingUrl(page.url());
         const raw = await settleAlbamonListingPage(page);
         const result = toAlbamonListingPageResult(raw, pageNumber, requestedUrl);
+        result.sourceFilterRegion = sourceFilter?.region ?? null;
+        result.sourceAreaCode = sourceFilter?.areaCode ?? null;
         result.transportDiagnostic = diagnostic;
         let newIds = 0; for (const candidate of result.candidates) if (!seen.has(candidate.sourcePostingId)) { seen.add(candidate.sourcePostingId); newIds += 1; }
         result.uniqueNewPostingIdCount = newIds; results.push(result);

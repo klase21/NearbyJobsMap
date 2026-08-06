@@ -36,6 +36,9 @@ export function JobCard({ record, rank, selected, origin, userState, userStatus,
   const monthly = job.salary.normalizedMonthlyMinimum;
   const administrativeArea = [job.city, job.district].filter(Boolean).join(" · ");
   const workplacePreview = job.workplaces.slice(0, 2).map((workplace) => workplace.originalText).join(" · ");
+  const sourceFilterRegionLabel = record.regionEvidenceSource === "source_filter"
+    ? record.normalizedRegions?.includes("seoul") ? "서울" : record.normalizedRegions?.includes("gyeonggi") ? "경기" : null
+    : null;
   const mapUnavailableReason = job.locationAccuracy === "location_undecided" ? "근무지가 결정되지 않아 지도에 표시할 수 없습니다." : job.locationAccuracy === "multiple_locations" ? "개별 근무지 좌표가 확인되지 않아 지도에 표시할 수 없습니다." : "사용 가능한 좌표가 없습니다.";
   return (
     <article ref={cardRef} className={`job-card ${selected ? "selected" : ""} ${state.workflowStatus === "ignored" ? "excluded" : ""}`} aria-current={selected ? "true" : undefined}>
@@ -58,7 +61,8 @@ export function JobCard({ record, rank, selected, origin, userState, userStatus,
         {job.employmentTypes.map((type) => <span className="badge" key={type}>{type}</span>)}
       </div>
       {record.observationKind === "bounded_manual_collection" && <p className="observation-note">수동 수집 · 상세 확인 · {record.observedAt ? `${formatDate(record.observedAt)} 확인` : "확인 시각 미상"} · 원문을 최종 기준으로 확인하세요.</p>}
-      {record.observationKind === "bounded_listing_collection" && <p className="observation-note">잡코리아 목록 페이지에서 수집된 정보이며 상세 내용은 확인되지 않았습니다. · {record.observedAt ? `${formatDate(record.observedAt)} 확인` : "확인 시각 미상"}</p>}
+      {record.observationKind === "bounded_listing_collection" && <p className="observation-note">{job.source === "albamon" ? "알바몬" : "잡코리아"} 목록 페이지에서 수집된 정보이며 상세 내용은 확인되지 않았습니다. · {record.observedAt ? `${formatDate(record.observedAt)} 확인` : "확인 시각 미상"}</p>}
+      {job.source === "albamon" && sourceFilterRegionLabel && <p className="observation-note">{sourceFilterRegionLabel} · 지역은 알바몬 검색 조건을 기준으로 분류되었습니다.</p>}
       {record.provenanceKind === "live_one_shot_observation" && record.observationKind !== "bounded_manual_collection" && <p className="observation-note">제한적 공개 페이지 관찰 · {record.observedAt ? `${formatDate(record.observedAt)} 확인` : "확인 시각 미상"}</p>}
       <div className="job-primary">
         <div>
@@ -69,7 +73,8 @@ export function JobCard({ record, rank, selected, origin, userState, userStatus,
           <div className="detail-line"><strong>조건</strong> {job.experienceRequirement ?? "경력 미확인"} · {job.educationRequirement ?? "학력 미확인"}</div>
         </div>
         <div>
-          <div className="detail-line"><strong>위치</strong> {job.addressOriginalText ?? "위치정보 없음"}</div>
+          {job.addressOriginalText && <div className="detail-line"><strong>위치</strong> {job.addressOriginalText}</div>}
+          {!job.addressOriginalText && record.regionEvidenceSource !== "source_filter" && <div className="detail-line"><strong>위치</strong> 위치정보 없음</div>}
           {job.locationAccuracy === "multiple_locations" && <div className="detail-line"><strong>복수 근무지</strong> {job.workplaceCount !== null ? `${job.workplaceCount}곳` : "개수 미확인"}{workplacePreview ? ` · ${workplacePreview}` : ""}</div>}
           {administrativeArea && <div className="detail-line"><strong>행정구역</strong> {administrativeArea}</div>}
           {job.nearestStation && <div className="detail-line"><strong>인근역</strong> {job.nearestStation}</div>}

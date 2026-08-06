@@ -1,8 +1,9 @@
 import type Database from "better-sqlite3";
 import type { UpsertAction } from "../../../db/repositories/job-repository";
-import type { CollectionRegion, NormalizedRegion, RegionNormalizationConfidence } from "../../../services/region-normalizer";
+import type { CollectionRegion, NormalizedRegion, RegionEvidenceSource, RegionNormalizationConfidence } from "../../../services/region-normalizer";
 import type { JobKoreaCollectionProgress } from "../../jobkorea/collection/jobkorea-collection-types";
 import type { CollectionExclusionConfig, ExclusionSummary } from "../../../services/collection-exclusion";
+import type { AlbamonAreaCode } from "./albamon-region-evidence";
 
 export interface AlbamonListingCandidate {
   sourcePostingId: string;
@@ -19,6 +20,7 @@ export interface AlbamonListingCandidate {
   categoryLabels: string[];
   firstSourcePosition: number;
   observedLinkCount: number;
+  locationContaminationRejected?: boolean;
 }
 
 export interface AlbamonListingPageResult {
@@ -34,6 +36,8 @@ export interface AlbamonListingPageResult {
   parserFailure: boolean;
   validEmptyPage: boolean;
   invalidCardCount?: number;
+  sourceFilterRegion?: CollectionRegion | null;
+  sourceAreaCode?: AlbamonAreaCode | null;
   candidates: AlbamonListingCandidate[];
   diagnosticCodes: string[];
   transportDiagnostic?: AlbamonTransportDiagnostic;
@@ -79,6 +83,8 @@ export interface AlbamonSelectedCandidate extends AlbamonListingCandidate {
   pageNumber: number;
   normalizedRegions: NormalizedRegion[];
   regionConfidence: RegionNormalizationConfidence;
+  regionEvidenceSource: RegionEvidenceSource;
+  sourceAreaCode: AlbamonAreaCode | null;
 }
 
 export interface AlbamonCollectionResult extends ExclusionSummary {
@@ -102,6 +108,10 @@ export interface AlbamonCollectionResult extends ExclusionSummary {
   multipleRegionMatches: number;
   unknownRegionCandidates: number;
   excludedByRegion: number;
+  displayedLocationRecords: number;
+  sourceFilterOnlyRecords: number;
+  regionConflicts: number;
+  titleLocationContaminationRejections: number;
   candidatesSelected: number;
   detailPagesAttempted: 0;
   successfullyParsed: 0;
@@ -127,7 +137,7 @@ export interface AlbamonCollectionResult extends ExclusionSummary {
 
 export interface AlbamonCollectionDependencies {
   database: Database.Database;
-  collectPages?: (pages: 1 | 2 | 3 | 4 | 5) => Promise<AlbamonListingPageResult[]>;
+  collectPages?: (pages: 1 | 2 | 3 | 4 | 5, options?: { sourceFilterRegion?: CollectionRegion | null }) => Promise<AlbamonListingPageResult[]>;
   now?: () => Date;
   onProgress?: (progress: JobKoreaCollectionProgress) => void;
 }
@@ -140,6 +150,10 @@ export interface AlbamonCandidateSelection {
   multipleRegionMatches: number;
   unknownRegionCandidates: number;
   excludedByRegion: number;
+  displayedLocationRecords: number;
+  sourceFilterOnlyRecords: number;
+  regionConflicts: number;
+  titleLocationContaminationRejections: number;
   exclusion: ExclusionSummary;
 }
 

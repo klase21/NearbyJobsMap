@@ -21,16 +21,17 @@ export const ALBAMON_LISTING_EVALUATOR_SOURCE = String.raw`(() => {
   const tokens = (element) => {
     try { return Array.from(element.classList || []).map((value) => String(value).toLowerCase()); } catch { return []; }
   };
-  const semanticText = (card, patterns) => {
+  const semanticNode = (card, patterns) => {
     const nodes = [card, ...Array.from(card.querySelectorAll("[class], [data-testid], [aria-label]"))].slice(0, 200);
     for (const node of nodes) {
       const evidence = [...tokens(node), clean(node.getAttribute && node.getAttribute("data-testid"), 80).toLowerCase(), clean(node.getAttribute && node.getAttribute("aria-label"), 80).toLowerCase()];
       if (evidence.some((value) => patterns.some((pattern) => pattern.test(value)))) {
-        const value = clean(node.textContent, 200); if (value) return value;
+        const value = clean(node.textContent, 200); if (value) return { node, value };
       }
     }
     return null;
   };
+  const semanticText = (card, patterns) => semanticNode(card, patterns)?.value || null;
   const leafTexts = (card) => Array.from(card.querySelectorAll("a, span, strong, b, p, em, dt, dd, div"))
     .filter((node) => node.childElementCount === 0).slice(0, 120).map((node) => clean(node.textContent, 200)).filter(Boolean);
   const idsIn = (element) => Array.from(new Set(Array.from(element.querySelectorAll("a")).map((a) => detail(hrefValue(a))?.id).filter(Boolean)));
@@ -55,12 +56,33 @@ export const ALBAMON_LISTING_EVALUATOR_SOURCE = String.raw`(() => {
     const leaves = leafTexts(card);
     const companyAnchor = Array.from(card.querySelectorAll("a")).find((a) => !detail(hrefValue(a)) && /\/(?:company|enterprise|brand|corp)(?:\/|$)/i.test(hrefValue(a)) && clean(a.textContent, 120));
     const excludedField = (text) => text === title || /(?:서울|경기|인천|[가-힣]+(?:시|군|구))/.test(text) || /(?:시급|일급|월급|연봉|원|마감|D-\d+|주\s*\d일|\d{1,2}:\d{2})/i.test(text);
-    const company = semanticText(card, [/(?:^|-|_)(?:company|corp|enterprise|business|brand)(?:$|-|_)/]) || clean(companyAnchor && companyAnchor.textContent, 120) || leaves.find((text) => !excludedField(text) && !/^(?:지원|스크랩|상세보기|바로가기)$/.test(text)) || null;
+    const companySemantic = semanticNode(card, [/(?:^|-|_)(?:company|corp|enterprise|business|brand)(?:$|-|_)/]);
+    const company = companySemantic?.value || clean(companyAnchor && companyAnchor.textContent, 120) || leaves.find((text) => !excludedField(text) && !/^(?:지원|스크랩|상세보기|바로가기)$/.test(text)) || null;
     if (!title || !company) return { invalid: true, id: item.detail.id };
     const fieldLeaves = leaves.filter((text) => text !== title && text !== company);
     const fieldText = (patterns) => { const value = semanticText(card, patterns); return value && value !== title && value !== company && !(value.includes(title) && value.includes(company)) ? value : null; };
+    let locationContaminationRejected = false;
+    const locationText = (() => {
+      const patterns = [/(?:^|-|_)(?:location|region|area|address|workplace)(?:$|-|_)/];
+      const nodes = Array.from(card.querySelectorAll("[class], [data-testid], [aria-label]")).slice(0, 200);
+      for (const node of nodes) {
+        const evidence = [...tokens(node), clean(node.getAttribute && node.getAttribute("data-testid"), 80).toLowerCase(), clean(node.getAttribute && node.getAttribute("aria-label"), 80).toLowerCase()];
+        if (!evidence.some((value) => patterns.some((pattern) => pattern.test(value)))) continue;
+        const value = clean(node.textContent, 200);
+        const containsTitleNode = Boolean(titleAnchor?.a && (node === titleAnchor.a || node.contains(titleAnchor.a)));
+        const containsCompanyNode = Boolean((companySemantic?.node && (node === companySemantic.node || node.contains(companySemantic.node))) || (companyAnchor && (node === companyAnchor || node.contains(companyAnchor))));
+        const containsJobIdentity = value === title || value === company || value.includes(title) || value.includes(company);
+        const unrelatedSignals = [/(?:salary|pay|wage)/i, /\d{1,2}:\d{2}/, /D-\d+|deadline/i].filter((pattern) => pattern.test(value)).length;
+        if (!value || containsTitleNode || containsCompanyNode || containsJobIdentity || unrelatedSignals > 1) {
+          locationContaminationRejected = true;
+          continue;
+        }
+        return value;
+      }
+      return null;
+    })();
     return { invalid: false, id: item.detail.id, url: item.detail.url, title, companyName: company,
-      regionText: fieldText([/(?:^|-|_)(?:location|region|area|address)(?:$|-|_)/]) || fieldLeaves.find((text) => /(?:서울|경기|인천|(?:수원|성남|고양|용인|부천|화성|안양|군포|과천|광명|의왕|하남|남양주|김포|파주)시|[가-힣]+구)/.test(text)) || null,
+      regionText: locationText, locationContaminationRejected,
       salaryText: fieldText([/(?:^|-|_)(?:salary|pay|wage)(?:$|-|_)/]) || fieldLeaves.find((text) => /(?:시급|일급|주급|월급|연봉|건별)\s*[\d,]+원|급여\s*협의/.test(text)) || null,
       employmentType: fieldText([/(?:^|-|_)(?:employment|job-type|work-type)(?:$|-|_)/]) || fieldLeaves.find((text) => /^(?:아르바이트|파트타임|정규직|계약직|인턴)$/.test(text)) || null,
       workDaysText: fieldText([/(?:^|-|_)(?:work-days|weekday|schedule)(?:$|-|_)/]) || fieldLeaves.find((text) => /(?:주\s*\d일|월.?금|요일)/.test(text)) || null,
@@ -100,7 +122,7 @@ interface EvaluatedPage {
   captcha: boolean; accessDenied: boolean; noResults: boolean; invalidCardCount: number;
   candidates: Array<{ id: string; url: string; title: string; companyName: string; regionText: string | null; salaryText: string | null;
     employmentType: string | null; workDaysText: string | null; workHoursText: string | null; postingDate: string | null;
-    deadlineText: string | null; categoryLabels: string[]; sourcePosition: number; observedLinkCount: number }>;
+    deadlineText: string | null; categoryLabels: string[]; sourcePosition: number; observedLinkCount: number; locationContaminationRejected?: boolean }>;
 }
 
 export function toAlbamonListingPageResult(value: unknown, pageNumber: number, requestedUrl: string): AlbamonListingPageResult {
@@ -119,6 +141,7 @@ export function toAlbamonListingPageResult(value: unknown, pageNumber: number, r
       sourcePostingId: item.id, canonicalUrl: item.url, title: item.title, companyName: item.companyName, regionText: item.regionText,
       salaryText: item.salaryText, employmentTypes: item.employmentType ? [item.employmentType] : [], workDaysText: item.workDaysText,
       workHoursText: item.workHoursText, postingDate: item.postingDate, deadlineText: item.deadlineText, categoryLabels: item.categoryLabels,
-      firstSourcePosition: item.sourcePosition, observedLinkCount: item.observedLinkCount })),
+      firstSourcePosition: item.sourcePosition, observedLinkCount: item.observedLinkCount,
+      locationContaminationRejected: item.locationContaminationRejected === true })),
     diagnosticCodes: [...(data.invalidCardCount ? ["ALBAMON_LISTING_CARD_INVALID"] : []), ...(classification === "malformed" ? ["ALBAMON_LISTING_PAGE_MALFORMED"] : [])] };
 }

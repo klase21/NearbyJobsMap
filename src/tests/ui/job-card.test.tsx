@@ -84,4 +84,17 @@ describe("공고 카드", () => {
     expect(screen.getByText("상세 확인")).toBeInTheDocument();
     expect(screen.queryByText(/상세 내용은 확인되지 않았습니다/)).not.toBeInTheDocument();
   });
+
+  it("알바몬 source-filter 지역 근거를 표시하고 가짜 위치 행을 만들지 않는다", () => {
+    const record: UiJobRecord = { ...demo, isFictional: false, safeSourceUrl: "https://www.albamon.com/jobs/detail/50000003",
+      provenanceKind: "live_one_shot_observation", observationKind: "bounded_listing_collection", observedAt: "2026-08-06T00:00:00Z",
+      normalizedRegions: ["seoul"], regionConfidence: "exact_source_filter", regionEvidenceSource: "source_filter", sourceAreaCode: "I000",
+      job: { ...demo.job, id: "albamon:50000003", source: "albamon", sourcePostingId: "50000003",
+        sourceUrl: "https://www.albamon.com/jobs/detail/50000003", canonicalUrl: "https://www.albamon.com/jobs/detail/50000003",
+        addressOriginalText: null, city: null, district: null, locationAccuracy: "unavailable" } };
+    render(<JobCard record={record} rank={1} selected={false} origin={DEFAULT_ORIGIN} userStatus="reviewing" onSelect={() => undefined} onMapFocus={() => undefined} onUserStatusChange={() => undefined} cardRef={() => undefined} />);
+    expect(screen.getByText(/알바몬 목록 페이지/)).toBeInTheDocument();
+    expect(screen.getByText("서울 · 지역은 알바몬 검색 조건을 기준으로 분류되었습니다.")).toBeInTheDocument();
+    expect(screen.queryByText("위치", { selector: "strong" })).not.toBeInTheDocument();
+  });
 });
