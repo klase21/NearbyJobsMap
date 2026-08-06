@@ -3,8 +3,9 @@ import type { CanonicalJob } from "../domain/canonical-job";
 import type { JobSource } from "../domain/job-source";
 import type { DataProvenanceKind, PermissionStatus } from "../domain/data-provenance";
 import type { CollectionRegion, NormalizedRegion, RegionNormalizationConfidence } from "../services/region-normalizer";
+import type { ExclusionField } from "../services/collection-exclusion";
 
-export const REQUIRED_MIGRATION_VERSION = "0005";
+export const REQUIRED_MIGRATION_VERSION = "0006";
 
 export type RecordKind = DataProvenanceKind;
 export type EvidenceType = "observed_html" | "observed_json_ld" | "observed_internal_json" | "fictional_demo" | "public_page_observation";
@@ -46,6 +47,9 @@ export interface TransportRunMetadata {
   dryRun: boolean;
   selectedTransport?: "playwright" | "direct" | null;
   searchPageCount?: number;
+  exclusionKeywords?: string[];
+  exclusionFields?: ExclusionField[];
+  exclusionConfigHash?: string | null;
 }
 
 export interface TransportRunCompletion {

@@ -3,12 +3,14 @@ import type { SalaryType } from "../domain/salary";
 import type { JobFilterState, MapPosition, SortOption, UiJobRecord, UserOrigin } from "../domain/ui-job";
 import { haversineDistanceKm } from "./distance";
 import { normalizeRegionText, type NormalizedRegion as RegionValue } from "./region-normalizer";
+import { matchCandidateExclusion, normalizeCollectionExclusionConfig } from "./collection-exclusion";
 
 export const DEFAULT_FILTERS: JobFilterState = {
   keyword: "", source: "all", provenance: "all", completeness: "all", region: "all", mapEligibility: "all", city: "", district: "", category: "", employmentType: "",
   experienceRequirement: "", educationRequirement: "", salaryType: "all",
   salaryThresholds: { hourly: 0, daily: 0, monthly: 0, annual: 0, normalizedMonthly: 0 },
   postingStatus: "all", locationAccuracy: "all", locationMode: "all", deadline: "all", showDemo: true,
+  exclusionKeywords: [], exclusionFields: ["title", "category"],
 };
 
 const EXACT_LOCATION = new Set<LocationAccuracy>(["exact_coordinate", "exact_address"]);
@@ -49,7 +51,7 @@ export function countActiveFilters(filters: JobFilterState): number {
     filters.mapEligibility !== "all", filters.city, filters.district, filters.category, filters.employmentType, filters.experienceRequirement,
     filters.educationRequirement, filters.salaryType !== "all", filters.postingStatus !== "all", filters.locationAccuracy !== "all",
     filters.locationMode !== "all", filters.deadline !== "all", !filters.showDemo,
-    Object.values(filters.salaryThresholds).some((value) => value > 0)].filter(Boolean).length;
+    Object.values(filters.salaryThresholds).some((value) => value > 0), filters.exclusionKeywords.length > 0].filter(Boolean).length;
 }
 
 function salaryThresholdMatches(record: UiJobRecord, filters: JobFilterState): boolean {
@@ -79,6 +81,8 @@ function deadlineMatches(record: UiJobRecord, filter: JobFilterState["deadline"]
 
 export function filterJobs(records: UiJobRecord[], filters: JobFilterState, now: Date): UiJobRecord[] {
   const query = filters.keyword.trim().toLocaleLowerCase("ko");
+  let exclusion = { keywords: [] as string[], fields: [] as typeof filters.exclusionFields };
+  try { exclusion = normalizeCollectionExclusionConfig({ keywords: filters.exclusionKeywords, fields: filters.exclusionFields }); } catch { /* Invalid stored UI values match nothing. */ }
   return records.filter((record) => {
     const job = record.job;
     if (!filters.showDemo && record.isFictional) return false;
@@ -112,6 +116,9 @@ export function filterJobs(records: UiJobRecord[], filters: JobFilterState, now:
         ...job.categories, ...job.employmentTypes, job.source, job.source === "jobkorea" ? "잡코리아" : job.source === "albamon" ? "알바몬" : ""];
       if (!values.some((value) => (value ?? "").toLocaleLowerCase("ko").includes(query))) return false;
     }
+    if (exclusion.keywords.length && matchCandidateExclusion({ postingId: job.sourcePostingId, listingPage: 0, sourcePosition: 0,
+      title: job.title, company: job.companyName, location: job.addressOriginalText, categories: job.categories,
+      employmentTypes: job.employmentTypes, workSchedule: [job.workDaysOriginalText, job.workStartTime, job.workEndTime].filter((value): value is string => Boolean(value)) }, exclusion)) return false;
     return true;
   });
 }

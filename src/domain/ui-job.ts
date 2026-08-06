@@ -4,6 +4,7 @@ import type { PostingStatus } from "./posting-status";
 import type { SalaryType } from "./salary";
 import type { DataProvenanceKind } from "./data-provenance";
 import type { NormalizedRegion, RegionNormalizationConfidence } from "../services/region-normalizer";
+import type { ExclusionField } from "../services/collection-exclusion";
 
 export type ActiveJobSource = "jobkorea" | "albamon";
 export type RegionFilter = "all" | "seoul" | "gyeonggi" | "other" | "unknown";
@@ -52,6 +53,8 @@ export interface JobFilterState {
   locationMode: "all" | "exact" | "estimated";
   deadline: "all" | "within_3_days" | "within_7_days" | "no_deadline";
   showDemo: boolean;
+  exclusionKeywords: string[];
+  exclusionFields: ExclusionField[];
 }
 
 export interface SavedPreferences {

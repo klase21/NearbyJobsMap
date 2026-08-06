@@ -7,6 +7,8 @@ const result = (mode: "dry-run" | "write"): JobKoreaCollectionResult => ({ runId
   presetId: "seoul-ai", presetLabel: "서울 AI 일자리", keyword: "AI", requestedRegions: ["seoul"], pageResults: [], listingPagesRequested: 1,
   listingPagesCompleted: 1, numericLinksExtracted: 12, uniquePostingIds: 5, seoulMatches: 5, gyeonggiMatches: 0, multipleRegionMatches: 0,
   unknownRegionCandidates: 0, excludedByRegion: 0, excludedRegionSamples: [], candidatesSelected: 5, detailPagesAttempted: 5,
+  candidatesBeforeExclusion: 5, candidatesExcluded: 0, candidatesAfterExclusion: 5,
+  exclusionReasonCounts: { byKeyword: {}, byField: {}, byKeywordAndField: {} }, excludedCandidateSamples: [], exclusionSamplesTruncated: false,
   successfullyParsed: 0, activeJobs: 0, expiredOrClosedJobs: 0, transportFailures: 0, blockedDetails: 5, parseFailures: 0,
   predictedInserts: 2, predictedUpdates: 1, predictedUnchanged: 2, actualInserts: mode === "write" ? 2 : 0,
   actualUpdates: mode === "write" ? 1 : 0, actualUnchanged: mode === "write" ? 2 : 0, listingOnlyRecords: 5, failedRecords: 0,

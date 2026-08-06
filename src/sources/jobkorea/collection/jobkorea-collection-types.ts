@@ -3,6 +3,7 @@ import type { UpsertAction } from "../../../db/repositories/job-repository";
 import type { JobKoreaListingCardFields, JobKoreaListingClassificationMetadata, JobKoreaListingPageResult, JobKoreaSearchExecution } from "../transport/jobkorea-search-types";
 import type { JobKoreaHttpClient } from "../transport/jobkorea-http-client";
 import type { CollectionRegion, NormalizedRegion, RegionNormalizationConfidence } from "../../../services/region-normalizer";
+import type { CollectionExclusionConfig, ExclusionSummary } from "../../../services/collection-exclusion";
 
 export interface JobKoreaCollectionOptions {
   searchUrl: string;
@@ -15,6 +16,8 @@ export interface JobKoreaCollectionOptions {
   presetLabel?: string | null;
   keyword?: string;
   requestedRegions?: CollectionRegion[];
+  exclusion?: CollectionExclusionConfig;
+  exclusionConfigHash?: string | null;
 }
 
 export interface JobKoreaCollectionCandidate {
@@ -48,7 +51,7 @@ export interface JobKoreaCollectedDetailOutcome {
   dataCompleteness: "detail_complete" | "listing_only" | "none";
 }
 
-export interface JobKoreaCollectionResult {
+export interface JobKoreaCollectionResult extends ExclusionSummary {
   runId: string | null;
   mode: JobKoreaCollectionOptions["mode"];
   status: "completed" | "partial" | "failed" | "blocked";
@@ -116,6 +119,9 @@ export interface JobKoreaCollectionProgress {
   numericLinksExtracted: number;
   uniquePostingIds: number;
   regionMatchingCandidates: number;
+  candidatesBeforeExclusion?: number;
+  candidatesExcluded?: number;
+  candidatesAfterExclusion?: number;
   selectedCandidates: number;
   detailAttemptsCompleted: number;
   detailAttemptsTotal: number;

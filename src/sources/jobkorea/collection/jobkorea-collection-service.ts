@@ -18,6 +18,8 @@ import { normalizeJobKoreaUrl, sourcePostingIdFromUrl } from "../transport/jobko
 import type { JobKoreaHttpResponse } from "../transport/types";
 import type { JobKoreaCollectedDetailOutcome, JobKoreaCollectionCandidate, JobKoreaCollectionDependencies, JobKoreaCollectionOptions, JobKoreaCollectionProgress, JobKoreaCollectionResult } from "./jobkorea-collection-types";
 import { matchesCollectionRegions, normalizeRegionText, type CollectionRegion, type NormalizedRegion } from "../../../services/region-normalizer";
+import { applyCandidateExclusions, normalizeCollectionExclusionConfig, type ExclusionSummary } from "../../../services/collection-exclusion";
+import { exclusionConfigurationHash } from "../../../services/collection-exclusion-hash.server";
 
 export const JOBKOREA_COLLECTION_DETAIL_CONCURRENCY = 2;
 export const JOBKOREA_COLLECTION_DRY_RUN_DEADLINE_MS = 90_000;
@@ -32,9 +34,10 @@ export interface JobKoreaCandidateSelection {
   unknownRegionCandidates: number;
   excludedByRegion: number;
   excludedRegionSamples: Array<{ sourcePostingId: string; reason: "nonmatching" | "unknown"; normalizedRegions: NormalizedRegion[] }>;
+  exclusion: ExclusionSummary;
 }
 
-export function selectJobKoreaCollectionCandidates(pages: JobKoreaCollectionResult["pageResults"], maximum: number, requestedRegions: CollectionRegion[] = []): JobKoreaCandidateSelection {
+export function selectJobKoreaCollectionCandidates(pages: JobKoreaCollectionResult["pageResults"], maximum: number, requestedRegions: CollectionRegion[] = [], exclusionInput = normalizeCollectionExclusionConfig()): JobKoreaCandidateSelection {
   const seen = new Set<string>(); const all: JobKoreaCollectionCandidate[] = [];
   let seoulMatches = 0, gyeonggiMatches = 0, multipleRegionMatches = 0, unknownRegionCandidates = 0, excludedByRegion = 0;
   const excludedRegionSamples: JobKoreaCandidateSelection["excludedRegionSamples"] = [];
@@ -59,8 +62,12 @@ export function selectJobKoreaCollectionCandidates(pages: JobKoreaCollectionResu
         normalizedRegions: region.regions, regionConfidence: region.confidence });
     }
   }
-  return { candidates: all.slice(0, maximum), uniquePostingIds: seen.size, seoulMatches, gyeonggiMatches, multipleRegionMatches,
-    unknownRegionCandidates, excludedByRegion, excludedRegionSamples };
+  const exclusion = applyCandidateExclusions(all, exclusionInput, (candidate) => ({ postingId: candidate.sourcePostingId,
+    listingPage: candidate.pageNumber, sourcePosition: candidate.sourcePosition, title: candidate.listingFields?.title ?? null,
+    company: candidate.listingFields?.companyName ?? null, location: candidate.listingFields?.regionText ?? null,
+    categories: [], employmentTypes: candidate.listingFields?.employmentTypes ?? [], workSchedule: [] }));
+  return { candidates: exclusion.candidates.slice(0, maximum), uniquePostingIds: seen.size, seoulMatches, gyeonggiMatches, multipleRegionMatches,
+    unknownRegionCandidates, excludedByRegion, excludedRegionSamples, exclusion: exclusion.summary };
 }
 
 function listing(candidate: JobKoreaCollectionCandidate, capturedAt: string): JobKoreaListing {
@@ -118,8 +125,10 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
   const httpClient = dependencies.httpClient ?? new JobKoreaHttpClient();
   const httpBudget = JobKoreaRequestBudget.forManualDetailCollection(options.maxDetails);
   const now = dependencies.now ?? (() => new Date()); let runId: string | null = null;
+  const exclusionConfig = normalizeCollectionExclusionConfig(options.exclusion);
   const progress: JobKoreaCollectionProgress = { status: "preparing", message: "수집 준비 중", listingPagesRequested: options.pages,
     listingPagesCompleted: 0, numericLinksExtracted: 0, uniquePostingIds: 0, regionMatchingCandidates: 0, selectedCandidates: 0,
+    candidatesBeforeExclusion: 0, candidatesExcluded: 0, candidatesAfterExclusion: 0,
     detailAttemptsCompleted: 0, detailAttemptsTotal: 0, successfulDetailParses: 0, listingFallbacks: 0, failedRecords: 0,
     predictedInserts: 0, predictedUpdates: 0, predictedUnchanged: 0, actualInserts: 0, actualUpdates: 0, actualUnchanged: 0,
     lowerCompletenessSkips: 0 };
@@ -132,6 +141,7 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
     permissionStatus: "unverified", listingUrl: options.searchUrl, maxDetails: options.maxDetails,
     contentRequestLimit: options.pages + options.maxDetails * (JOBKOREA_MANUAL_DETAIL_REDIRECT_HOPS + 1), preflightRequestLimit: 0, dryRun: false,
     selectedTransport: "playwright", searchPageCount: options.pages,
+    exclusionKeywords: exclusionConfig.keywords, exclusionFields: exclusionConfig.fields, exclusionConfigHash: options.exclusionConfigHash ?? exclusionConfigurationHash(exclusionConfig),
   });
   const executionOptions: JobKoreaSearchOptions = { searchUrl: options.searchUrl, pages: options.pages, maxDetails: options.maxDetails,
     transport: "playwright", confirm: true, dryRun: options.mode === "dry-run", diagnostic: false };
@@ -142,7 +152,11 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
     emit({ status: "filtering_regions", message: "지역 후보 선별 중", listingPagesCompleted: execution.pages.length,
       numericLinksExtracted: execution.pages.reduce((sum, page) => sum + (page.extractedCount ?? 0), 0) });
     const blockedPages = execution.pages.filter((page) => page.blocked).length;
-    const selection = selectJobKoreaCollectionCandidates(execution.pages, options.maxDetails, options.requestedRegions ?? []);
+    const selection = selectJobKoreaCollectionCandidates(execution.pages, options.maxDetails, options.requestedRegions ?? [], exclusionConfig);
+    if (runId) runs.updateExclusionSummary(runId, selection.exclusion.candidatesExcluded, selection.candidates.length);
+    emit({ status: "filtering_regions", message: `제외 키워드로 ${selection.exclusion.candidatesExcluded}건 제외`,
+      candidatesBeforeExclusion: selection.exclusion.candidatesBeforeExclusion, candidatesExcluded: selection.exclusion.candidatesExcluded,
+      candidatesAfterExclusion: selection.exclusion.candidatesAfterExclusion });
     emit({ status: "collecting_details", message: `상세 정보 0/${selection.candidates.length} 확인 중`, uniquePostingIds: selection.uniquePostingIds,
       regionMatchingCandidates: selection.uniquePostingIds - selection.excludedByRegion, selectedCandidates: selection.candidates.length,
       detailAttemptsTotal: selection.candidates.length });
@@ -236,6 +250,7 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
       numericLinksExtracted: execution.pages.reduce((sum, page) => sum + (page.extractedCount ?? 0), 0), uniquePostingIds: selection.uniquePostingIds,
       seoulMatches: selection.seoulMatches, gyeonggiMatches: selection.gyeonggiMatches, multipleRegionMatches: selection.multipleRegionMatches,
       unknownRegionCandidates: selection.unknownRegionCandidates, excludedByRegion: selection.excludedByRegion, excludedRegionSamples: selection.excludedRegionSamples,
+      ...selection.exclusion,
       candidatesSelected: selection.candidates.length, detailPagesAttempted: outcomes.length, successfullyParsed: parsed.length,
       activeJobs: parsed.filter((item) => item.status === "active").length, expiredOrClosedJobs: parsed.filter((item) => item.status === "expired" || item.status === "closed").length,
       transportFailures: outcomes.filter((item) => item.status === "transport_failed").length, blockedDetails: outcomes.filter((item) => item.status === "access_blocked").length,

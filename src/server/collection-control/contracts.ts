@@ -1,6 +1,7 @@
 import type { JobKoreaCollectionProgress, JobKoreaCollectionResult } from "../../sources/jobkorea/collection/jobkorea-collection-types";
 import type { AlbamonCollectionResult } from "../../sources/albamon/collection/albamon-collection-types";
 import type { CollectionPreset } from "../../sources/collection/collection-presets";
+import type { CollectionExclusionConfig } from "../../services/collection-exclusion";
 
 export type CollectionControlMode = "dry_run" | "write";
 export type CollectionRunStatus = JobKoreaCollectionProgress["status"] | "failed";
@@ -9,6 +10,7 @@ export interface CollectionControlConfig {
   presetId: CollectionPreset["id"];
   pages: number;
   maxDetails: number;
+  exclusion: CollectionExclusionConfig;
 }
 
 export type CollectionRunSnapshot = Omit<JobKoreaCollectionProgress, "status"> & {
@@ -19,6 +21,8 @@ export type CollectionRunSnapshot = Omit<JobKoreaCollectionProgress, "status"> &
   source: "jobkorea" | "albamon";
   presetLabel: string;
   maxDetailsRequested: number;
+  exclusion: CollectionExclusionConfig;
+  exclusionConfigHash: string;
   startedAt: string;
   updatedAt: string;
   elapsedMs: number;

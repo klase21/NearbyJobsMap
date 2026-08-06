@@ -317,6 +317,21 @@ UI filter는 source, provenance(수동 수집·픽스처·데모), completeness(
 
 2026-08-06 실제 UI 계약 검증은 `seoul-ai`, 1페이지, 후보 5건 드라이런으로 한 번 수행됐다. 명령 시작과 polling은 정상 동작했고 4.3초 내 구조화된 결과가 반환됐지만, 당시 공개 검색 페이지가 `unexpected_page`로 분류되어 숫자 링크와 유효 레코드는 0건이었다. SQLite SHA-256과 jobs 46, ingestion runs 10, ingestion items 114, provenance 66은 모두 그대로였다. 따라서 쓰기 승인은 발급되지 않았고 실제 쓰기 실행은 수행하지 않았다. 이 결과는 잡코리아 접근 제한이나 빈 검색 결과를 의미하지 않는다.
 
+## 다중 소스 제외 키워드
+
+잡코리아와 알바몬 수동 수집은 공통 제외 엔진을 사용한다. 문자열은 Unicode NFKC, 앞뒤 공백 제거, 연속 공백 축약, 영문 소문자화 후 리터럴 부분 문자열로 비교한다. 정규식·wildcard·실행 가능한 표현식은 지원하지 않는다. 키워드는 최대 30개, 정규화 후 2~50자이며 중복은 첫 입력 순서를 유지한 채 제거한다. 선택 필드는 공고명(`title`), 회사명(`company`), 지역(`location`), 직종·카테고리(`category`), 고용형태(`employment_type`), 근무 일정(`work_schedule`)이고 기본값은 공고명과 직종·카테고리다.
+
+수집 순서는 카드 검증과 posting ID 중복 제거, 지역 정규화·필터, 제외 키워드 필터, 후보 상한 순이다. 따라서 제외 공고는 상세 시도나 ingestion item을 소비하지 않는다. dry-run 결과에는 제외 전·제외·제외 후 후보 수, 키워드·필드별 aggregate, 최대 20개의 posting ID/page/position sample만 표시한다. write 승인은 source, preset, pages, max-details와 함께 정규화된 키워드 순서와 필드 및 SHA-256 설정 hash에 묶인다. 변경 시 같은 설정으로 dry-run을 다시 실행해야 한다. write run은 migration `0006`의 ingestion-run metadata에 설정과 aggregate를 기록한다.
+
+```powershell
+npm.cmd run collect:jobkorea:once -- --preset capital-ai --pages 2 --max-details 20 --exclude-keyword "전기" --exclude-keyword "강사" --exclude-field title --exclude-field category --dry-run --confirm
+npm.cmd run collect:albamon:once -- --preset albamon-capital-today --pages 2 --max-details 20 --exclude-keyword "강사" --exclude-field title --dry-run --confirm
+```
+
+`/collection`은 쉼표·줄바꿈 paste, removable chip, field checkbox와 전체 지우기를 제공하며 versioned localStorage에는 편의를 위한 최신 설정만 둔다. 서버 검증이 권위 있는 경계다. jobs 화면의 “화면 제외 키워드”는 같은 규칙으로 기존 목록과 marker를 임시로 숨길 뿐 SQLite를 변경하지 않는다. 양수 keyword search와 기존 source/provenance/completeness/region/status/map 필터 뒤에 적용하며 전체 필터 초기화에 함께 초기화된다.
+
+알바몬 live 요청은 이 기능 작업에서 수행하지 않았고 정상 live listing dry-run이 성공하기 전까지 write gate는 그대로 유지한다. 2026-08-06 실제 잡코리아 UI service-path dry-run은 `capital-ai`, 1페이지, 후보 10건, 키워드 `전기·스트리머·강사·수학·공인중개사·웨이터`, 필드 `title·category`로 정확히 한 번 실행됐다. 4.36초 안에 완료됐지만 검색 페이지가 `unexpected_page`로 분류되어 numeric link, 지역 후보, 제외 전·제외·제외 후 후보, 선택 후보가 모두 0이었다. 따라서 제외 aggregate도 비어 있었고 write authorization은 발급되지 않아 write는 실행하지 않았다. dry-run 전후 SQLite는 SHA-256 `5524DCF962B00B43C027626BB7781AC2B9B329A9D33287B44C754EDE32D4E356`, jobs 46, ingestion runs 10, ingestion items 114, provenance rows 66, source identity duplicate 0으로 동일했다. 이 hash는 데이터 변경이 아니라 forward migration `0006` 적용 뒤의 기준값이다. 연결 가능한 UI browser가 없어 실제 클릭 재현은 수행하지 못했으며 `/collection`과 `/` HTTP 200, jsdom 상호작용 테스트, 전체 build로 화면 경계를 검증했다.
+
 ## 알바몬 bounded 목록 수집
 
 알바몬 첫 live 수집 경계는 공개 browser-rendered `https://www.albamon.com/jobs/total` 목록만 사용한다. `/jobs/detail/{numeric-id}`는 identity와 안전한 source link로만 정규화하며 상세 페이지나 undocumented BFF는 요청하지 않는다. 각 페이지는 `page`, `sortType=POSTED_DATE`, `size=50`, `searchPeriodType=TODAY`를 `URLSearchParams`로 만들고 사용자가 정한 페이지 수를 정확히 방문한다. duplicate-only 또는 신규 ID 0개 페이지를 empty로 간주하거나 조기 종료하지 않는다.

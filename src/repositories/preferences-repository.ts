@@ -1,6 +1,7 @@
 import type { JobFilterState, SavedPreferences, SortOption, UserJobStatus, UserOrigin } from "../domain/ui-job";
 import { validateOrigin } from "../services/distance";
 import { DEFAULT_FILTERS } from "../services/job-search";
+import { EXCLUSION_FIELDS, normalizeExclusionText, type ExclusionField } from "../services/collection-exclusion";
 
 export const PREFERENCES_STORAGE_KEY = "nearby-jobs-map:preferences:v1";
 export interface StorageLike { getItem(key: string): string | null; setItem(key: string, value: string): void; removeItem(key: string): void }
@@ -30,6 +31,8 @@ function validFilters(value: unknown): value is JobFilterState {
   const salaryThresholds = value.salaryThresholds;
   const strings = ["keyword", "source", "provenance", "completeness", "region", "mapEligibility", "city", "district", "category", "employmentType", "experienceRequirement", "educationRequirement", "salaryType", "postingStatus", "locationAccuracy", "locationMode", "deadline"];
   return strings.every((key) => typeof value[key] === "string") && typeof value.showDemo === "boolean"
+    && Array.isArray(value.exclusionKeywords) && value.exclusionKeywords.every((item) => typeof item === "string")
+    && Array.isArray(value.exclusionFields) && value.exclusionFields.every((item) => typeof item === "string" && EXCLUSION_FIELDS.includes(item as ExclusionField))
     && Object.entries(FILTER_OPTIONS).every(([key, options]) => options.has(value[key] as never))
     && ["hourly", "daily", "monthly", "annual", "normalizedMonthly"].every((key) => typeof salaryThresholds[key] === "number" && Number.isFinite(salaryThresholds[key]) && (salaryThresholds[key] as number) >= 0);
 }
@@ -42,10 +45,13 @@ function validOrigin(value: unknown): value is UserOrigin {
 function parsePreferences(raw: string): SavedPreferences | null {
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== 2) || !isRecord(parsed.value)) return null;
+    if (!isRecord(parsed) || ![1, 2, 3].includes(parsed.version as number) || !isRecord(parsed.value)) return null;
     const value = parsed.value;
-    const filters = isRecord(value.filters) ? { ...DEFAULT_FILTERS, ...value.filters,
-      salaryThresholds: isRecord(value.filters.salaryThresholds) ? { ...DEFAULT_FILTERS.salaryThresholds, ...value.filters.salaryThresholds } : DEFAULT_FILTERS.salaryThresholds } : null;
+    const rawFilters = isRecord(value.filters) ? value.filters : null;
+    const filters = rawFilters ? { ...DEFAULT_FILTERS, ...rawFilters,
+      exclusionKeywords: Array.isArray(rawFilters.exclusionKeywords) ? [...new Set(rawFilters.exclusionKeywords.filter((item): item is string => typeof item === "string").map(normalizeExclusionText).filter((item) => item.length >= 2 && item.length <= 50))].slice(0, 30) : [],
+      exclusionFields: Array.isArray(rawFilters.exclusionFields) ? rawFilters.exclusionFields.filter((item): item is ExclusionField => typeof item === "string" && EXCLUSION_FIELDS.includes(item as ExclusionField)) : DEFAULT_FILTERS.exclusionFields,
+      salaryThresholds: isRecord(rawFilters.salaryThresholds) ? { ...DEFAULT_FILTERS.salaryThresholds, ...rawFilters.salaryThresholds } : DEFAULT_FILTERS.salaryThresholds } : null;
     if (!validFilters(filters) || typeof value.sort !== "string" || !SORT_OPTIONS.has(value.sort as SortOption)
       || typeof value.mapVisible !== "boolean" || !validOrigin(value.origin) || !isRecord(value.userJobStatuses)) return null;
     const statuses = Object.fromEntries(Object.entries(value.userJobStatuses).filter((entry): entry is [string, UserJobStatus] => typeof entry[1] === "string" && USER_STATUSES.has(entry[1] as UserJobStatus)));
@@ -64,7 +70,7 @@ export function createPreferencesRepository(storage: StorageLike | null) {
     },
     save(value: SavedPreferences): boolean {
       if (!storage) return false;
-      try { storage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify({ version: 2, value })); return true; } catch { return false; }
+      try { storage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify({ version: 3, value })); return true; } catch { return false; }
     },
     clear(): void { storage?.removeItem(PREFERENCES_STORAGE_KEY); },
   };

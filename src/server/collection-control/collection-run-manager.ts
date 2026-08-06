@@ -8,28 +8,32 @@ import { collectAlbamonOnce } from "../../sources/albamon/collection/albamon-col
 import type { AlbamonCollectionDependencies } from "../../sources/albamon/collection/albamon-collection-types";
 import { getCollectionPreset, type CollectionPreset } from "../../sources/collection/collection-presets";
 import type { CollectionControlConfig, CollectionControlMode, CollectionRunSnapshot } from "./contracts";
+import { normalizeCollectionExclusionConfig } from "../../services/collection-exclusion";
+import { exclusionConfigurationHash } from "../../services/collection-exclusion-hash.server";
 
 const WRITE_AUTH_TTL_MS = 30 * 60_000;
 const MAX_RETAINED_RUNS = 20;
 
 interface WriteAuthorization { token: string; configKey: string; dryRunId: string; expiresAt: number; used: boolean }
-interface StartRequest extends CollectionControlConfig { mode: CollectionControlMode; writeAuthorizationToken?: string; confirmationPhrase?: string }
+interface StartRequest extends Omit<CollectionControlConfig, "exclusion"> { exclusion?: CollectionControlConfig["exclusion"]; mode: CollectionControlMode; writeAuthorizationToken?: string; confirmationPhrase?: string }
 export interface CollectionRunManagerDependencies { runCollection?: typeof collectJobKoreaOnce; runAlbamonCollection?: typeof collectAlbamonOnce; openReadonly?: typeof openReadonlyDatabase; openWritable?: typeof openWritableDatabase; now?: () => Date; collectionDependencies?: Partial<JobKoreaCollectionDependencies>; albamonDependencies?: Partial<AlbamonCollectionDependencies> }
 
 const initialProgress = (pages: number): JobKoreaCollectionProgress => ({ status: "preparing", message: "수집 준비 중", listingPagesRequested: pages,
   listingPagesCompleted: 0, numericLinksExtracted: 0, uniquePostingIds: 0, regionMatchingCandidates: 0, selectedCandidates: 0,
+  candidatesBeforeExclusion: 0, candidatesExcluded: 0, candidatesAfterExclusion: 0,
   detailAttemptsCompleted: 0, detailAttemptsTotal: 0, successfulDetailParses: 0, listingFallbacks: 0, failedRecords: 0,
   predictedInserts: 0, predictedUpdates: 0, predictedUnchanged: 0, actualInserts: 0, actualUpdates: 0, actualUnchanged: 0, lowerCompletenessSkips: 0 });
 
-function configuration(presetId: string, pages: number, maxDetails: number): { preset: CollectionPreset; config: CollectionControlConfig } {
+function configuration(presetId: string, pages: number, maxDetails: number, exclusionInput?: CollectionControlConfig["exclusion"]): { preset: CollectionPreset; config: CollectionControlConfig } {
   const preset = getCollectionPreset(presetId);
   if (!preset) throw Object.assign(new Error("알 수 없는 수집 프리셋입니다."), { code: "COLLECTION_PRESET_INVALID", status: 400 });
   if (!Number.isInteger(pages) || pages < 1 || pages > preset.pages || pages > 5) throw Object.assign(new Error("페이지 수가 프리셋 한도를 벗어났습니다."), { code: "COLLECTION_PAGES_INVALID", status: 400 });
   if (!Number.isInteger(maxDetails) || maxDetails < 1 || maxDetails > preset.maxDetails || maxDetails > 50) throw Object.assign(new Error("후보 수가 프리셋 한도를 벗어났습니다."), { code: "COLLECTION_MAX_DETAILS_INVALID", status: 400 });
-  return { preset, config: { presetId: preset.id, pages, maxDetails } };
+  return { preset, config: { presetId: preset.id, pages, maxDetails, exclusion: normalizeCollectionExclusionConfig(exclusionInput) } };
 }
 
-const configKey = (config: CollectionControlConfig): string => `${getCollectionPreset(config.presetId)?.source ?? "unknown"}:${config.presetId}:${config.pages}:${config.maxDetails}`;
+export { exclusionConfigurationHash } from "../../services/collection-exclusion-hash.server";
+const configKey = (config: CollectionControlConfig): string => `${getCollectionPreset(config.presetId)?.source ?? "unknown"}:${config.presetId}:${config.pages}:${config.maxDetails}:${exclusionConfigurationHash(config.exclusion)}`;
 const safeError = (error: unknown) => ({ code: error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : "COLLECTION_RUN_FAILED",
   message: error instanceof Error ? error.message.slice(0, 500) : "수집 실행에 실패했습니다." });
 
@@ -41,12 +45,12 @@ export class CollectionRunManager {
 
   start(input: StartRequest): CollectionRunSnapshot {
     if (this.activeId) throw Object.assign(new Error("이미 실행 중인 수집이 있습니다."), { code: "COLLECTION_RUN_CONFLICT", status: 409 });
-    const { preset, config } = configuration(input.presetId, input.pages, input.maxDetails);
+    const { preset, config } = configuration(input.presetId, input.pages, input.maxDetails, input.exclusion);
     if (input.mode !== "dry_run" && input.mode !== "write") throw Object.assign(new Error("올바른 실행 모드가 아닙니다."), { code: "COLLECTION_MODE_INVALID", status: 400 });
     if (input.mode === "write") this.consumeWriteAuthorization(input, config);
     const now = (this.dependencies.now ?? (() => new Date()))(); const runId = randomUUID(); const progress = initialProgress(config.pages);
     const snapshot: CollectionRunSnapshot = { ...progress, runId, mode: input.mode, presetId: preset.id, presetLabel: preset.label, source: preset.source,
-      maxDetailsRequested: config.maxDetails, startedAt: now.toISOString(), updatedAt: now.toISOString(), elapsedMs: 0, result: null, error: null,
+      maxDetailsRequested: config.maxDetails, exclusion: config.exclusion, exclusionConfigHash: exclusionConfigurationHash(config.exclusion), startedAt: now.toISOString(), updatedAt: now.toISOString(), elapsedMs: 0, result: null, error: null,
       writeAuthorizationToken: null, writeAuthorizationExpiresAt: null };
     this.runs.set(runId, snapshot); this.activeId = runId; this.trim(); void this.execute(runId, preset, config, input.mode); return { ...snapshot };
   }
@@ -73,10 +77,11 @@ export class CollectionRunManager {
       const result = preset.source === "jobkorea"
         ? await (this.dependencies.runCollection ?? collectJobKoreaOnce)({ searchUrl: buildJobKoreaKeywordSearchUrl(preset.keyword), pages: config.pages as 1|2|3|4|5,
           maxDetails: config.maxDetails, mode: mode === "write" ? "write" : "dry-run", confirm: true, allowListingFallback: preset.allowListingFallback,
-          presetId: preset.id, presetLabel: preset.label, keyword: preset.keyword, requestedRegions: preset.regions }, { ...this.dependencies.collectionDependencies, database, onProgress })
+          presetId: preset.id, presetLabel: preset.label, keyword: preset.keyword, requestedRegions: preset.regions, exclusion: config.exclusion,
+          exclusionConfigHash: exclusionConfigurationHash(config.exclusion) }, { ...this.dependencies.collectionDependencies, database, onProgress })
         : await (this.dependencies.runAlbamonCollection ?? collectAlbamonOnce)({ presetId: preset.id, presetLabel: preset.label,
           pages: config.pages as 1|2|3|4|5, maxDetails: config.maxDetails, mode: mode === "write" ? "write" : "dry-run", confirm: true,
-          requestedRegions: preset.regions }, { ...this.dependencies.albamonDependencies, database, onProgress });
+          requestedRegions: preset.regions, exclusion: config.exclusion, exclusionConfigHash: exclusionConfigurationHash(config.exclusion) }, { ...this.dependencies.albamonDependencies, database, onProgress });
       const current = this.runs.get(runId)!; current.result = result; current.status = "completed"; current.message = "수집 완료";
       if (mode === "dry_run" && result.successfullyParsed + result.listingOnlyRecords > 0) {
         const token = randomUUID(); const expiresAt = (this.dependencies.now ?? (() => new Date()))().getTime() + WRITE_AUTH_TTL_MS;

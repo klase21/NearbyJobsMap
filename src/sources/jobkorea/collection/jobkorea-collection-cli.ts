@@ -3,6 +3,7 @@ import { normalizeJobKoreaSearchUrl } from "../transport/jobkorea-url-policy";
 import type { JobKoreaCollectionOptions } from "./jobkorea-collection-types";
 import type { CollectionRegion } from "../../../services/region-normalizer";
 import { buildJobKoreaKeywordSearchUrl, getJobKoreaCollectionPreset } from "./jobkorea-collection-presets";
+import { normalizeCollectionExclusionConfig, type ExclusionField } from "../../../services/collection-exclusion";
 
 export const JOBKOREA_COLLECTION_MAX_PAGES = 5;
 export const JOBKOREA_COLLECTION_MAX_DETAILS = 50;
@@ -16,8 +17,8 @@ function regions(value: string | true | undefined): CollectionRegion[] {
 }
 
 export function parseJobKoreaCollectionArgs(argv: string[]): JobKoreaCollectionOptions {
-  const values = new Map<string, string | true>();
-  const valueFlags = new Set(["--preset", "--search-url", "--pages", "--max-details", "--region"]);
+  const values = new Map<string, string | true>(); const repeated = new Map<string, string[]>();
+  const valueFlags = new Set(["--preset", "--search-url", "--pages", "--max-details", "--region", "--exclude-keyword", "--exclude-field"]);
   const booleanFlags = new Set(["--confirm", "--dry-run", "--write", "--allow-listing-fallback"]);
   for (let index = 0; index < argv.length; index += 1) {
     const key = argv[index]!;
@@ -25,7 +26,8 @@ export function parseJobKoreaCollectionArgs(argv: string[]): JobKoreaCollectionO
     if (!valueFlags.has(key)) throw new JobKoreaTransportError("JOBKOREA_COLLECTION_ARGUMENT_INVALID", `지원하지 않는 인자입니다: ${key}`);
     const value = argv[index + 1];
     if (!value || value.startsWith("--")) throw new JobKoreaTransportError("JOBKOREA_COLLECTION_ARGUMENT_INVALID", `${key} 값이 필요합니다.`);
-    values.set(key, value); index += 1;
+    if (key === "--exclude-keyword" || key === "--exclude-field") repeated.set(key, [...(repeated.get(key) ?? []), value]);
+    else values.set(key, value); index += 1;
   }
   if (!values.has("--confirm")) throw new JobKoreaTransportError("JOBKOREA_CONFIRMATION_REQUIRED", "실행하려면 --confirm이 필요합니다.");
   const presetValue = values.get("--preset"); const candidate = values.get("--search-url");
@@ -46,7 +48,9 @@ export function parseJobKoreaCollectionArgs(argv: string[]): JobKoreaCollectionO
   if (dryRun === write) throw new JobKoreaTransportError("JOBKOREA_COLLECTION_MODE_REQUIRED", "--dry-run 또는 --write 중 정확히 하나가 필요합니다.");
   const searchUrl = preset ? buildJobKoreaKeywordSearchUrl(preset.keyword) : normalizeJobKoreaSearchUrl(candidate as string);
   const keyword = preset?.keyword ?? new URL(searchUrl).searchParams.get("stext")?.trim() ?? "";
+  if (!(repeated.get("--exclude-keyword")?.length) && repeated.get("--exclude-field")?.length) throw new JobKoreaTransportError("JOBKOREA_COLLECTION_EXCLUSION_FIELDS_WITHOUT_KEYWORDS", "--exclude-field는 --exclude-keyword와 함께 사용해야 합니다.");
+  const exclusion = normalizeCollectionExclusionConfig({ keywords: repeated.get("--exclude-keyword") ?? [], fields: (repeated.get("--exclude-field") ?? []) as ExclusionField[] });
   return { searchUrl, pages: pages as 1 | 2 | 3 | 4 | 5, maxDetails, mode: write ? "write" : "dry-run", confirm: true,
     allowListingFallback: preset?.allowListingFallback || values.has("--allow-listing-fallback"), presetId: preset?.id ?? null,
-    presetLabel: preset?.label ?? null, keyword, requestedRegions };
+    presetLabel: preset?.label ?? null, keyword, requestedRegions, exclusion };
 }

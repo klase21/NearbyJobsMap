@@ -7,6 +7,7 @@ export function formatJobKoreaCollectionResult(result: JobKoreaCollectionResult)
     `목록 페이지: ${result.listingPagesCompleted}/${result.listingPagesRequested}`, `숫자 링크: ${result.numericLinksExtracted}`,
     `고유 posting ID (지역 필터 전): ${result.uniquePostingIds}`, `서울/경기/복수/미확인: ${result.seoulMatches}/${result.gyeonggiMatches}/${result.multipleRegionMatches}/${result.unknownRegionCandidates}`,
     `지역 제외/선택 후보: ${result.excludedByRegion}/${result.candidatesSelected}`,
+    `제외 전/제외/제외 후: ${result.candidatesBeforeExclusion}/${result.candidatesExcluded}/${result.candidatesAfterExclusion}`,
     `상세 시도: ${result.detailPagesAttempted}`, `파싱 성공: ${result.successfullyParsed}`,
     `활성: ${result.activeJobs}`, `만료/마감: ${result.expiredOrClosedJobs}`, `전송 실패: ${result.transportFailures}`,
     `차단 상세: ${result.blockedDetails}`, `파싱 실패: ${result.parseFailures}`,
@@ -15,6 +16,9 @@ export function formatJobKoreaCollectionResult(result: JobKoreaCollectionResult)
     `목록 정보/저장 실패/낮은 완성도 skip: ${result.listingOnlyRecords}/${result.failedRecords}/${result.actualLowerCompletenessSkips}`,
     `SQLite 총 공고: ${result.totalSqliteJobs}`, `경과: ${result.elapsedMs}ms`, `Run ID: ${result.runId ?? "dry-run (기록 없음)"}`];
   if (result.excludedRegionSamples.length) lines.push("지역 제외 sample", ...result.excludedRegionSamples.map((sample) => `- ${sample.sourcePostingId}: ${sample.reason} (${sample.normalizedRegions.join(",") || "unknown"})`));
+  if (result.candidatesExcluded) lines.push("제외 결과", ...Object.entries(result.exclusionReasonCounts.byKeyword).map(([keyword, count]) => `- keyword ${keyword}: ${count}`),
+    ...Object.entries(result.exclusionReasonCounts.byField).map(([field, count]) => `- field ${field}: ${count}`),
+    ...result.excludedCandidateSamples.map((sample) => `- ${sample.postingId}: ${sample.matchedKeyword}/${sample.matchedField} page=${sample.listingPage} position=${sample.sourcePosition}`));
   lines.push("", "상세 결과");
   for (const item of result.details) {
     const redirectPath = item.redirectChain.length ? ` · redirects ${item.redirectChain.map(({ status, host, path }) => `${status}:${host}${path}`).join(" → ")}` : "";

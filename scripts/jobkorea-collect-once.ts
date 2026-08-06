@@ -15,6 +15,7 @@ async function main(): Promise<void> {
   console.log(`Detail pages: ${options.maxDetails}/50`); console.log(`Detail concurrency: ${JOBKOREA_COLLECTION_DETAIL_CONCURRENCY}/2`);
   console.log("Retries/direct endpoint/cookies/login/profile/stealth: disabled"); console.log(`Database writes: ${options.mode === "write" ? "enabled" : "disabled"}`);
   console.log(`Listing fallback: ${options.allowListingFallback ? "enabled" : "disabled"}`);
+  console.log(`Exclusion keywords: ${options.exclusion?.keywords.join(", ") || "none"}`); console.log(`Exclusion fields: ${options.exclusion?.fields.join(", ") || "none"}`);
   const database = options.mode === "write" ? openWritableDatabase(getDatabasePath()) : openReadonlyDatabase(getDatabasePath());
   try {
     if (!listAppliedMigrations(database).includes(REQUIRED_MIGRATION_VERSION)) throw new JobKoreaTransportError("JOBKOREA_MIGRATION_MISSING", `migration ${REQUIRED_MIGRATION_VERSION}이 필요합니다.`);

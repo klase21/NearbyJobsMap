@@ -10,8 +10,10 @@ import { collectAlbamonListingPages } from "./albamon-listing-browser";
 import { buildAlbamonListingUrl } from "./albamon-url-policy";
 import type { AlbamonCandidateSelection, AlbamonCollectionDependencies, AlbamonCollectionOptions, AlbamonCollectionResult, AlbamonListingPageResult, AlbamonSelectedCandidate } from "./albamon-collection-types";
 import type { JobKoreaCollectionProgress } from "../../jobkorea/collection/jobkorea-collection-types";
+import { applyCandidateExclusions, normalizeCollectionExclusionConfig } from "../../../services/collection-exclusion";
+import { exclusionConfigurationHash } from "../../../services/collection-exclusion-hash.server";
 
-export function selectAlbamonCandidates(pageResults: AlbamonListingPageResult[], maximum: number, requestedRegions: AlbamonCollectionOptions["requestedRegions"]): AlbamonCandidateSelection {
+export function selectAlbamonCandidates(pageResults: AlbamonListingPageResult[], maximum: number, requestedRegions: AlbamonCollectionOptions["requestedRegions"], exclusionInput = normalizeCollectionExclusionConfig()): AlbamonCandidateSelection {
   const seen = new Set<string>(); const matching: AlbamonSelectedCandidate[] = [];
   let seoulMatches = 0, gyeonggiMatches = 0, multipleRegionMatches = 0, unknownRegionCandidates = 0, excludedByRegion = 0;
   for (const page of [...pageResults].sort((a, b) => a.pageNumber - b.pageNumber)) {
@@ -26,7 +28,11 @@ export function selectAlbamonCandidates(pageResults: AlbamonListingPageResult[],
       matching.push({ ...candidate, pageNumber: page.pageNumber, normalizedRegions: region.regions, regionConfidence: region.confidence });
     }
   }
-  return { candidates: matching.slice(0, maximum), uniquePostingIds: seen.size, seoulMatches, gyeonggiMatches, multipleRegionMatches, unknownRegionCandidates, excludedByRegion };
+  const exclusion = applyCandidateExclusions(matching, exclusionInput, (candidate) => ({ postingId: candidate.sourcePostingId,
+    listingPage: candidate.pageNumber, sourcePosition: candidate.firstSourcePosition, title: candidate.title, company: candidate.companyName,
+    location: candidate.regionText, categories: candidate.categoryLabels, employmentTypes: candidate.employmentTypes,
+    workSchedule: [candidate.workDaysText, candidate.workHoursText].filter((value): value is string => Boolean(value)) }));
+  return { candidates: exclusion.candidates.slice(0, maximum), uniquePostingIds: seen.size, seoulMatches, gyeonggiMatches, multipleRegionMatches, unknownRegionCandidates, excludedByRegion, exclusion: exclusion.summary };
 }
 
 function recordFor(candidate: AlbamonSelectedCandidate, options: AlbamonCollectionOptions, observedAt: string): IngestionRecord | null {
@@ -50,22 +56,29 @@ function recordFor(candidate: AlbamonSelectedCandidate, options: AlbamonCollecti
 
 export async function collectAlbamonOnce(options: AlbamonCollectionOptions, dependencies: AlbamonCollectionDependencies): Promise<AlbamonCollectionResult> {
   const started = performance.now(); const now = dependencies.now ?? (() => new Date());
+  const exclusionConfig = normalizeCollectionExclusionConfig(options.exclusion);
   const progress: JobKoreaCollectionProgress = { status: "preparing", message: "알바몬 수집 준비 중", listingPagesRequested: options.pages,
     listingPagesCompleted: 0, numericLinksExtracted: 0, uniquePostingIds: 0, regionMatchingCandidates: 0, selectedCandidates: 0,
+    candidatesBeforeExclusion: 0, candidatesExcluded: 0, candidatesAfterExclusion: 0,
     detailAttemptsCompleted: 0, detailAttemptsTotal: 0, successfulDetailParses: 0, listingFallbacks: 0, failedRecords: 0,
     predictedInserts: 0, predictedUpdates: 0, predictedUnchanged: 0, actualInserts: 0, actualUpdates: 0, actualUnchanged: 0, lowerCompletenessSkips: 0 };
   const emit = (patch: Partial<JobKoreaCollectionProgress>) => { Object.assign(progress, patch); try { dependencies.onProgress?.({ ...progress }); } catch { /* observer isolation */ } };
   let runId: string | null = null; const runs = new IngestionRunRepository(dependencies.database); const jobs = new JobRepository(dependencies.database);
   if (options.mode === "write") runId = runs.begin("albamon", "albamon_listing_collection", options.maxDetails, { permissionStatus: "unverified",
     listingUrl: buildAlbamonListingUrl(1), maxDetails: options.maxDetails, contentRequestLimit: options.pages, preflightRequestLimit: 0,
-    dryRun: false, selectedTransport: "playwright", searchPageCount: options.pages });
+    dryRun: false, selectedTransport: "playwright", searchPageCount: options.pages,
+    exclusionKeywords: exclusionConfig.keywords, exclusionFields: exclusionConfig.fields, exclusionConfigHash: options.exclusionConfigHash ?? exclusionConfigurationHash(exclusionConfig) });
   try {
     emit({ status: "collecting_listings", message: `알바몬 목록 0/${options.pages} 페이지 수집 중` });
     const pageResults = await (dependencies.collectPages ?? collectAlbamonListingPages)(options.pages);
     const completed = pageResults.filter((page) => page.classification !== "transport_failed").length;
     const numericLinks = pageResults.reduce((sum, page) => sum + page.extractedNumericLinkCount, 0);
     emit({ status: "filtering_regions", message: "서울·경기 후보 선별 중", listingPagesCompleted: completed, numericLinksExtracted: numericLinks });
-    const selection = selectAlbamonCandidates(pageResults, options.maxDetails, options.requestedRegions);
+    const selection = selectAlbamonCandidates(pageResults, options.maxDetails, options.requestedRegions, exclusionConfig);
+    if (runId) runs.updateExclusionSummary(runId, selection.exclusion.candidatesExcluded, selection.candidates.length);
+    emit({ status: "filtering_regions", message: `제외 키워드로 ${selection.exclusion.candidatesExcluded}건 제외`,
+      candidatesBeforeExclusion: selection.exclusion.candidatesBeforeExclusion, candidatesExcluded: selection.exclusion.candidatesExcluded,
+      candidatesAfterExclusion: selection.exclusion.candidatesAfterExclusion });
     const observedAt = now().toISOString(); const records = selection.candidates.map((candidate) => recordFor(candidate, options, observedAt)).filter((record): record is IngestionRecord => Boolean(record));
     const invalid = selection.candidates.length - records.length;
     const previews = records.map((record) => jobs.previewUpsert(record.job, record.metadata).action);
@@ -75,6 +88,8 @@ export async function collectAlbamonOnce(options: AlbamonCollectionOptions, depe
     const predictedLowerCompletenessSkips = previews.filter((value) => value === "skipped").length;
     emit({ status: "predicting_changes", message: "목록 정보 변경 예상 계산 중", uniquePostingIds: selection.uniquePostingIds,
       regionMatchingCandidates: selection.uniquePostingIds - selection.excludedByRegion, selectedCandidates: selection.candidates.length,
+      candidatesBeforeExclusion: selection.exclusion.candidatesBeforeExclusion, candidatesExcluded: selection.exclusion.candidatesExcluded,
+      candidatesAfterExclusion: selection.exclusion.candidatesAfterExclusion,
       listingFallbacks: records.length, failedRecords: invalid, predictedInserts, predictedUpdates, predictedUnchanged, lowerCompletenessSkips: predictedLowerCompletenessSkips });
     let actualInserts = 0, actualUpdates = 0, actualUnchanged = 0, actualLowerCompletenessSkips = 0;
     if (options.mode === "write" && runId) {
@@ -92,6 +107,7 @@ export async function collectAlbamonOnce(options: AlbamonCollectionOptions, depe
       pageResults, listingPagesRequested: options.pages, listingPagesCompleted: completed, numericLinksExtracted: numericLinks,
       uniquePostingIds: selection.uniquePostingIds, seoulMatches: selection.seoulMatches, gyeonggiMatches: selection.gyeonggiMatches,
       multipleRegionMatches: selection.multipleRegionMatches, unknownRegionCandidates: selection.unknownRegionCandidates, excludedByRegion: selection.excludedByRegion,
+      ...selection.exclusion,
       candidatesSelected: selection.candidates.length, detailPagesAttempted: 0, successfullyParsed: 0, activeJobs: 0, expiredOrClosedJobs: 0,
       transportFailures, blockedDetails: 0, parseFailures: invalid, predictedInserts, predictedUpdates, predictedUnchanged,
       actualInserts, actualUpdates, actualUnchanged, listingOnlyRecords: records.length, failedRecords: invalid,

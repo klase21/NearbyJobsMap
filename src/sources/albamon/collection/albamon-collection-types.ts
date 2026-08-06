@@ -2,6 +2,7 @@ import type Database from "better-sqlite3";
 import type { UpsertAction } from "../../../db/repositories/job-repository";
 import type { CollectionRegion, NormalizedRegion, RegionNormalizationConfidence } from "../../../services/region-normalizer";
 import type { JobKoreaCollectionProgress } from "../../jobkorea/collection/jobkorea-collection-types";
+import type { CollectionExclusionConfig, ExclusionSummary } from "../../../services/collection-exclusion";
 
 export interface AlbamonListingCandidate {
   sourcePostingId: string;
@@ -44,6 +45,8 @@ export interface AlbamonCollectionOptions {
   mode: "dry-run" | "write";
   confirm: true;
   requestedRegions: CollectionRegion[];
+  exclusion?: CollectionExclusionConfig;
+  exclusionConfigHash?: string | null;
 }
 
 export interface AlbamonSelectedCandidate extends AlbamonListingCandidate {
@@ -52,7 +55,7 @@ export interface AlbamonSelectedCandidate extends AlbamonListingCandidate {
   regionConfidence: RegionNormalizationConfidence;
 }
 
-export interface AlbamonCollectionResult {
+export interface AlbamonCollectionResult extends ExclusionSummary {
   runId: string | null;
   mode: AlbamonCollectionOptions["mode"];
   status: "completed" | "partial" | "failed" | "blocked";
@@ -109,6 +112,7 @@ export interface AlbamonCandidateSelection {
   multipleRegionMatches: number;
   unknownRegionCandidates: number;
   excludedByRegion: number;
+  exclusion: ExclusionSummary;
 }
 
 export type AlbamonCollectionCliOptions = AlbamonCollectionOptions;

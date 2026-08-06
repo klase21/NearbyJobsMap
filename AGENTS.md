@@ -174,6 +174,17 @@
 - 소스와 위치 정확도·환산 신뢰도를 숨기지 않는다.
 - 장식적이거나 판단에 도움이 되지 않는 UI를 피한다.
 
+## Exclusion Keyword Protection
+
+- 잡코리아와 알바몬 수집 및 jobs 화면은 하나의 source-neutral 제외 matcher와 정규화 규칙을 공유한다.
+- 제외 입력은 literal substring만 허용하며 regex, wildcard, JavaScript, shell, SQL 또는 arbitrary property path로 해석하지 않는다.
+- 수집 제외는 posting ID 중복 제거와 지역 필터 뒤, candidate cap 전에 적용한다. 제외 후보는 상세 시도·후보 slot·ingestion item·job provenance를 소비하지 않는다.
+- 정규화된 keyword 순서, 선택 field, source, preset, pages, max-details를 dry-run/write authorization에 묶고 어느 하나가 바뀌면 write를 거부한다.
+- keyword는 최대 30개, 2~50자이고 지원 field allowlist를 client와 server 양쪽에서 검증한다.
+- CLI, collection UI, 두 source adapter는 같은 matcher를 사용하고 raw HTML, description, 연락처, hidden state를 비교 대상으로 추가하지 않는다.
+- jobs 화면의 display exclusion은 SQLite를 변경하지 않으며 기존 filter preference의 versioned localStorage 경계와 reset 동작을 유지한다.
+- 이 기능 작업에서는 실제 알바몬 요청을 실행하지 않는다. 수집은 계속 수동 실행, 동시성 최대 2, retry 0이며 scheduler나 접근 제어 우회를 추가하지 않는다.
+
 ## Validation Policy
 
 모든 변경은 다음 명령을 통과해야 한다.

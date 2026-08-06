@@ -11,12 +11,19 @@ export class IngestionRunRepository {
     const now = new Date().toISOString();
     this.database.prepare(`INSERT INTO ingestion_runs
       (id, source, ingestion_type, status, started_at, input_record_count, permission_status, listing_url, max_details,
-       content_request_limit, preflight_request_limit, dry_run, selected_transport, search_page_count, created_at)
-      VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+       content_request_limit, preflight_request_limit, dry_run, selected_transport, search_page_count,
+       exclusion_keywords_json, exclusion_fields_json, exclusion_config_hash, created_at)
+      VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, source, ingestionType, now, inputRecordCount, metadata?.permissionStatus ?? null, metadata?.listingUrl ?? null,
         metadata?.maxDetails ?? null, metadata?.contentRequestLimit ?? null, metadata?.preflightRequestLimit ?? null,
-        metadata?.dryRun ? 1 : 0, metadata?.selectedTransport ?? null, metadata?.searchPageCount ?? 0, now);
+        metadata?.dryRun ? 1 : 0, metadata?.selectedTransport ?? null, metadata?.searchPageCount ?? 0,
+        JSON.stringify(metadata?.exclusionKeywords ?? []), JSON.stringify(metadata?.exclusionFields ?? []), metadata?.exclusionConfigHash ?? null, now);
     return id;
+  }
+
+  updateExclusionSummary(runId: string, excludedCandidateCount: number, selectedCandidateCountAfterExclusion: number): void {
+    this.database.prepare(`UPDATE ingestion_runs SET excluded_candidate_count = ?, selected_candidate_count_after_exclusion = ? WHERE id = ?`)
+      .run(excludedCandidateCount, selectedCandidateCountAfterExclusion, runId);
   }
 
   recordItem(input: {

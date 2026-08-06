@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { JobFilterState, UiJobRecord } from "../../domain/ui-job";
 import { LOCATION_LABELS, POSTING_STATUS_LABELS, SALARY_TYPE_LABELS } from "../../services/job-display";
 import { DEFAULT_FILTERS, getNormalizedRegions, isMapEligible } from "../../services/job-search";
+import { DEFAULT_EXCLUSION_FIELDS, EXCLUSION_FIELDS, normalizeExclusionText, splitExclusionKeywordInput, type ExclusionField } from "../../services/collection-exclusion";
 
 interface FilterPanelProps {
   filters: JobFilterState;
@@ -18,6 +19,7 @@ export function FilterPanel({ filters, jobs, onChange, onClose }: FilterPanelPro
   const firstControlRef = useRef<HTMLSelectElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const [isMobileDrawer, setIsMobileDrawer] = useState(false);
+  const [displayExclusionText, setDisplayExclusionText] = useState(filters.exclusionKeywords.join(", "));
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     firstControlRef.current?.focus();
@@ -80,6 +82,8 @@ export function FilterPanel({ filters, jobs, onChange, onClose }: FilterPanelPro
     },
   });
   const resetFilters = () => onChange({ ...DEFAULT_FILTERS, salaryThresholds: { ...DEFAULT_FILTERS.salaryThresholds } });
+  const setDisplayExclusions = (raw: string) => update("exclusionKeywords", [...new Set(splitExclusionKeywordInput(raw).map(normalizeExclusionText).filter((value) => value.length >= 2 && value.length <= 50))].slice(0, 30));
+  const toggleExclusionField = (field: ExclusionField) => update("exclusionFields", filters.exclusionFields.includes(field) ? filters.exclusionFields.filter((item) => item !== field) : [...filters.exclusionFields, field]);
   const threshold = (key: keyof JobFilterState["salaryThresholds"], value: string) => {
     const parsed = Number(value);
     onChange({ ...filters, salaryThresholds: { ...filters.salaryThresholds, [key]: Number.isFinite(parsed) && parsed > 0 ? parsed : 0 } });
@@ -115,6 +119,12 @@ export function FilterPanel({ filters, jobs, onChange, onClose }: FilterPanelPro
           <NumberField label="최소 연봉 (원)" value={filters.salaryThresholds.annual} disabled={filters.salaryType !== "all" && filters.salaryType !== "annual"} onChange={(value) => threshold("annual", value)} placeholder="예: 40000000" />
           <NumberField label="월 환산 예상 최소 (원)" value={filters.salaryThresholds.normalizedMonthly} onChange={(value) => threshold("normalizedMonthly", value)} placeholder="비교용 추정치" />
         </div>
+        <details className="display-exclusion-controls"><summary>화면 제외 키워드 {filters.exclusionKeywords.length ? `(${filters.exclusionKeywords.length})` : ""}</summary>
+          <p>저장된 데이터를 삭제하지 않고 현재 화면에서만 숨깁니다.</p>
+          <label>제외 키워드<textarea value={displayExclusionText} placeholder="전기, 강사" onChange={(event) => setDisplayExclusionText(event.target.value)} onBlur={() => setDisplayExclusions(displayExclusionText)} /></label>
+          <div className="exclusion-fields">{EXCLUSION_FIELDS.map((field) => <label key={field}><input type="checkbox" checked={filters.exclusionFields.includes(field)} onChange={() => toggleExclusionField(field)} /> {{ title: "공고명", company: "회사명", location: "지역", category: "직종·카테고리", employment_type: "고용형태", work_schedule: "근무 일정" }[field]}</label>)}</div>
+          <button type="button" className="button compact" onClick={() => setDisplayExclusions(displayExclusionText)}>적용</button> <button type="button" className="button compact" onClick={() => { setDisplayExclusionText(""); onChange({ ...filters, exclusionKeywords: [], exclusionFields: DEFAULT_EXCLUSION_FIELDS }); }}>화면 제외 초기화</button>
+        </details>
         <div className="filter-footer">
           <label className="checkbox-line"><input type="checkbox" checked={filters.showDemo} onChange={(event) => update("showDemo", event.target.checked)} /> 기능 검증용 가상 공고 포함</label>
           <div className="filter-actions"><button className="button" type="button" onClick={resetFilters}>필터 초기화</button><button className="button primary" type="button" onClick={onClose}>결과 보기</button></div>
