@@ -6,7 +6,7 @@ import { ALBAMON_COLLECTION_PRESETS } from "../../sources/albamon/collection/alb
 import { ALBAMON_LISTING_EVALUATOR_SOURCE, toAlbamonListingPageResult } from "../../sources/albamon/collection/albamon-listing-evaluator";
 import type { AlbamonListingCandidate, AlbamonListingPageResult } from "../../sources/albamon/collection/albamon-collection-types";
 import { buildAlbamonListingUrl, normalizeAlbamonDetailUrl, normalizeAlbamonListingUrl } from "../../sources/albamon/collection/albamon-url-policy";
-import { classifyAlbamonNavigationFailure } from "../../sources/albamon/collection/albamon-listing-browser";
+import { classifyAlbamonNavigationFailure, sanitizeAlbamonTransportError, settleAlbamonListingPage } from "../../sources/albamon/collection/albamon-listing-browser";
 import { createTestDatabase, type TestDatabase } from "../db/test-database";
 
 const databases: TestDatabase[] = [];
@@ -31,13 +31,16 @@ async function evaluateHtml(html: string): Promise<unknown> {
 
 describe("Albamon public URL policy and presets", () => {
   it("retains only bounded navigation failure categories", () => {
+    expect(classifyAlbamonNavigationFailure(new Error("net::ERR_NAME_NOT_RESOLVED"))).toBe("ALBAMON_LISTING_DNS_FAILED");
     expect(classifyAlbamonNavigationFailure(new Error("net::ERR_CERT_COMMON_NAME_INVALID private detail"))).toBe("ALBAMON_LISTING_TLS_FAILED");
     expect(classifyAlbamonNavigationFailure(new Error("Timeout 15000ms exceeded"))).toBe("ALBAMON_LISTING_NAVIGATION_TIMEOUT");
     expect(classifyAlbamonNavigationFailure(new Error("secret path"))).toBe("ALBAMON_LISTING_NAVIGATION_FAILED");
+    expect(sanitizeAlbamonTransportError(new Error("failed at C:\\Users\\sample\\profile data")).message).toBe("failed at <LOCAL_PATH> data");
   });
   it("constructs explicit listing pages and strips detail tracking", () => {
-    expect(buildAlbamonListingUrl(2)).toBe("https://www.albamon.com/jobs/total?page=2&sortType=POSTED_DATE&size=50&searchPeriodType=TODAY");
+    expect(buildAlbamonListingUrl(2)).toBe("https://www.albamon.com/jobs/total?page=2&sortType=POSTED_DATE&size=50&searchPeriodType=TODAY&excludeBar=true");
     expect(normalizeAlbamonListingUrl(buildAlbamonListingUrl(1))).toContain("/jobs/total?");
+    expect(normalizeAlbamonListingUrl("https://m.albamon.com/jobs/total?page=1")).toBe("https://m.albamon.com/jobs/total?page=1");
     expect(normalizeAlbamonDetailUrl("/jobs/detail/123456?tracking=secret")).toEqual({ postingId: "123456", canonicalUrl: "https://www.albamon.com/jobs/detail/123456" });
     for (const value of ["http://www.albamon.com/jobs/total", "https://evil.example/jobs/detail/1", "https://user:pass@www.albamon.com/jobs/detail/1", "/jobs/detail/not-id"]) expect(() => value.includes("total") ? normalizeAlbamonListingUrl(value) : normalizeAlbamonDetailUrl(value)).toThrow();
   });
@@ -45,6 +48,7 @@ describe("Albamon public URL policy and presets", () => {
     expect(Object.keys(ALBAMON_COLLECTION_PRESETS)).toHaveLength(3);
     expect(ALBAMON_COLLECTION_PRESETS["albamon-capital-today"]).toMatchObject({ source: "albamon", regions: ["seoul", "gyeonggi"], pages: 5, maxDetails: 50, listingOnly: true });
     expect(parseAlbamonCollectionArgs(["--preset", "albamon-seoul-today", "--pages", "1", "--max-details", "5", "--dry-run", "--confirm"])).toMatchObject({ pages: 1, maxDetails: 5, mode: "dry-run" });
+    expect(parseAlbamonCollectionArgs(["--preset", "albamon-seoul-today", "--pages", "1", "--max-details", "5", "--dry-run", "--confirm", "--diagnostic"]).diagnostic).toBe(true);
     expect(() => parseAlbamonCollectionArgs(["--preset", "albamon-seoul-today", "--pages", "4", "--dry-run", "--confirm"])).toThrow();
     expect(() => parseAlbamonCollectionArgs(["--preset", "unknown", "--dry-run", "--confirm"])).toThrow();
   });
@@ -65,6 +69,31 @@ describe("Albamon card-isolated evaluator", () => {
     const malformed = toAlbamonListingPageResult(await evaluateHtml(`<!doctype html><main><div><a href="/jobs/detail/1">A</a><a href="/jobs/detail/2">B</a><span class="company">회사</span></div></main>`), 1, buildAlbamonListingUrl(1));
     expect(malformed.classification).toBe("malformed"); expect(malformed.candidates).toHaveLength(0);
     expect(toAlbamonListingPageResult(await evaluateHtml(`<!doctype html><main>등록된 공고가 없습니다</main>`), 1, buildAlbamonListingUrl(1)).validEmptyPage).toBe(true);
+  }, 10_000);
+  it("ignores hidden no-result templates when an active result region has cards", async () => {
+    const raw = await evaluateHtml(`<!doctype html><div class="no-result" hidden>검색 결과가 없습니다</div><main><ul class="job-list">
+      <li><a href="/jobs/detail/20001">서울 운영 보조</a><span class="company">새봄데이터</span><span class="location">서울 강남구</span></li>
+      <li><a href="/jobs/detail/20002">경기 데이터 정리</a><span class="company">한빛로컬랩</span><span class="location">경기 성남시</span></li>
+    </ul></main>`);
+    expect(toAlbamonListingPageResult(raw, 1, buildAlbamonListingUrl(1))).toMatchObject({ classification: "valid_results", validEmptyPage: false, uniquePostingIdCount: 2 });
+  });
+  it("does not infer a missing location from region words in the title or company", async () => {
+    const raw = await evaluateHtml(`<!doctype html><main><ul class="job-list">
+      <li><a href="/jobs/detail/21001">서울 강서구 매장 운영</a><span class="company">서울서비스</span></li>
+      <li><a href="/jobs/detail/21002">일반 운영 보조</a><span class="company">한빛로컬랩</span></li>
+    </ul></main>`);
+    expect(toAlbamonListingPageResult(raw, 1, buildAlbamonListingUrl(1)).candidates[0]?.regionText).toBeNull();
+  });
+  it("uses bounded scrolling and stops after the card count stabilizes", async () => {
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const page = await browser.newPage();
+      await page.setContent(`<!doctype html><main><ul class="job-list"><li><a href="/jobs/detail/30001">서울 운영</a><span class="company">새봄데이터</span></li></ul></main><script>
+        let appended=false; window.scrollTo=()=>{if(appended)return;appended=true;document.querySelector('ul').insertAdjacentHTML('beforeend','<li><a href="/jobs/detail/30002">경기 운영</a><span class="company">한빛로컬랩</span></li>')};
+      </script>`);
+      const raw = await settleAlbamonListingPage(page);
+      expect(toAlbamonListingPageResult(raw, 1, buildAlbamonListingUrl(1)).uniquePostingIdCount).toBe(2);
+    } finally { await browser.close(); }
   });
 });
 

@@ -33,8 +33,32 @@ export interface AlbamonListingPageResult {
   blocked: boolean;
   parserFailure: boolean;
   validEmptyPage: boolean;
+  invalidCardCount?: number;
   candidates: AlbamonListingCandidate[];
   diagnosticCodes: string[];
+  transportDiagnostic?: AlbamonTransportDiagnostic;
+}
+
+export interface AlbamonTransportDiagnostic {
+  requestedUrl: string;
+  finalUrl: string | null;
+  httpStatus: number | null;
+  redirectChain: Array<{ host: string; path: string; status: number | null }>;
+  navigationElapsedMs: number | null;
+  browserLaunchStatus: "completed" | "failed";
+  contextCreationStatus: "completed" | "failed" | "not_attempted";
+  pageCreationStatus: "completed" | "failed" | "not_attempted";
+  errorName: string | null;
+  errorMessage: string | null;
+  failureCategory: string | null;
+  dnsFailure: boolean;
+  tlsFailure: boolean;
+  timeoutFailure: boolean;
+  pageCrash: boolean;
+  pageCleanup: "completed" | "failed" | "not_attempted";
+  contextCleanup: "completed" | "failed" | "not_attempted";
+  browserCleanup: "completed" | "failed" | "not_attempted";
+  serverCleanup: "completed" | "failed" | "not_attempted";
 }
 
 export interface AlbamonCollectionOptions {
@@ -48,6 +72,7 @@ export interface AlbamonCollectionOptions {
   exclusion?: CollectionExclusionConfig;
   exclusionConfigHash?: string | null;
   savedProfile?: { id: string; name: string; revision: number; configurationHash: string } | null;
+  diagnostic?: boolean;
 }
 
 export interface AlbamonSelectedCandidate extends AlbamonListingCandidate {
@@ -70,6 +95,8 @@ export interface AlbamonCollectionResult extends ExclusionSummary {
   listingPagesCompleted: number;
   numericLinksExtracted: number;
   uniquePostingIds: number;
+  validListingCards: number;
+  invalidListingCards: number;
   seoulMatches: number;
   gyeonggiMatches: number;
   multipleRegionMatches: number;

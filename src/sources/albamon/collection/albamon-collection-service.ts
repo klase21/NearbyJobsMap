@@ -72,9 +72,13 @@ export async function collectAlbamonOnce(options: AlbamonCollectionOptions, depe
     savedProfileConfigurationHash: options.savedProfile?.configurationHash ?? null });
   try {
     emit({ status: "collecting_listings", message: `알바몬 목록 0/${options.pages} 페이지 수집 중` });
-    const pageResults = await (dependencies.collectPages ?? collectAlbamonListingPages)(options.pages);
-    const completed = pageResults.filter((page) => page.classification !== "transport_failed").length;
+    const pageResults = dependencies.collectPages
+      ? await dependencies.collectPages(options.pages)
+      : await collectAlbamonListingPages(options.pages, { diagnostic: options.diagnostic === true });
+    const completed = pageResults.filter((page) => page.classification === "valid_results" || page.classification === "valid_empty").length;
     const numericLinks = pageResults.reduce((sum, page) => sum + page.extractedNumericLinkCount, 0);
+    const validListingCards = pageResults.reduce((sum, page) => sum + page.candidates.length, 0);
+    const invalidListingCards = pageResults.reduce((sum, page) => sum + (page.invalidCardCount ?? 0), 0);
     emit({ status: "filtering_regions", message: "서울·경기 후보 선별 중", listingPagesCompleted: completed, numericLinksExtracted: numericLinks });
     const selection = selectAlbamonCandidates(pageResults, options.maxDetails, options.requestedRegions, exclusionConfig);
     if (runId) runs.updateExclusionSummary(runId, selection.exclusion.candidatesExcluded, selection.candidates.length);
@@ -107,7 +111,8 @@ export async function collectAlbamonOnce(options: AlbamonCollectionOptions, depe
     return { runId, mode: options.mode, status: blocked === pageResults.length && pageResults.length ? "blocked" : transportFailures || invalid ? "partial" : "completed",
       source: "albamon", presetId: options.presetId, presetLabel: options.presetLabel, keyword: "오늘 등록", requestedRegions: options.requestedRegions,
       pageResults, listingPagesRequested: options.pages, listingPagesCompleted: completed, numericLinksExtracted: numericLinks,
-      uniquePostingIds: selection.uniquePostingIds, seoulMatches: selection.seoulMatches, gyeonggiMatches: selection.gyeonggiMatches,
+      uniquePostingIds: selection.uniquePostingIds, validListingCards, invalidListingCards,
+      seoulMatches: selection.seoulMatches, gyeonggiMatches: selection.gyeonggiMatches,
       multipleRegionMatches: selection.multipleRegionMatches, unknownRegionCandidates: selection.unknownRegionCandidates, excludedByRegion: selection.excludedByRegion,
       ...selection.exclusion,
       candidatesSelected: selection.candidates.length, detailPagesAttempted: 0, successfullyParsed: 0, activeJobs: 0, expiredOrClosedJobs: 0,

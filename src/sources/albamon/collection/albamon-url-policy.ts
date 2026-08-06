@@ -16,12 +16,13 @@ export function buildAlbamonListingUrl(page: number): string {
   url.searchParams.set("sortType", "POSTED_DATE");
   url.searchParams.set("size", "50");
   url.searchParams.set("searchPeriodType", "TODAY");
+  url.searchParams.set("excludeBar", "true");
   return url.toString();
 }
 
 export function normalizeAlbamonListingUrl(value: string): string {
   const url = parseHttps(value);
-  if (url.hostname !== "www.albamon.com" || url.pathname.replace(/\/$/, "") !== "/jobs/total") throw new Error("ALBAMON_LISTING_URL_INVALID");
+  if (url.pathname.replace(/\/$/, "") !== "/jobs/total") throw new Error("ALBAMON_LISTING_URL_INVALID");
   return url.toString();
 }
 

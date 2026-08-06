@@ -54,7 +54,11 @@ The public page may have changed or anonymous detail access may require login/ve
 
 ## Albamon transport failure
 
-The first-phase adapter uses only browser-rendered public listing pages. Do not call undocumented BFF endpoints, automate authentication, or add detail crawling. Keep records absent until a normal public listing run succeeds.
+The adapter uses only explicit browser-rendered public `/jobs/total` pages with `size=50`, `sortType=POSTED_DATE`, `searchPeriodType=TODAY`, and `excludeBar=true`. It waits for `DOMContentLoaded`, performs bounded rendering stabilization, and never treats duplicate-only or zero-new-ID pages as empty. A valid empty page requires visible no-result evidence in the active result region.
+
+The August 2026 bounded probe did not reproduce the earlier transport failure: it returned HTTP 200 in about four seconds with no DNS, TLS, timeout, redirect, crash, or cleanup error. The subsequent two-page validation isolated 100 numeric posting-ID cards. One candidate was initially selected only because its title contained a district name; the write was rolled back and title/company values are now prohibited as location fallbacks. Therefore the runtime database still contains no live Albamon row, and a future approved run must confirm a distinct visible location value before write.
+
+Use `--diagnostic` only for a specifically authorized bounded run when transport classification is needed. It reports sanitized URL/status/redirect, elapsed time, failure category, lifecycle state, and cleanup—never HTML, response bodies, cookies, headers, or page text. Do not call undocumented BFF endpoints, automate authentication, or add detail crawling.
 
 ## Map tiles are unavailable
 

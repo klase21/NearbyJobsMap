@@ -6,7 +6,7 @@ export function parseAlbamonCollectionArgs(args: string[]): AlbamonCollectionCli
   const values = new Map<string, string>(); const repeated = new Map<string, string[]>(); const flags = new Set<string>();
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!; if (!arg.startsWith("--")) throw new Error("ALBAMON_CLI_ARGUMENT_INVALID");
-    if (["--dry-run", "--write", "--confirm"].includes(arg)) { flags.add(arg); continue; }
+    if (["--dry-run", "--write", "--confirm", "--diagnostic"].includes(arg)) { flags.add(arg); continue; }
     const value = args[++index]; if (!value || value.startsWith("--")) throw new Error("ALBAMON_CLI_VALUE_REQUIRED");
     if (arg === "--exclude-keyword" || arg === "--exclude-field") repeated.set(arg, [...(repeated.get(arg) ?? []), value]);
     else if (["--preset", "--pages", "--max-details"].includes(arg)) values.set(arg, value); else throw new Error("ALBAMON_CLI_ARGUMENT_INVALID");
@@ -20,5 +20,6 @@ export function parseAlbamonCollectionArgs(args: string[]): AlbamonCollectionCli
   if (!(repeated.get("--exclude-keyword")?.length) && repeated.get("--exclude-field")?.length) throw new Error("ALBAMON_EXCLUSION_FIELDS_WITHOUT_KEYWORDS");
   return { presetId: preset.id, presetLabel: preset.label, pages: pages as 1|2|3|4|5, maxDetails,
     mode: flags.has("--write") ? "write" : "dry-run", confirm: true, requestedRegions: preset.regions,
+    diagnostic: flags.has("--diagnostic"),
     exclusion: normalizeCollectionExclusionConfig({ keywords: repeated.get("--exclude-keyword") ?? [], fields: (repeated.get("--exclude-field") ?? []) as ExclusionField[] }) };
 }

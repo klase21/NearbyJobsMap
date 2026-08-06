@@ -147,6 +147,9 @@
 - 한 listing record는 하나의 bounded single-posting card에서만 추출하고 numeric `/jobs/detail/{id}`를 identity로 사용한다. page-level ancestor나 복수 posting ID card는 거부한다.
 - title과 company가 모두 있어야 listing-only CanonicalJob을 만들 수 있고 raw HTML, 전체 card text, description, 개인 연락처를 보존하지 않는다.
 - 서울·경기 판정은 원본 location을 보존한 채 card 추출 후 candidate cap 전에 로컬로 수행하며 누락·모호한 위치는 추측하지 않는다.
+- Albamon location fallback은 title·company와 동일한 값이나 title/company를 함께 포함한 card 전체 text를 사용할 수 없다. 제목의 지역명·지점명을 실제 표시 location으로 추론하지 않는다.
+- Albamon empty는 active result region의 보이는 명시적 no-result evidence만 허용한다. 숨겨진 template 문구, duplicate-only page, zero-new-ID page, blocked/parser/transport failure는 empty가 아니다.
+- Albamon 공개 listing URL은 `excludeBar=true`를 포함하고 `DOMContentLoaded` 뒤 최대 15회 bounded scroll과 두 번의 안정된 card count로 정리한다. 허용된 HTTPS Albamon host의 `/jobs/total` canonical redirect 외에는 성공으로 처리하지 않는다.
 - Albamon 목록 레코드는 `bounded_listing_collection`, `listing_only`, `not_attempted`, permission `unverified`로 표시하며 future detail-complete 데이터를 downgrade하지 않는다.
 - CLI와 로컬 collection UI는 같은 Albamon collection service를 사용한다. UI는 내장 preset만 받고 한 active run, 30분 dry-run binding, typed write confirmation을 그대로 적용한다.
 - Albamon 수집도 수동 실행만 허용하고 retry 0, 페이지 최대 5, 후보 최대 50을 유지하며 scheduler, recurring worker, 로그인·접근제어 우회를 추가하지 않는다.
