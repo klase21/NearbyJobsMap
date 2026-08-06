@@ -307,3 +307,12 @@ npm.cmd run collect:jobkorea:once -- --preset capital-ai --pages 2 --max-details
 이어진 단 한 번의 write도 2페이지·20개 후보로 완료됐다. detail parse는 0개, listing-only fallback은 20개, insert/update/unchanged는 0/20/0이었다. 최종 SQLite는 46 jobs, 10 ingestion runs, 114 ingestion items, 66 provenance rows이며 duplicate source identity는 0개다. 이는 공식 API나 source-provided region filter가 아니며 permission은 계속 `unverified`다.
 
 UI filter는 source, provenance(수동 수집·픽스처·데모), completeness(목록 정보·상세 확인), region(서울·경기·기타·지역 미확인), posting status, map eligibility를 제공한다. category 간에는 AND로 결합하고 keyword search는 title·company·location·employment type·source를 포함한다. 결과는 `전체 중 표시 · 지도 가능` 수로 요약되며 reset은 기본값을 복원한다. preference는 version 2 localStorage에 저장되고 이전 version 1 값은 안전하게 보완하며 알 수 없는 stale 값은 무시한다. 실제 46개 데이터에서 잡코리아+수동 수집+목록 정보 조합은 서울 10개, 경기 10개, 지역 미확인 10개이고 좌표가 없어 map-eligible은 0개다. reset 결과는 46개 목록과 8개 marker다.
+# 로컬 수집 관리 화면
+
+`NEARBY_JOBS_ENABLE_COLLECTION_UI=1`로 로컬 개발 서버를 시작하면 `/collection`에서 기존 잡코리아 프리셋(`seoul-ai`, `gyeonggi-ai`, `capital-ai`)을 수동 실행할 수 있다. 공개 환경과 비로컬 호스트에서는 실행 API가 기본적으로 거부된다. 화면은 프리셋 기본값보다 작은 페이지 수와 후보 수만 허용하며 동시성 2, 재시도 0, 목록 대체 정책은 기존 CLI 수집 서비스와 동일하다.
+
+먼저 드라이런을 확인하고 실행한다. 유효한 상세 또는 목록 대체 레코드가 하나 이상 만들어진 경우에만 서버가 동일한 preset/pages/max-details 설정에 묶인 30분짜리 쓰기 승인을 발급한다. 실제 쓰기는 `WRITE <preset-id>` 문구가 정확히 일치해야 하며 한 번 사용한 승인은 재사용할 수 없다. 진행 상태는 750ms 로컬 polling으로 표시되고, 최근 실제 수집 10건은 기존 ingestion run 데이터에서 읽는다. 드라이런 상태는 SQLite에 쓰지 않는다.
+
+이 기능은 scheduler나 원격 queue가 아니다. 프로세스 안에서 한 번에 하나의 수동 실행만 유지하므로 개발 서버가 재시작되면 메모리의 진행 상태와 쓰기 승인이 사라질 수 있다. 이 경우 화면은 실행 상태를 찾을 수 없다고 표시하며 완료를 추정하지 않는다.
+
+2026-08-06 실제 UI 계약 검증은 `seoul-ai`, 1페이지, 후보 5건 드라이런으로 한 번 수행됐다. 명령 시작과 polling은 정상 동작했고 4.3초 내 구조화된 결과가 반환됐지만, 당시 공개 검색 페이지가 `unexpected_page`로 분류되어 숫자 링크와 유효 레코드는 0건이었다. SQLite SHA-256과 jobs 46, ingestion runs 10, ingestion items 114, provenance 66은 모두 그대로였다. 따라서 쓰기 승인은 발급되지 않았고 실제 쓰기 실행은 수행하지 않았다. 이 결과는 잡코리아 접근 제한이나 빈 검색 결과를 의미하지 않는다.

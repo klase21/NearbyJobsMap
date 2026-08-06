@@ -1,5 +1,18 @@
 # Project Identity
 
+## Local Collection Control Protection
+
+- 수집 관리 화면과 실행 API는 로컬 전용이며 `NEARBY_JOBS_ENABLE_COLLECTION_UI=1`이 없으면 실행을 허용하지 않는다.
+- 공개·비로컬 호스트에서는 수집 실행을 거부하고 인증 시스템으로 이를 우회하지 않는다.
+- 화면은 내장 preset만 받고 arbitrary URL, keyword, shell command, SQL, 환경 변수를 실행 입력으로 받지 않는다.
+- 동시에 활성화된 수집 run은 최대 1개이며 수동 시작만 허용한다. scheduler, cron, recurring worker, remote queue를 추가하지 않는다.
+- UI와 CLI는 동일한 JobKorea collection service를 사용하며 route handler에 crawler logic을 복제하거나 CLI를 shell-out하지 않는다.
+- write는 동일 preset/pages/max-details 설정으로 30분 이내 성공한 dry-run, 서버 발급 opaque token, 정확한 `WRITE <preset-id>` 문구를 모두 요구한다.
+- preset 및 global pages/details 한도를 서버와 클라이언트 양쪽에서 검증한다. 동시성 2와 retry 0을 UI에서 변경하지 않는다.
+- dry-run progress와 승인은 메모리에만 유지하며 SQLite에 run, item, job, provenance를 쓰지 않는다.
+- JobKorea login·verification을 우회하지 않고 기존 listing-only 표기를 유지하며 detail-complete 데이터를 downgrade하지 않는다.
+- progress와 오류 응답에는 raw HTML, 본문, header, cookie, description, stack trace를 포함하지 않는다.
+
 이 프로젝트는 로컬 우선 통합 채용 목록과 보조적 근무지 지도를 위한 fixture 기반 UI MVP다. 현재 활성 소스는 잡코리아·알바몬이며, 작은 sanitized fixture와 명시적인 가상 공고만 화면에 제공한다.
 
 ## Project Direction

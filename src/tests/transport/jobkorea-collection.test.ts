@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseJobKoreaCollectionArgs } from "../../sources/jobkorea/collection/jobkorea-collection-cli";
 import { formatJobKoreaCollectionResult } from "../../sources/jobkorea/collection/jobkorea-collection-output";
 import { collectJobKoreaOnce, JOBKOREA_COLLECTION_DETAIL_CONCURRENCY, selectJobKoreaCollectionCandidates } from "../../sources/jobkorea/collection/jobkorea-collection-service";
@@ -108,6 +108,17 @@ describe("JobKorea collection candidate selection", () => {
 });
 
 describe("JobKorea bounded collection pipeline", () => {
+  it("shares bounded progress without allowing observer failures to change results", async () => {
+    const testDb = createTestDatabase(); databases.push(testDb); const statuses: string[] = [];
+    const result = await collectJobKoreaOnce({ searchUrl: "https://www.jobkorea.co.kr/Search?stext=AI", pages: 1, maxDetails: 1, mode: "dry-run", confirm: true },
+      { database: testDb.database, createExecution: async () => execution([page(1, [collectionCandidate("50000999", 1)])]), httpClient: http().client,
+        onProgress: vi.fn((event) => { statuses.push(event.status); if (event.status === "collecting_details") throw new Error("observer only"); }) });
+    expect(result.successfullyParsed).toBe(1);
+    expect(statuses).toEqual(expect.arrayContaining(["preparing", "collecting_listings", "filtering_regions", "collecting_details", "predicting_changes", "completed"]));
+    expect(statuses).not.toContain("writing_database");
+    expect(testDb.database.prepare("SELECT COUNT(*) count FROM ingestion_runs").get()).toEqual({ count: 0 });
+  });
+
   it("dry-runs detail parsing concurrently without any database write", async () => {
     const testDb = createTestDatabase(); databases.push(testDb);
     const candidates = Array.from({ length: 5 }, (_, index) => collectionCandidate(String(50001000 + index), index + 1));

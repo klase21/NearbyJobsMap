@@ -95,4 +95,38 @@ export interface JobKoreaCollectionDependencies {
   createExecution?: (options: import("../transport/jobkorea-search-types").JobKoreaSearchOptions) => Promise<JobKoreaSearchExecution>;
   httpClient?: JobKoreaHttpClient;
   now?: () => Date;
+  onProgress?: (progress: JobKoreaCollectionProgress) => void;
+}
+
+export type JobKoreaCollectionProgressStatus =
+  | "preparing"
+  | "collecting_listings"
+  | "filtering_regions"
+  | "collecting_details"
+  | "applying_listing_fallback"
+  | "predicting_changes"
+  | "writing_database"
+  | "completed";
+
+export interface JobKoreaCollectionProgress {
+  status: JobKoreaCollectionProgressStatus;
+  message: string;
+  listingPagesRequested: number;
+  listingPagesCompleted: number;
+  numericLinksExtracted: number;
+  uniquePostingIds: number;
+  regionMatchingCandidates: number;
+  selectedCandidates: number;
+  detailAttemptsCompleted: number;
+  detailAttemptsTotal: number;
+  successfulDetailParses: number;
+  listingFallbacks: number;
+  failedRecords: number;
+  predictedInserts: number;
+  predictedUpdates: number;
+  predictedUnchanged: number;
+  actualInserts: number;
+  actualUpdates: number;
+  actualUnchanged: number;
+  lowerCompletenessSkips: number;
 }

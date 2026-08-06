@@ -16,7 +16,7 @@ import type { JobKoreaSearchOptions } from "../transport/jobkorea-search-types";
 import { JOBKOREA_PARSER_CONTRACT_VERSION, JOBKOREA_SANITIZER_VERSION, sanitizeJobKoreaDetail } from "../transport/jobkorea-sanitizer";
 import { normalizeJobKoreaUrl, sourcePostingIdFromUrl } from "../transport/jobkorea-url-policy";
 import type { JobKoreaHttpResponse } from "../transport/types";
-import type { JobKoreaCollectedDetailOutcome, JobKoreaCollectionCandidate, JobKoreaCollectionDependencies, JobKoreaCollectionOptions, JobKoreaCollectionResult } from "./jobkorea-collection-types";
+import type { JobKoreaCollectedDetailOutcome, JobKoreaCollectionCandidate, JobKoreaCollectionDependencies, JobKoreaCollectionOptions, JobKoreaCollectionProgress, JobKoreaCollectionResult } from "./jobkorea-collection-types";
 import { matchesCollectionRegions, normalizeRegionText, type CollectionRegion, type NormalizedRegion } from "../../../services/region-normalizer";
 
 export const JOBKOREA_COLLECTION_DETAIL_CONCURRENCY = 2;
@@ -118,6 +118,16 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
   const httpClient = dependencies.httpClient ?? new JobKoreaHttpClient();
   const httpBudget = JobKoreaRequestBudget.forManualDetailCollection(options.maxDetails);
   const now = dependencies.now ?? (() => new Date()); let runId: string | null = null;
+  const progress: JobKoreaCollectionProgress = { status: "preparing", message: "수집 준비 중", listingPagesRequested: options.pages,
+    listingPagesCompleted: 0, numericLinksExtracted: 0, uniquePostingIds: 0, regionMatchingCandidates: 0, selectedCandidates: 0,
+    detailAttemptsCompleted: 0, detailAttemptsTotal: 0, successfulDetailParses: 0, listingFallbacks: 0, failedRecords: 0,
+    predictedInserts: 0, predictedUpdates: 0, predictedUnchanged: 0, actualInserts: 0, actualUpdates: 0, actualUnchanged: 0,
+    lowerCompletenessSkips: 0 };
+  const emit = (patch: Partial<JobKoreaCollectionProgress>) => {
+    Object.assign(progress, patch);
+    try { dependencies.onProgress?.({ ...progress }); } catch { /* Progress observers cannot affect collection. */ }
+  };
+  emit({ status: "preparing", message: "수집 준비 중" });
   if (options.mode === "write") runId = runs.begin("jobkorea", "jobkorea_one_shot_transport", options.maxDetails, {
     permissionStatus: "unverified", listingUrl: options.searchUrl, maxDetails: options.maxDetails,
     contentRequestLimit: options.pages + options.maxDetails * (JOBKOREA_MANUAL_DETAIL_REDIRECT_HOPS + 1), preflightRequestLimit: 0, dryRun: false,
@@ -127,14 +137,31 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
     transport: "playwright", confirm: true, dryRun: options.mode === "dry-run", diagnostic: false };
   let execution: Awaited<ReturnType<typeof createJobKoreaSearchExecution>> | null = null;
   try {
+    emit({ status: "collecting_listings", message: `목록 0/${options.pages} 페이지 수집 중` });
     execution = await (dependencies.createExecution ?? createJobKoreaSearchExecution)(executionOptions);
+    emit({ status: "filtering_regions", message: "지역 후보 선별 중", listingPagesCompleted: execution.pages.length,
+      numericLinksExtracted: execution.pages.reduce((sum, page) => sum + (page.extractedCount ?? 0), 0) });
     const blockedPages = execution.pages.filter((page) => page.blocked).length;
     const selection = selectJobKoreaCollectionCandidates(execution.pages, options.maxDetails, options.requestedRegions ?? []);
+    emit({ status: "collecting_details", message: `상세 정보 0/${selection.candidates.length} 확인 중`, uniquePostingIds: selection.uniquePostingIds,
+      regionMatchingCandidates: selection.uniquePostingIds - selection.excludedByRegion, selectedCandidates: selection.candidates.length,
+      detailAttemptsTotal: selection.candidates.length });
+    let completedDetails = 0; let successfulDetails = 0; let listingFallbacks = 0; let failedDetails = 0;
     const records: IngestionRecord[] = []; const outcomes = await concurrentMap(selection.candidates, JOBKOREA_COLLECTION_DETAIL_CONCURRENCY, async (candidate) => {
-      if (performance.now() - started >= deadline) return { sourcePostingId: candidate.sourcePostingId, requestedUrl: candidate.sourceUrl,
+      const finish = (outcome: JobKoreaCollectedDetailOutcome): JobKoreaCollectedDetailOutcome => {
+        completedDetails += 1;
+        if (outcome.parserResult === "parsed") successfulDetails += 1;
+        if (outcome.dataCompleteness === "listing_only") listingFallbacks += 1;
+        if (outcome.databaseAction === "not_stored") failedDetails += 1;
+        emit({ status: outcome.dataCompleteness === "listing_only" ? "applying_listing_fallback" : "collecting_details",
+          message: outcome.dataCompleteness === "listing_only" ? `목록 정보 대체 ${listingFallbacks}건` : `상세 정보 ${completedDetails}/${selection.candidates.length} 확인 중`,
+          detailAttemptsCompleted: completedDetails, successfulDetailParses: successfulDetails, listingFallbacks, failedRecords: failedDetails });
+        return outcome;
+      };
+      if (performance.now() - started >= deadline) return finish({ sourcePostingId: candidate.sourcePostingId, requestedUrl: candidate.sourceUrl,
         finalUrl: null, httpStatus: null, redirectCount: null, redirectClassification: "not_observed", redirectChain: [],
         status: "transport_failed", parserResult: "failed", canonicalValidation: "not_reached", databaseAction: "not_stored",
-        diagnosticCodes: ["JOBKOREA_COLLECTION_DEADLINE_EXCEEDED"], transport: "http", dataCompleteness: "none" } satisfies JobKoreaCollectedDetailOutcome;
+        diagnosticCodes: ["JOBKOREA_COLLECTION_DEADLINE_EXCEEDED"], transport: "http", dataCompleteness: "none" });
       let httpResponse: JobKoreaHttpResponse | null = null;
       const observedAt = now().toISOString();
       try {
@@ -152,10 +179,10 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
         const issues = validateCanonicalJob(job); if (issues.length) throw new JobKoreaTransportError("JOBKOREA_CANONICAL_VALIDATION_FAILED", issues.map((item) => item.code).join(", "), response.finalUrl);
         const record = collectionRecord(candidate, options, observedAt, job, "detail_complete", response.finalUrl);
         records.push(record); const preview = jobs.previewUpsert(job, record.metadata);
-        return { sourcePostingId: candidate.sourcePostingId, requestedUrl: httpResponse.requestedUrl, finalUrl: httpResponse.finalUrl,
+        return finish({ sourcePostingId: candidate.sourcePostingId, requestedUrl: httpResponse.requestedUrl, finalUrl: httpResponse.finalUrl,
           httpStatus: httpResponse.status, redirectCount: httpResponse.redirectCount, redirectClassification: httpResponse.redirectClassification,
           redirectChain: httpResponse.redirectChain, status: detailStatus(job.postingStatus), parserResult: "parsed", canonicalValidation: "passed",
-          databaseAction: preview.action, diagnosticCodes: parsed.diagnostics.map((item) => item.code), transport: "http", dataCompleteness: "detail_complete" } satisfies JobKoreaCollectedDetailOutcome;
+          databaseAction: preview.action, diagnosticCodes: parsed.diagnostics.map((item) => item.code), transport: "http", dataCompleteness: "detail_complete" });
       } catch (error) {
         const code = error instanceof JobKoreaTransportError ? error.code : "JOBKOREA_DETAIL_PROCESSING_FAILED";
         const errorContext = error instanceof JobKoreaTransportError ? error.context : null;
@@ -168,23 +195,23 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
           if (!issues.length) {
             const record = collectionRecord(candidate, options, observedAt, fallbackJob, "listing_only", null);
             records.push(record); const preview = jobs.previewUpsert(fallbackJob, record.metadata);
-            return { sourcePostingId: candidate.sourcePostingId, requestedUrl: errorContext?.requestedUrl ?? httpResponse?.requestedUrl ?? candidate.sourceUrl,
+            return finish({ sourcePostingId: candidate.sourcePostingId, requestedUrl: errorContext?.requestedUrl ?? httpResponse?.requestedUrl ?? candidate.sourceUrl,
               finalUrl: errorContext?.finalUrl ?? httpResponse?.finalUrl ?? null, httpStatus: errorContext?.httpStatus ?? httpResponse?.status ?? null,
               redirectCount: errorContext?.redirectCount ?? httpResponse?.redirectCount ?? null, redirectClassification,
               redirectChain: errorContext?.redirectChain ?? httpResponse?.redirectChain ?? [], status: failureStatus(code), parserResult: "failed",
               canonicalValidation: "passed", databaseAction: preview.action, diagnosticCodes: [code, "JOBKOREA_LISTING_FALLBACK_USED"],
-              transport: "http", dataCompleteness: "listing_only" } satisfies JobKoreaCollectedDetailOutcome;
+              transport: "http", dataCompleteness: "listing_only" });
           }
         }
         if (runId) runs.recordItem({ runId, source: "jobkorea", sourcePostingId: candidate.sourcePostingId,
           canonicalJobId: `jobkorea:${candidate.sourcePostingId}`, result: "failed", diagnosticCodes: [code], contentHash: null });
-        return { sourcePostingId: candidate.sourcePostingId, requestedUrl: errorContext?.requestedUrl ?? httpResponse?.requestedUrl ?? candidate.sourceUrl,
+        return finish({ sourcePostingId: candidate.sourcePostingId, requestedUrl: errorContext?.requestedUrl ?? httpResponse?.requestedUrl ?? candidate.sourceUrl,
           finalUrl: errorContext?.finalUrl ?? httpResponse?.finalUrl ?? (error instanceof JobKoreaTransportError ? error.url : null),
           httpStatus: errorContext?.httpStatus ?? httpResponse?.status ?? null,
           redirectCount: errorContext?.redirectCount ?? httpResponse?.redirectCount ?? null,
           redirectClassification, redirectChain: errorContext?.redirectChain ?? httpResponse?.redirectChain ?? [],
           status: failureStatus(code), parserResult: "failed", canonicalValidation: code === "JOBKOREA_CANONICAL_VALIDATION_FAILED" ? "failed" : "not_reached",
-          databaseAction: "not_stored", diagnosticCodes: [code], transport: "http", dataCompleteness: "none" } satisfies JobKoreaCollectedDetailOutcome;
+          databaseAction: "not_stored", diagnosticCodes: [code], transport: "http", dataCompleteness: "none" });
       }
     });
     const failed = outcomes.filter((item) => item.databaseAction === "not_stored").length;
@@ -192,7 +219,12 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
       selectedDetailCount: selection.candidates.length, blockedCount: blockedPages, browserNavigations: execution.searchNavigationCount,
       detailNavigations: execution.detailNavigationCount, directRequests: 0 };
     let actualInserts = 0, actualUpdates = 0, actualUnchanged = 0, actualLowerCompletenessSkips = 0;
+    emit({ status: "predicting_changes", message: "변경 내용 계산 중", predictedInserts: outcomes.filter((item) => item.databaseAction === "inserted").length,
+      predictedUpdates: outcomes.filter((item) => item.databaseAction === "updated").length,
+      predictedUnchanged: outcomes.filter((item) => item.databaseAction === "unchanged").length,
+      lowerCompletenessSkips: outcomes.filter((item) => item.databaseAction === "skipped").length });
     if (runId) {
+      emit({ status: "writing_database", message: "SQLite 반영 중" });
       const ingested = new IngestionService(dependencies.database).ingest(records, { source: "jobkorea", ingestionType: "jobkorea_one_shot_transport" }, { runId, initial: { failed }, transportCompletion: completion });
       actualInserts = ingested.inserted; actualUpdates = ingested.updated; actualUnchanged = ingested.unchanged;
       actualLowerCompletenessSkips = ingested.skipped;
@@ -213,6 +245,8 @@ export async function collectJobKoreaOnce(options: JobKoreaCollectionOptions, de
       listingOnlyRecords: outcomes.filter((item) => item.dataCompleteness === "listing_only").length, failedRecords: failed,
       predictedLowerCompletenessSkips: outcomes.filter((item) => item.databaseAction === "skipped").length, actualLowerCompletenessSkips,
       totalSqliteJobs: jobs.listAll().length, details: outcomes, elapsedMs: Math.round(performance.now() - started) };
+    emit({ status: "completed", message: "수집 완료", actualInserts, actualUpdates, actualUnchanged,
+      lowerCompletenessSkips: options.mode === "write" ? actualLowerCompletenessSkips : result.predictedLowerCompletenessSkips });
     return result;
   } catch (error) {
     if (runId) runs.fail(runId, error instanceof Error ? error.message : "수동 수집 실패");
