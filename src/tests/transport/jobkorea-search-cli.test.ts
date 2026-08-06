@@ -24,6 +24,7 @@ describe("잡코리아 search URL 정책", () => {
   it("Search URL과 Page_No를 정규화한다", () => {
     expect(parseJobKoreaSearchPageNumber(normalizeJobKoreaSearchUrl(search))).toBe(1);
     expect(jobKoreaSearchPageUrl(search, 2)).toContain("Page_No=2");
+    expect(jobKoreaSearchPageUrl(search, 10)).toContain("Page_No=10");
     expect(normalizeJobKoreaSearchUrl("https://www.jobkorea.co.kr/Search?stext=AI")).toContain("tabType=recruit");
   });
   it.each(["http://www.jobkorea.co.kr/Search?stext=AI", "https://evil.test/Search?stext=AI", "https://user:pass@www.jobkorea.co.kr/Search?stext=AI", "https://www.jobkorea.co.kr/Search?Page_No=3"])("위험하거나 범위를 벗어난 URL을 거부한다", (url) => expect(() => normalizeJobKoreaSearchUrl(url)).toThrow());

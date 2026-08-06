@@ -53,7 +53,10 @@ export function normalizeJobKoreaSearchUrl(candidate: string): string {
   return url.toString();
 }
 
-export function jobKoreaSearchPageUrl(searchUrl: string, pageNumber: 1 | 2 | 3 | 4 | 5): string {
+export function jobKoreaSearchPageUrl(searchUrl: string, pageNumber: number): string {
+  if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > 10) {
+    throw new JobKoreaTransportError("JOBKOREA_SEARCH_PAGE_INVALID", "Page_No는 1~10 정수여야 합니다.", null);
+  }
   const url = new URL(normalizeJobKoreaSearchUrl(searchUrl));
   url.searchParams.set("Page_No", String(pageNumber));
   return url.toString();

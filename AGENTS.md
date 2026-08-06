@@ -313,3 +313,15 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Browser-install timeouts terminate only the Playwright installer process tree they started; never broadly terminate Node processes.
 - The app remains usable without Chromium, while collection readiness is reported honestly. Diagnostic checks never contact source hosts or start collection.
 - v0.1.1 remains unreleased until owner review; hardening validation must not create a tag or release.
+
+## JobKorea listing-only backfill protection
+
+- `backfill:jobkorea:once` is a separately authorized manual maintenance boundary. It requires explicit page range, `--listing-only`, a dry-run, and exact `BACKFILL JOBKOREA CAPITAL` write confirmation; it never runs from the app, build, test, migration, scheduler, or background process.
+- The first backfill hard cap is pages 1–10, 200 selected candidates, listing concurrency 1, detail requests 0, and retries 0. These limits do not widen the normal collection-control cap of 5 pages and 50 candidates.
+- Backfill eligibility requires a known result-root numeric posting ID plus an isolated nonempty title and company. Legacy ordinary classification remains provenance metadata; a page without bounded valid-card evidence is unresolved and blocks the write before the transaction starts.
+- Region normalization and optional literal exclusions run before the candidate cap. Unknown regions are not guessed, duplicate-only pages are not empty, and every explicitly requested page is visited once.
+- Listing-only rows use `bounded_listing_collection`, detail access `not_attempted`, and permission `unverified`; they never downgrade detail-complete data.
+- Address and salary quality are deterministic derived metadata. Never fabricate addresses, coordinates, salary amounts, unit conversion, working hours, commute routes, commute costs, or after-tax income.
+- Commute-ready means reliable coordinates or a trustworthy full address only. City/district and region-only records are not route-ready.
+- A write batch must roll back completely on a critical row, identity, provenance, observation, foreign-key, or integrity failure. The verified post-backfill backup stays ignored under `data/backups` and is never committed.
+- v0.1.1 publication remains paused until the owner reviews the backfilled data and verified backup.

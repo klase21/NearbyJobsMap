@@ -12,7 +12,7 @@ NearbyJobsMap is a local-first Korean job discovery and application workspace. I
 ## Current status and limitations
 
 - Collection is manual only. There is no scheduler, recurring worker, automated login, CAPTCHA bypass, cookie reuse, stealth, or proxy rotation.
-- JobKorea public search-page listing collection and listing-only fallback are implemented. Anonymous detail responses may return login or verification content, so many collected records remain explicitly labeled as listing-only.
+- JobKorea public search-page listing collection and listing-only fallback are implemented. Anonymous detail responses may return login or verification content, so many collected records remain explicitly labeled as listing-only. An explicitly approved August 2026 capital-region backfill visited pages 1–10 once, selected 196 Seoul/Gyeonggi records, and wrote 177 inserts, 5 updates, and 14 unchanged observations with zero detail requests or failed items.
 - The Albamon listing adapter uses public browser-rendered `/jobs/total` pages only. A bounded August 2026 Seoul run used the historically recorded public area mapping `I000 → Seoul` (`B000 → Gyeonggi`), isolated 100 cards across two explicit pages, selected 20, and wrote 20 listing-only records with no failures. Displayed location is optional: when absent, the single-region source filter is stored as separate region evidence and the original location remains `null`. This project does not call undocumented Albamon BFF endpoints or crawl Albamon detail pages.
 - Seoul and Gyeonggi classification uses trustworthy displayed location or a verified single-region source filter. A contradictory displayed region is rejected, and unknown locations are never guessed or copied from title/company text.
 - Source permission is `unverified`; the project does not grant collection permission.
@@ -197,6 +197,7 @@ Never use reset when you intend to preserve an existing database.
 
 - Manual initiation only; no scheduler or automatic retries
 - JobKorea listing maximum 5 pages and candidate maximum 50; detail concurrency maximum 2
+- The separate manual `backfill:jobkorea:once` maintenance command is listing-only and bounded to an explicit page range of 1–10 and 200 candidates. It requires a dry-run plus the exact write phrase, makes no detail requests, has zero retries, and does not weaken the ordinary collection-control limits.
 - Albamon listing maximum 5 explicit pages and candidate maximum 50; public `/jobs/total` rendering uses `DOMContentLoaded`, bounded scrolling, verified single-region area filters (`I000` Seoul, `B000` Gyeonggi), local conflict checks, and no detail or undocumented BFF requests
 - No authentication, cookie/session reuse, access-control bypass, CAPTCHA solving, or stealth
 - Dry-run writes no collection run, item, provenance, or job data
@@ -204,6 +205,12 @@ Never use reset when you intend to preserve an existing database.
 - Failed candidates are not replaced after selection
 
 Collection examples and controls are documented in the application. Review source rules and obtain any required permission before enabling them.
+
+### JobKorea data quality
+
+The backfill preserves displayed location and salary text without inventing missing detail fields. Address quality is classified as full address, city/district, region only, multiple locations, unknown, or contaminated. Salary quality is classified as structured, display-only, negotiable, unknown, or invalid without converting between hourly, daily, monthly, and annual units. A record is conservatively marked commute-ready only when it has reliable coordinates or a trustworthy full address; external geocoding, route calculation, commute cost, and after-tax income are not implemented.
+
+The verified post-backfill inventory contains 215 JobKorea records: 207 bounded live listing observations, 3 fixture-derived records, and 5 fictional records. All 215 passed numeric public-ID rules where applicable, canonical URL matching, title/company, location contamination, coordinate-pair, salary, provenance, observation, foreign-key, and duplicate-identity checks. The 207 live records remain `listing_only` with detail access `not_attempted` and permission `unverified`.
 
 ## Backup and restore
 
@@ -236,10 +243,9 @@ Users are responsible for complying with third-party terms, robots policies, app
 
 ## Roadmap
 
-- Owner-reviewed v0.1.0 release publication
-- Simpler Windows distribution and signed launcher experience
+- Owner review and publication of v0.1.1 First-User Hardening after the verified backfill backup
+- 통근비·실질소득 계산기, only after workplace-address and salary quality are sufficient: saved origins, manual commute time/cost, before-tax monthly estimates, after-tax estimates, commute-adjusted income, effective hourly wage, and route display
 - Optional source integrations only after permission and contract review
-- Public GitHub release after repository review
 
 No dates are promised.
 

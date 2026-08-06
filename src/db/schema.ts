@@ -5,7 +5,7 @@ import type { DataProvenanceKind, PermissionStatus } from "../domain/data-proven
 import type { CollectionRegion, NormalizedRegion, RegionEvidenceSource, RegionNormalizationConfidence } from "../services/region-normalizer";
 import type { ExclusionField } from "../services/collection-exclusion";
 
-export const REQUIRED_MIGRATION_VERSION = "0011";
+export const REQUIRED_MIGRATION_VERSION = "0012";
 
 export type RecordKind = DataProvenanceKind;
 export type EvidenceType = "observed_html" | "observed_json_ld" | "observed_internal_json" | "fictional_demo" | "public_page_observation";
@@ -37,6 +37,9 @@ export interface IngestionMetadata {
   regionEvidenceSource?: RegionEvidenceSource;
   sourceAreaCode?: string | null;
   displayedLocationPresent?: boolean | null;
+  addressQuality?: import("../services/job-data-quality").AddressQuality;
+  salaryQuality?: import("../services/job-data-quality").SalaryQuality;
+  commuteReady?: boolean;
   detailAccessStatus?: "available" | "access_blocked" | "unavailable" | "not_attempted" | null;
   observedLinkCount?: number | null;
 }

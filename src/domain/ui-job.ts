@@ -5,6 +5,7 @@ import type { SalaryType } from "./salary";
 import type { DataProvenanceKind } from "./data-provenance";
 import type { NormalizedRegion, RegionEvidenceSource, RegionNormalizationConfidence } from "../services/region-normalizer";
 import type { ExclusionField } from "../services/collection-exclusion";
+import type { AddressQuality, SalaryQuality } from "../services/job-data-quality";
 
 export type ActiveJobSource = "jobkorea" | "albamon";
 export type RegionFilter = "all" | "seoul" | "gyeonggi" | "other" | "unknown";
@@ -31,6 +32,9 @@ export interface UiJobRecord {
   regionConfidence?: RegionNormalizationConfidence;
   regionEvidenceSource?: RegionEvidenceSource;
   sourceAreaCode?: string | null;
+  addressQuality?: AddressQuality;
+  salaryQuality?: SalaryQuality;
+  commuteReady?: boolean;
 }
 
 export interface SalaryThresholds { hourly: number; daily: number; monthly: number; annual: number; normalizedMonthly: number }

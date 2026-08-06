@@ -99,6 +99,21 @@ export class CollectionDashboardRepository {
     const completenessBySource = sources.map((source) => ({ source: source.source, listingOnly: source.listingOnly, detailComplete: source.detailComplete, unknown: source.completenessUnknown }));
     const mapBySource = sources.map((source) => ({ source: source.source, eligible: source.mapEligible, total: source.storedJobs, percentage: ratio(source.mapEligible, source.storedJobs) }));
     const mapCoverage = { eligible: inventory.mapEligibleRecords, listOnly: inventory.listOnlyRecords, percentage: ratio(inventory.mapEligibleRecords, inventory.totalJobs), bySource: mapBySource };
+    const qualityRows = this.database.prepare(`SELECT address_quality, salary_quality, COUNT(*) count
+      FROM jobs GROUP BY address_quality, salary_quality`).all() as Row[];
+    const address = { full_address: 0, city_district: 0, region_only: 0, multiple_locations: 0, unknown: 0, contaminated: 0 };
+    const salary = { structured: 0, display_only: 0, negotiable: 0, unknown: 0, invalid: 0 };
+    for (const row of qualityRows) {
+      const count = n(row.count);
+      const addressKey = String(row.address_quality ?? "unknown") as keyof typeof address;
+      const salaryKey = String(row.salary_quality ?? "unknown") as keyof typeof salary;
+      if (addressKey in address) address[addressKey] += count;
+      if (salaryKey in salary) salary[salaryKey] += count;
+    }
+    const qualityTotals = this.database.prepare(`SELECT
+      SUM(display_map_latitude IS NOT NULL AND display_map_longitude IS NOT NULL) coordinate_records,
+      SUM(commute_ready=1) commute_ready_records FROM jobs`).get() as Row;
+    const dataQuality = { address, salary, coordinateRecords: n(qualityTotals.coordinate_records), commuteReadyRecords: n(qualityTotals.commute_ready_records) };
 
     const where = runWhere(filters, this.now());
     const runRows = this.database.prepare(`SELECT r.*,
@@ -143,7 +158,7 @@ export class CollectionDashboardRepository {
       fields: [...fieldUses].map(([field, uses]) => ({ field, uses })).sort((a, b) => b.uses - a.uses || a.field.localeCompare(b.field)) };
 
     const recentRuns = runRows.slice(0, 20).map((row) => summary({ ...row, selected_candidates: row.selected_after_exclusion ?? row.selected_detail_count }));
-    return { generatedAt: this.now().toISOString(), filters, inventory, sources, regions, completenessBySource, mapCoverage, effectiveness, exclusions, recentRuns, profiles };
+    return { generatedAt: this.now().toISOString(), filters, inventory, sources, regions, completenessBySource, mapCoverage, dataQuality, effectiveness, exclusions, recentRuns, profiles };
   }
 
   getRunDetail(runId: string): CollectionRunDetail | null {

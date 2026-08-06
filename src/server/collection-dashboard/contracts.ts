@@ -63,6 +63,12 @@ export interface CollectionDashboardData {
   regions: Record<"seoul" | "gyeonggi" | "multiple" | "other" | "unknown", DashboardCountPair>;
   completenessBySource: Array<{ source: "jobkorea" | "albamon"; listingOnly: number; detailComplete: number; unknown: number }>;
   mapCoverage: { eligible: number; listOnly: number; percentage: number | null; bySource: Array<{ source: "jobkorea" | "albamon"; eligible: number; total: number; percentage: number | null }> };
+  dataQuality: {
+    address: Record<"full_address" | "city_district" | "region_only" | "multiple_locations" | "unknown" | "contaminated", number>;
+    salary: Record<"structured" | "display_only" | "negotiable" | "unknown" | "invalid", number>;
+    coordinateRecords: number;
+    commuteReadyRecords: number;
+  };
   effectiveness: {
     runs: number;
     selectedCandidates: number | null;

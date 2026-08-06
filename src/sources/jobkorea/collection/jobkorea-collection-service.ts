@@ -20,6 +20,7 @@ import type { JobKoreaCollectedDetailOutcome, JobKoreaCollectionCandidate, JobKo
 import { matchesCollectionRegions, normalizeRegionText, type CollectionRegion, type NormalizedRegion } from "../../../services/region-normalizer";
 import { applyCandidateExclusions, normalizeCollectionExclusionConfig, type ExclusionSummary } from "../../../services/collection-exclusion";
 import { exclusionConfigurationHash } from "../../../services/collection-exclusion-hash.server";
+import { isContaminatedLocation } from "../../../services/job-data-quality";
 
 export const JOBKOREA_COLLECTION_DETAIL_CONCURRENCY = 2;
 export const JOBKOREA_COLLECTION_DRY_RUN_DEADLINE_MS = 90_000;
@@ -32,24 +33,44 @@ export interface JobKoreaCandidateSelection {
   gyeonggiMatches: number;
   multipleRegionMatches: number;
   unknownRegionCandidates: number;
+  otherRegionCandidates: number;
   excludedByRegion: number;
+  crossPageDuplicates: number;
+  validListingCards: number;
+  invalidListingCards: number;
+  locationContaminationRejected: number;
   excludedRegionSamples: Array<{ sourcePostingId: string; reason: "nonmatching" | "unknown"; normalizedRegions: NormalizedRegion[] }>;
   exclusion: ExclusionSummary;
 }
 
-export function selectJobKoreaCollectionCandidates(pages: JobKoreaCollectionResult["pageResults"], maximum: number, requestedRegions: CollectionRegion[] = [], exclusionInput = normalizeCollectionExclusionConfig()): JobKoreaCandidateSelection {
-  const seen = new Set<string>(); const all: JobKoreaCollectionCandidate[] = [];
-  let seoulMatches = 0, gyeonggiMatches = 0, multipleRegionMatches = 0, unknownRegionCandidates = 0, excludedByRegion = 0;
+export function trustworthyJobKoreaListingLocation(fields: import("../transport/jobkorea-search-types").JobKoreaListingCardFields | null | undefined): string | null {
+  const value = fields?.regionText?.normalize("NFKC").replace(/\s+/g, " ").trim() || null;
+  if (!value || !fields?.title?.trim() || !fields.companyName?.trim()) return value;
+  return isContaminatedLocation(value, fields.title, fields.companyName) ? null : value;
+}
+
+export function selectJobKoreaCollectionCandidates(pages: JobKoreaCollectionResult["pageResults"], maximum: number, requestedRegions: CollectionRegion[] = [], exclusionInput = normalizeCollectionExclusionConfig(), behavior: { requireCompleteListingCard?: boolean } = {}): JobKoreaCandidateSelection {
+  const seen = new Map<string, number>(); const all: JobKoreaCollectionCandidate[] = [];
+  let seoulMatches = 0, gyeonggiMatches = 0, multipleRegionMatches = 0, unknownRegionCandidates = 0, otherRegionCandidates = 0, excludedByRegion = 0;
+  let crossPageDuplicates = 0, validListingCards = 0, invalidListingCards = 0, locationContaminationRejected = 0;
   const excludedRegionSamples: JobKoreaCandidateSelection["excludedRegionSamples"] = [];
   for (const page of [...pages].sort((a, b) => a.pageNumber - b.pageNumber)) {
     for (const candidate of [...(page.collectionCandidates ?? [])].sort((a, b) => a.firstSourcePosition - b.firstSourcePosition)) {
-      if (seen.has(candidate.postingId)) continue;
-      seen.add(candidate.postingId);
-      const region = normalizeRegionText(candidate.listingFields?.regionText);
+      const firstPage = seen.get(candidate.postingId);
+      if (firstPage !== undefined) { if (firstPage !== page.pageNumber) crossPageDuplicates += 1; continue; }
+      seen.set(candidate.postingId, page.pageNumber);
+      const fields = candidate.listingFields;
+      const validListing = Boolean(fields?.title?.trim() && fields.companyName?.trim());
+      if (validListing) validListingCards += 1; else invalidListingCards += 1;
+      const location = trustworthyJobKoreaListingLocation(fields);
+      if (fields?.regionText?.trim() && !location) locationContaminationRejected += 1;
+      const region = normalizeRegionText(location);
       if (region.regions.includes("seoul")) seoulMatches += 1;
       if (region.regions.includes("gyeonggi")) gyeonggiMatches += 1;
       if (region.regions.length > 1) multipleRegionMatches += 1;
       if (!region.regions.length) unknownRegionCandidates += 1;
+      if (region.regions.includes("other")) otherRegionCandidates += 1;
+      if (behavior.requireCompleteListingCard && !validListing) continue;
       if (!matchesCollectionRegions(region, requestedRegions)) {
         excludedByRegion += 1;
         if (excludedRegionSamples.length < 5) excludedRegionSamples.push({ sourcePostingId: candidate.postingId,
@@ -64,16 +85,17 @@ export function selectJobKoreaCollectionCandidates(pages: JobKoreaCollectionResu
   }
   const exclusion = applyCandidateExclusions(all, exclusionInput, (candidate) => ({ postingId: candidate.sourcePostingId,
     listingPage: candidate.pageNumber, sourcePosition: candidate.sourcePosition, title: candidate.listingFields?.title ?? null,
-    company: candidate.listingFields?.companyName ?? null, location: candidate.listingFields?.regionText ?? null,
+    company: candidate.listingFields?.companyName ?? null, location: trustworthyJobKoreaListingLocation(candidate.listingFields),
     categories: [], employmentTypes: candidate.listingFields?.employmentTypes ?? [], workSchedule: [] }));
   return { candidates: exclusion.candidates.slice(0, maximum), uniquePostingIds: seen.size, seoulMatches, gyeonggiMatches, multipleRegionMatches,
-    unknownRegionCandidates, excludedByRegion, excludedRegionSamples, exclusion: exclusion.summary };
+    unknownRegionCandidates, otherRegionCandidates, excludedByRegion, crossPageDuplicates, validListingCards, invalidListingCards,
+    locationContaminationRejected, excludedRegionSamples, exclusion: exclusion.summary };
 }
 
 function listing(candidate: JobKoreaCollectionCandidate, capturedAt: string): JobKoreaListing {
   const fields = candidate.listingFields;
   return { sourcePostingId: candidate.sourcePostingId, sourceUrl: candidate.sourceUrl, title: fields?.title?.trim() || `잡코리아 공고 ${candidate.sourcePostingId}`,
-    companyName: fields?.companyName?.trim() || "상세 페이지 확인 전", salaryText: fields?.salaryText ?? null, regionText: fields?.regionText ?? null,
+    companyName: fields?.companyName?.trim() || "상세 페이지 확인 전", salaryText: fields?.salaryText ?? null, regionText: trustworthyJobKoreaListingLocation(fields),
     categories: [], employmentTypes: fields?.employmentTypes ?? [], experienceRequirement: fields?.experienceRequirement ?? null,
     educationRequirement: fields?.educationRequirement ?? null, postedAt: fields?.postedAt ?? null, deadlineText: fields?.deadlineText ?? null,
     promoted: candidate.listingClassification === "explicit_promoted", capturedAt };

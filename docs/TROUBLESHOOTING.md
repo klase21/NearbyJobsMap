@@ -52,6 +52,10 @@ Collection execution is intentionally rejected on non-loopback hosts. Do not add
 
 The public page may have changed or anonymous detail access may require login/verification. Do not export cookies, automate login, bypass CAPTCHA, rotate proxies, or use stealth tooling. Listing-only fallback may remain available where validated.
 
+The one-time maintenance backfill uses `backfill:jobkorea:once` only when separately authorized. It renders explicit public search pages, accepts numeric posting IDs with isolated title/company evidence inside the known result root, and does not visit detail pages. Legacy ordinary-selector classification remains diagnostic metadata: a page with valid bounded listing cards is not discarded solely because that older classifier reports `malformed_results`. A page with no valid card evidence remains unresolved and blocks the write transaction.
+
+Backfill location and salary fields are conservative. Title/company/card-wide text cannot become location, unknown addresses and salaries remain unknown, no coordinates are fabricated, and salary units are not converted. Run `npm.cmd run audit:jobkorea-quality` for a read-only aggregate integrity and quality report. The command prints no job title, company, posting ID, or personal workflow data.
+
 ## Albamon transport failure
 
 The adapter uses only explicit browser-rendered public `/jobs/total` pages with `size=50`, `sortType=POSTED_DATE`, `searchPeriodType=TODAY`, and `excludeBar=true`. It waits for `DOMContentLoaded`, performs bounded rendering stabilization, and never treats duplicate-only or zero-new-ID pages as empty. A valid empty page requires visible no-result evidence in the active result region.

@@ -7,6 +7,7 @@ import { calculateJobContentHash } from "../content-hash";
 import { isLocationAccuracy, isPostingStatus, isSalaryType, validateCanonicalJob } from "../job-validation";
 import type { IngestionMetadata, PersistedJobRecord, RepositoryListResult } from "../schema";
 import type { CollectionRegion, NormalizedRegion, RegionNormalizationConfidence } from "../../services/region-normalizer";
+import { assessJobDataQuality, type AddressQuality, type SalaryQuality } from "../../services/job-data-quality";
 
 type SqlRow = Record<string, unknown>;
 export type UpsertAction = "inserted" | "updated" | "unchanged" | "skipped";
@@ -32,6 +33,7 @@ const JOB_COLUMNS = [
   "observation_kind", "observation_transport", "observation_page_number", "observation_listing_position",
   "collection_preset_id", "collection_preset_label", "collection_keyword", "requested_regions_json", "normalized_regions_json",
   "region_normalization_confidence", "region_evidence_source", "source_area_code", "displayed_location_present", "detail_access_status", "observed_link_count",
+  "address_quality", "salary_quality", "commute_ready",
   "content_hash", "created_at", "updated_at",
 ] as const;
 
@@ -44,6 +46,7 @@ const legacyRecordKind = (value: IngestionMetadata["recordKind"]): "fixture_deri
 const legacyEvidenceType = (value: IngestionMetadata["evidenceType"]): Exclude<IngestionMetadata["evidenceType"], "public_page_observation"> => value === "public_page_observation" ? "observed_html" : value;
 
 function parameters(job: CanonicalJob, metadata: IngestionMetadata, contentHash: string, createdAt: string, updatedAt: string): SqlRow {
+  const quality = assessJobDataQuality(job);
   return {
     id: job.id, source: job.source, source_posting_id: job.sourcePostingId, source_url: job.sourceUrl, canonical_url: job.canonicalUrl,
     title: job.title, company_name: job.companyName, normalized_company_name: job.normalizedCompanyName, description_summary: job.descriptionSummary,
@@ -73,6 +76,8 @@ function parameters(job: CanonicalJob, metadata: IngestionMetadata, contentHash:
     region_evidence_source: metadata.regionEvidenceSource ?? "unknown", source_area_code: metadata.sourceAreaCode ?? null,
     displayed_location_present: metadata.displayedLocationPresent === undefined || metadata.displayedLocationPresent === null ? null : booleanToSql(metadata.displayedLocationPresent),
     detail_access_status: metadata.detailAccessStatus ?? null, observed_link_count: metadata.observedLinkCount ?? null,
+    address_quality: metadata.addressQuality ?? quality.addressQuality, salary_quality: metadata.salaryQuality ?? quality.salaryQuality,
+    commute_ready: booleanToSql(metadata.commuteReady ?? quality.commuteReady),
     content_hash: contentHash, created_at: createdAt, updated_at: updatedAt,
   };
 }
@@ -235,7 +240,7 @@ export class JobRepository {
             observed_at = ?, sanitizer_version = ?, parser_version = ?, observation_kind = ?, observation_transport = ?, observation_page_number = ?,
             observation_listing_position = ?, collection_preset_id = ?, collection_preset_label = ?, collection_keyword = ?, requested_regions_json = ?,
             normalized_regions_json = ?, region_normalization_confidence = ?, region_evidence_source = ?, source_area_code = ?,
-            displayed_location_present = ?, detail_access_status = ?, observed_link_count = ?,
+            displayed_location_present = ?, detail_access_status = ?, observed_link_count = ?, address_quality = ?, salary_quality = ?, commute_ready = ?,
             evidence_type = ?, source_fixture_reference = ?, last_verified_at = ? WHERE id = ?`)
             .run(metadata.recordKind, metadata.permissionStatus ?? null, metadata.evidenceType, metadata.listingUrl ?? null, metadata.detailUrl ?? null,
               metadata.observedAt ?? null, metadata.sanitizerVersion ?? null, metadata.parserVersion ?? null, metadata.observationKind ?? null,
@@ -244,7 +249,10 @@ export class JobRepository {
               JSON.stringify(metadata.requestedRegions ?? []), JSON.stringify(metadata.normalizedRegions ?? []), metadata.regionConfidence ?? "unknown",
               metadata.regionEvidenceSource ?? "unknown", metadata.sourceAreaCode ?? null,
               metadata.displayedLocationPresent === undefined || metadata.displayedLocationPresent === null ? null : booleanToSql(metadata.displayedLocationPresent),
-              metadata.detailAccessStatus ?? null, metadata.observedLinkCount ?? null, legacyEvidenceType(metadata.evidenceType),
+              metadata.detailAccessStatus ?? null, metadata.observedLinkCount ?? null,
+              metadata.addressQuality ?? assessJobDataQuality(job).addressQuality,
+              metadata.salaryQuality ?? assessJobDataQuality(job).salaryQuality,
+              booleanToSql(metadata.commuteReady ?? assessJobDataQuality(job).commuteReady), legacyEvidenceType(metadata.evidenceType),
               metadata.sourceFixtureReference, job.lastVerifiedAt, persistedId);
           return;
         }
@@ -296,6 +304,10 @@ export class JobRepository {
     if (!["displayed_location", "mapped_displayed_location", "source_filter", "unknown"].includes(regionEvidenceSource)) throw new JobRepositoryError("INVALID_DATABASE_ROW", "region evidence source가 유효하지 않습니다.");
     const detailAccessStatus = nullableString(row, "detail_access_status") as "available" | "access_blocked" | "unavailable" | "not_attempted" | null;
     if (detailAccessStatus !== null && !["available", "access_blocked", "unavailable", "not_attempted"].includes(detailAccessStatus)) throw new JobRepositoryError("INVALID_DATABASE_ROW", "detail access status가 유효하지 않습니다.");
+    const addressQuality = requiredString(row, "address_quality") as AddressQuality;
+    if (!["full_address", "city_district", "region_only", "multiple_locations", "unknown", "contaminated"].includes(addressQuality)) throw new JobRepositoryError("INVALID_DATABASE_ROW", "address quality가 유효하지 않습니다.");
+    const salaryQuality = requiredString(row, "salary_quality") as SalaryQuality;
+    if (!["structured", "display_only", "negotiable", "unknown", "invalid"].includes(salaryQuality)) throw new JobRepositoryError("INVALID_DATABASE_ROW", "salary quality가 유효하지 않습니다.");
     const job: CanonicalJob = {
       id, source, sourcePostingId: requiredString(row, "source_posting_id"), sourceUrl: requiredString(row, "source_url"), canonicalUrl: nullableString(row, "canonical_url"),
       title: requiredString(row, "title"), companyName: requiredString(row, "company_name"), normalizedCompanyName: nullableString(row, "normalized_company_name"),
@@ -324,7 +336,8 @@ export class JobRepository {
         collectionKeyword: nullableString(row, "collection_keyword"), requestedRegions, normalizedRegions, regionConfidence,
         regionEvidenceSource, sourceAreaCode: nullableString(row, "source_area_code"),
         displayedLocationPresent: sqlBoolean(row, "displayed_location_present", true),
-        detailAccessStatus, observedLinkCount: nullableNumber(row, "observed_link_count") },
+        detailAccessStatus, observedLinkCount: nullableNumber(row, "observed_link_count"), addressQuality, salaryQuality,
+        commuteReady: sqlBoolean(row, "commute_ready") },
       contentHash: requiredString(row, "content_hash"), createdAt: requiredString(row, "created_at"), updatedAt: requiredString(row, "updated_at"),
     };
   }
@@ -354,6 +367,7 @@ export class JobRepository {
         collectionPresetId: metadata.collectionPresetId ?? null, collectionPresetLabel: metadata.collectionPresetLabel ?? null,
         collectionKeyword: metadata.collectionKeyword ?? null, normalizedRegions: metadata.normalizedRegions ?? [], regionConfidence: metadata.regionConfidence ?? "unknown",
         regionEvidenceSource: metadata.regionEvidenceSource ?? "unknown", sourceAreaCode: metadata.sourceAreaCode ?? null,
+        addressQuality: metadata.addressQuality ?? "unknown", salaryQuality: metadata.salaryQuality ?? "unknown", commuteReady: metadata.commuteReady ?? false,
       })),
       diagnostics: result.diagnostics,
     };
