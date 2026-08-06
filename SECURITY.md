@@ -2,11 +2,11 @@
 
 ## Supported versions
 
-Until a public release is published, only the latest commit on the default branch is supported. No formal long-term support or response-time SLA is promised.
+For the local MVP, only the latest release and the latest commit on the default branch are supported. No formal long-term support or response-time SLA is promised.
 
 ## Reporting a vulnerability
 
-After the repository is published, open a **private GitHub security advisory**. Do not open a public issue containing credentials, cookies, personal notes, private job-application data, database files, or exploitable details.
+Open a **private GitHub security advisory** for this repository. Do not open a public issue containing credentials, cookies, personal notes, private job-application data, database files, or exploitable details.
 
 If private advisories are not yet available, wait for the repository owner to publish a private reporting channel rather than posting sensitive material publicly. This document intentionally does not invent an email address.
 

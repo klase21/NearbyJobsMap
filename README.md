@@ -1,5 +1,8 @@
 # NearbyJobsMap
 
+[![CI](https://github.com/klase21/NearbyJobsMap/actions/workflows/ci.yml/badge.svg)](https://github.com/klase21/NearbyJobsMap/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 ## 내 주변 일자리 지도
 
 NearbyJobsMap is a local-first Korean job discovery and application workspace. It keeps a unified job list in SQLite, uses a map as a secondary exploration tool, and provides bounded, manually initiated collection operations for supported source adapters.
@@ -116,7 +119,13 @@ docs/                Public installation, troubleshooting, and architecture guid
 
 ## Windows quick start
 
-1. Clone or download this repository.
+1. Clone or download this repository:
+
+   ```powershell
+   git clone https://github.com/klase21/NearbyJobsMap.git
+   Set-Location NearbyJobsMap
+   ```
+
 2. Open PowerShell in the project directory.
 3. Install and initialize:
 

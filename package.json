@@ -4,6 +4,14 @@
   "private": true,
   "description": "Local-first Korean job collection, comparison, list, map, and application workspace.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/klase21/NearbyJobsMap.git"
+  },
+  "bugs": {
+    "url": "https://github.com/klase21/NearbyJobsMap/issues"
+  },
+  "homepage": "https://github.com/klase21/NearbyJobsMap#readme",
   "keywords": ["jobs", "map", "sqlite", "nextjs", "local-first"],
   "engines": {
     "node": ">=20.9.0",
