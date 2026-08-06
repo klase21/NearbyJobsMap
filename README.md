@@ -52,16 +52,33 @@ NearbyJobsMap is a local-first Korean job discovery and application workspace. I
 - First/last-seen and not-observed freshness labels; stale never means closed
 - SQLite backup, verification, pre-restore backup, and guarded restore
 
-## Screenshots
+## 화면 미리보기
 
-Public screenshots are intentionally not included yet because the current runtime database contains local operating history. After sanitization, the owner can add:
+화면 이미지는 외부 사이트에서 가져온 실데이터가 아닌, 프로젝트의 정제된 데모 데이터로 생성되었습니다. 캡처 과정은 격리된 임시 SQLite 데이터베이스를 사용하고 모든 외부 브라우저 요청을 차단합니다.
 
-- Main jobs screen
-- Collection dashboard
-- Saved-profile comparison
-- Personal workflow panel
+### 공고 목록과 지도
 
-Place reviewed images under `docs/images/`. Never commit private notes, source HTML, cookies, or identifiable application data.
+![서울 수동 수집·목록 정보 필터가 적용된 공고 목록과 보조 지도](docs/images/jobs-list-map-desktop.png)
+
+### 수집 현황과 실행
+
+![소스, 지역, 완성도, 지도 범위와 최근 합성 실행을 보여 주는 수집 현황](docs/images/collection-dashboard-desktop.png)
+
+![기본 프리셋, 저장 프로필, 제외 키워드와 드라이런 준비 화면](docs/images/collection-execution-desktop.png)
+
+### 저장 프로필 비교
+
+![두 저장 프로필의 구성, 제외 키워드, 실행 성과와 정확 ID 중복 비교](docs/images/profile-comparison-desktop.png)
+
+### 개인 구직 관리
+
+![관심, 지원 예정, 메모, 날짜와 최신성을 보여 주는 모바일 개인 구직 화면](docs/images/job-workspace-mobile.png)
+
+### 첫 실행 안내
+
+![데모, 픽스처, 수동 수집과 완성도 라벨을 설명하는 모바일 온보딩](docs/images/onboarding-mobile.png)
+
+재생성 및 검토 절차는 [스크린샷 가이드](docs/SCREENSHOTS.md)를 참고하세요.
 
 ## Architecture
 
@@ -206,7 +223,7 @@ Users are responsible for complying with third-party terms, robots policies, app
 
 ## Roadmap
 
-- Owner-reviewed public screenshots
+- Owner-reviewed v0.1.0 release publication
 - Simpler Windows distribution and signed launcher experience
 - Optional source integrations only after permission and contract review
 - Public GitHub release after repository review

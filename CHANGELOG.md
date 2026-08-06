@@ -4,7 +4,8 @@ All notable changes are documented here. The project has not yet published a Git
 
 ## Unreleased
 
-- Public repository packaging and Windows launcher validation.
+- Sanitized documentation screenshots and a local v0.1.0 release candidate package.
+- Owner review checklist and release notes for manual GitHub publication.
 
 ## 0.1.0 — Local MVP
 

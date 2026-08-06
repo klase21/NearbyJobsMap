@@ -235,6 +235,16 @@
 
 ## Validation Policy
 
+## Public screenshot and release protection
+
+- 문서 screenshot은 `artifacts/screenshot-work` 아래의 격리된 임시 SQLite와 고정된 가상 데이터만 사용한다. 실사용 runtime DB는 캡처에 사용하지 않는다.
+- screenshot browser는 localhost 이외 모든 HTTP/HTTPS 요청을 차단하며 JobKorea, Albamon, OpenStreetMap 또는 다른 외부 host를 호출하지 않는다.
+- 승인된 screenshot은 `docs/images/jobs-list-map-desktop.png`, `collection-dashboard-desktop.png`, `collection-execution-desktop.png`, `profile-comparison-desktop.png`, `job-workspace-mobile.png`, `onboarding-mobile.png`뿐이다.
+- 임시 screenshot DB와 작업 폴더는 성공·실패 모두에서 삭제한다. release ZIP, checksum, manifest는 `artifacts/`에만 두고 Git에 추가하지 않는다.
+- 모든 screenshot은 공개 전 사람이 직접 열어 가상 데이터, clipping, overflow, 외부 타일, 개인 정보 부재를 검토한다.
+- GitHub repository 생성, remote 추가, push, tag, release publication은 소유자의 수동 검토 단계이며 자동화하지 않는다.
+- 수집 관리 navigation의 42px control 높이, inline-flex 중앙 정렬, controlled line-height를 유지하고 pixel offset 또는 transform hack을 추가하지 않는다.
+
 모든 변경은 다음 명령을 통과해야 한다.
 
 ```bash
