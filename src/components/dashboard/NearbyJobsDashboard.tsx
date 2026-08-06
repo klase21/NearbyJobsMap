@@ -10,6 +10,7 @@ import { JobList } from "../jobs/JobList";
 import { MapPanel } from "../map/MapPanel";
 import { SummaryStrip } from "../summary/SummaryStrip";
 import { FirstRunOnboarding } from "../onboarding/FirstRunOnboarding";
+import { defaultJobUserState,type JobUserState,type JobUserStateInput,type JobWorkflowStatus } from "../../services/job-user-state";
 
 interface NearbyJobsDashboardProps { initialJobs: UiJobRecord[]; dataError?: string; dataWarning?: string | undefined }
 const REFERENCE_NOW = new Date("2026-08-05T12:00:00+09:00");
@@ -29,6 +30,8 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
   const [storageFailed, setStorageFailed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [helpOpen,setHelpOpen]=useState(false);
+  const [jobStates,setJobStates]=useState<Record<string,JobUserState>>({});
+  const [workspaceView,setWorkspaceView]=useState<"all"|"favorite"|JobWorkflowStatus|"archived"|"hidden">("all");
   const hasOneShotObservation = initialJobs.some(({ provenanceKind }) => provenanceKind === "live_one_shot_observation");
   const listPanelRef = useRef<HTMLElement>(null);
   const mapSlotRef = useRef<HTMLDivElement>(null);
@@ -39,6 +42,7 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
     setOrigin(result.value.origin); setUserStatuses(result.value.userJobStatuses); setCorruptedSettings(result.corrupted);
     setHydrated(true);
   }, []);
+  useEffect(()=>{void fetch("/api/job-user-state",{cache:"no-store"}).then(async r=>r.ok?(await r.json()).states:[]).then((states:JobUserState[])=>setJobStates(Object.fromEntries(states.map(s=>[s.jobId,s])))).catch(()=>{});},[]);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 900px)");
@@ -54,7 +58,8 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
     setStorageFailed(!createPreferencesRepository(window.localStorage).save(value));
   }, [filters, hydrated, mapVisible, origin, sort, userStatuses]);
 
-  const filtered = useMemo(() => filterJobs(initialJobs, filters, REFERENCE_NOW), [filters, initialJobs]);
+  const workspaceJobs=useMemo(()=>initialJobs.filter(({job})=>{const s=jobStates[job.id]??defaultJobUserState(job.id);if(workspaceView==="hidden")return s.isHidden;if(s.isHidden)return false;if(workspaceView==="archived")return s.isArchived;if(s.isArchived)return false;if(workspaceView==="favorite")return s.isFavorite;if(workspaceView!=="all")return s.workflowStatus===workspaceView;return true;}),[initialJobs,jobStates,workspaceView]);
+  const filtered = useMemo(() => filterJobs(workspaceJobs, filters, REFERENCE_NOW), [filters, workspaceJobs]);
   const sorted = useMemo(() => sortJobs(filtered, sort, origin), [filtered, origin, sort]);
   const visibleIds = useMemo(() => sorted.map(({ job }) => job.id), [sorted]);
   const availableSources = useMemo(() => [...new Set(initialJobs.map(({ job }) => job.source).filter((source): source is "jobkorea" | "albamon" => source === "jobkorea" || source === "albamon"))], [initialJobs]);
@@ -94,7 +99,7 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
     setMapVisible(true);
     if (isSinglePane) showMobileView("map");
   };
-  const setUserStatus = (jobId: string, status: UserJobStatus) => setUserStatuses((current) => ({ ...current, [jobId]: status }));
+  const updateJobState=async(jobId:string,input:JobUserStateInput)=>{const response=await fetch(`/api/job-user-state/${jobId}`,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify(input)});if(response.ok){const body=await response.json();setJobStates(current=>({...current,[jobId]:body.state}));}};
   const summary = useMemo(() => ({
     total: initialJobs.length,
     filtered: sorted.length,
@@ -117,6 +122,7 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
       {storageFailed && <div className="warning-banner" role="alert">브라우저 저장공간에 설정을 저장하지 못했습니다. 현재 화면에서는 계속 사용할 수 있습니다.</div>}
       {dataWarning && <div className="warning-banner" role="status">{dataWarning}</div>}
       <SummaryStrip {...summary} />
+      <div className="workspace-quick-filters" aria-label="개인 지원 상태 빠른 보기">{([['all','전체'],['favorite','관심 공고'],['apply_planned','지원 예정'],['applied','지원 완료'],['waiting','연락 대기'],['interview','면접'],['archived','보관됨'],['hidden','숨김']] as const).map(([value,label])=><button key={value} className={workspaceView===value?"active":""} aria-pressed={workspaceView===value} onClick={()=>setWorkspaceView(value)}>{label}</button>)}</div>
       <p className="result-count-line" aria-live="polite">{initialJobs.length}개 중 {sorted.length}개 표시 · 지도 {mapVisibleCount}개</p>
       {filtersOpen && <FilterPanel filters={filters} jobs={initialJobs} onChange={setFilters} onClose={closeFilters} />}
       <div className="mobile-view-switch" aria-label="모바일 화면 전환">
@@ -128,8 +134,9 @@ export function NearbyJobsDashboard({ initialJobs, dataError, dataWarning }: Nea
         : initialJobs.length === 0 ? <div className="state-panel"><h2>불러온 공고가 없습니다</h2><p>sanitized fixture와 demo provider를 확인해 주세요.</p></div>
         : <div className={`dashboard-body ${mapVisible ? "" : "map-hidden"}`}>
           <section ref={listPanelRef} className={`list-panel ${mobileView === "map" ? "mobile-hidden" : ""}`} aria-label="통합 공고 목록 패널">
-            <JobList records={sorted} selectedJobId={selectedJobId} origin={origin} sort={sort} userStatuses={userStatuses}
-              onSortChange={setSort} onSelect={setSelectedJobId} onMapFocus={focusMapJob} onUserStatusChange={setUserStatus}
+            <JobList records={sorted} selectedJobId={selectedJobId} origin={origin} sort={sort} userStates={jobStates}
+              onSortChange={setSort} onSelect={setSelectedJobId} onMapFocus={focusMapJob}
+              onUserStateChange={(jobId,state)=>void updateJobState(jobId,state)}
               onResetFilters={() => setFilters({ ...DEFAULT_FILTERS, salaryThresholds: { ...DEFAULT_FILTERS.salaryThresholds } })} />
           </section>
           {mapVisible && (isSinglePane === false || mobileView === "map") && <div id="dashboard-map" ref={mapSlotRef} className="map-slot">

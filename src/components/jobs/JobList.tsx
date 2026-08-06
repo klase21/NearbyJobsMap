@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { SortOption, UserJobStatus, UiJobRecord, UserOrigin } from "../../domain/ui-job";
+import type { SortOption, UiJobRecord, UserOrigin } from "../../domain/ui-job";
+import type { JobUserState,JobUserStateInput } from "../../services/job-user-state";
 import { SORT_LABELS } from "../../services/job-display";
 import { JobCard } from "./JobCard";
 
@@ -10,11 +11,11 @@ interface JobListProps {
   selectedJobId: string | null;
   origin: UserOrigin;
   sort: SortOption;
-  userStatuses: Record<string, UserJobStatus>;
+  userStates: Record<string, JobUserState>;
   onSortChange(sort: SortOption): void;
   onSelect(jobId: string): void;
   onMapFocus(jobId: string): void;
-  onUserStatusChange(jobId: string, status: UserJobStatus): void;
+  onUserStateChange(jobId:string,state:JobUserStateInput):void;
   onResetFilters(): void;
 }
 
@@ -42,8 +43,8 @@ export function JobList(props: JobListProps) {
           <div className="state-panel"><h2>조건에 맞는 공고가 없습니다</h2><p>급여 단위나 지역 조건을 줄여 다시 확인해 보세요.</p><button className="button" type="button" onClick={props.onResetFilters}>필터 초기화</button></div>
         ) : props.records.map((record, index) => (
           <JobCard key={record.job.id} record={record} rank={index + 1} selected={props.selectedJobId === record.job.id} origin={props.origin}
-            userStatus={props.userStatuses[record.job.id] ?? "reviewing"} onSelect={() => props.onSelect(record.job.id)} onMapFocus={() => props.onMapFocus(record.job.id)}
-            onUserStatusChange={(status) => props.onUserStatusChange(record.job.id, status)}
+            {...(props.userStates[record.job.id]?{userState:props.userStates[record.job.id]}:{})} onSelect={() => props.onSelect(record.job.id)} onMapFocus={() => props.onMapFocus(record.job.id)}
+            onUserStateChange={(state) => props.onUserStateChange(record.job.id,state)}
             cardRef={(node) => { if (node) refs.current.set(record.job.id, node); else refs.current.delete(record.job.id); }} />
         ))}
       </div>

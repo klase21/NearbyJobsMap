@@ -1,8 +1,10 @@
 "use client";
 
-import type { UserJobStatus, UiJobRecord, UserOrigin } from "../../domain/ui-job";
+import type { UiJobRecord, UserOrigin,UserJobStatus } from "../../domain/ui-job";
 import { haversineDistanceKm } from "../../services/distance";
-import { formatDate, formatWon, LOCATION_LABELS, POSTING_STATUS_LABELS, SALARY_CONFIDENCE_LABELS, SOURCE_LABELS, USER_STATUS_LABELS } from "../../services/job-display";
+import { formatDate, formatWon, LOCATION_LABELS, POSTING_STATUS_LABELS, SALARY_CONFIDENCE_LABELS, SOURCE_LABELS,USER_STATUS_LABELS } from "../../services/job-display";
+import { defaultJobUserState,JOB_WORKFLOW_LABELS,type JobUserState,type JobUserStateInput } from "../../services/job-user-state";
+import { useEffect,useMemo,useState } from "react";
 import { getJobDataLabel, getMapPositions, isMapEligible } from "../../services/job-search";
 
 interface JobCardProps {
@@ -10,17 +12,21 @@ interface JobCardProps {
   rank: number;
   selected: boolean;
   origin: UserOrigin;
-  userStatus: UserJobStatus;
+  userState?: JobUserState|undefined;
+  userStatus?:UserJobStatus|undefined;
   onSelect(): void;
   onMapFocus(): void;
-  onUserStatusChange(status: UserJobStatus): void;
+  onUserStateChange?(state:JobUserStateInput):void;
+  onUserStatusChange?(status:UserJobStatus):void;
   cardRef(node: HTMLElement | null): void;
 }
 
 const isExact = (record: UiJobRecord) => record.job.locationAccuracy === "exact_coordinate" || record.job.locationAccuracy === "exact_address";
 
-export function JobCard({ record, rank, selected, origin, userStatus, onSelect, onMapFocus, onUserStatusChange, cardRef }: JobCardProps) {
+export function JobCard({ record, rank, selected, origin, userState, userStatus, onSelect, onMapFocus, onUserStateChange=()=>{},onUserStatusChange, cardRef }: JobCardProps) {
   const { job } = record;
+  const state=useMemo(()=>userState??defaultJobUserState(job.id),[userState,job.id]);const[draft,setDraft]=useState(state);useEffect(()=>setDraft(state),[state]);
+  const input=(next:JobUserState):JobUserStateInput=>({isFavorite:next.isFavorite,workflowStatus:next.workflowStatus,isHidden:next.isHidden,isArchived:next.isArchived,note:next.note,applicationDate:next.applicationDate,followUpAt:next.followUpAt,personalDeadline:next.personalDeadline,expectedUpdatedAt:state.updatedAt||null});
   const mapEligible = isMapEligible(record);
   const distances = getMapPositions(record).map((position) => haversineDistanceKm(origin, position));
   const distance = distances.length ? Math.min(...distances) : null;
@@ -30,7 +36,7 @@ export function JobCard({ record, rank, selected, origin, userStatus, onSelect, 
   const workplacePreview = job.workplaces.slice(0, 2).map((workplace) => workplace.originalText).join(" · ");
   const mapUnavailableReason = job.locationAccuracy === "location_undecided" ? "근무지가 결정되지 않아 지도에 표시할 수 없습니다." : job.locationAccuracy === "multiple_locations" ? "개별 근무지 좌표가 확인되지 않아 지도에 표시할 수 없습니다." : "사용 가능한 좌표가 없습니다.";
   return (
-    <article ref={cardRef} className={`job-card ${selected ? "selected" : ""} ${userStatus === "excluded" ? "excluded" : ""}`} aria-current={selected ? "true" : undefined}>
+    <article ref={cardRef} className={`job-card ${selected ? "selected" : ""} ${state.workflowStatus === "ignored" ? "excluded" : ""}`} aria-current={selected ? "true" : undefined}>
       <div className="job-card-top">
         <span className="rank" aria-label={`${rank}번째 공고`}>{rank}</span>
         <div>
@@ -69,16 +75,17 @@ export function JobCard({ record, rank, selected, origin, userStatus, onSelect, 
         </div>
       </div>
       <div className="job-actions">
+        <button className="action-button" aria-pressed={state.isFavorite} onClick={()=>onUserStateChange(input({...state,isFavorite:!state.isFavorite}))}>{state.isFavorite?"★ 관심 해제":"☆ 관심"}</button>
         {record.safeSourceUrl ? <a className="action-link" href={record.safeSourceUrl} target="_blank" rel="noopener noreferrer" aria-label={`${job.title} 원문 새 창에서 보기`}>원문 보기 ↗</a>
           : <span className="detail-line">{record.isFictional ? "가상 공고 · 원문 없음" : "안전한 원문 URL 없음"}</span>}
         <button type="button" className="action-button" disabled={!mapEligible} onClick={onMapFocus} aria-label={mapEligible ? `${job.title} 지도에서 보기` : `${job.title} 지도 표시 불가: ${mapUnavailableReason}`} title={!mapEligible ? mapUnavailableReason : undefined}>
           {mapEligible ? "지도에서 보기" : job.locationAccuracy === "location_undecided" || job.locationAccuracy === "multiple_locations" ? "지도 표시 불가" : "지도 좌표 없음"}
         </button>
-        <label className="sr-only" htmlFor={`status-${job.id}`}>사용자 상태</label>
-        <select id={`status-${job.id}`} className="status-select" value={userStatus} onChange={(event) => onUserStatusChange(event.target.value as UserJobStatus)}>
-          {Object.entries(USER_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
+        <label className="sr-only" htmlFor={`status-${job.id}`}>{userStatus?"사용자 상태":"지원 상태"}</label>
+        {userStatus?<select id={`status-${job.id}`} className="status-select" value={userStatus} onChange={event=>onUserStatusChange?.(event.target.value as UserJobStatus)}>{Object.entries(USER_STATUS_LABELS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>:<select id={`status-${job.id}`} className="status-select" value={state.workflowStatus} onChange={(event) => onUserStateChange(input({...state,workflowStatus:event.target.value as JobUserState["workflowStatus"]}))}>{Object.entries(JOB_WORKFLOW_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>}
+        <button className="action-button" onClick={()=>onUserStateChange(input({...state,isHidden:!state.isHidden}))}>{state.isHidden?"숨김 해제":"숨기기"}</button>
       </div>
+      {selected&&<section className="job-workspace" aria-label="개인 지원 관리"><h4>개인 지원 관리</h4><div className="profile-form-grid"><label>지원일<input type="date" value={draft.applicationDate??""} onChange={e=>setDraft({...draft,applicationDate:e.target.value||null})}/></label><label>후속 확인일<input type="date" value={draft.followUpAt??""} onChange={e=>setDraft({...draft,followUpAt:e.target.value||null})}/></label><label>개인 마감일<input type="date" value={draft.personalDeadline??""} onChange={e=>setDraft({...draft,personalDeadline:e.target.value||null})}/></label></div><label>개인 메모<textarea maxLength={5000} value={draft.note} onChange={e=>setDraft({...draft,note:e.target.value})}/></label><small>{draft.note.length}/5000 · source 공고와 분리 저장</small><div className="profile-actions"><button className="button primary compact" onClick={()=>onUserStateChange(input(draft))}>개인 정보 저장</button><button className="button compact" onClick={()=>onUserStateChange(input({...state,isArchived:!state.isArchived}))}>{state.isArchived?"보관 해제":"보관"}</button></div></section>}
     </article>
   );
 }
