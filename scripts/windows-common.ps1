@@ -12,6 +12,15 @@ function Write-Fail([string]$Message) { Write-Host "FAIL  $Message" -ForegroundC
 
 function Enter-ProjectRoot { Set-Location -LiteralPath $script:ProjectRoot }
 
+function Normalize-ProcessEnvironment {
+  # Some host shells expose both Path and PATH. Windows PowerShell 5.1
+  # Start-Process rejects that case-insensitive duplicate dictionary.
+  $keys = @([Environment]::GetEnvironmentVariables("Process").Keys)
+  if ($keys -ccontains "Path" -and $keys -ccontains "PATH") {
+    [Environment]::SetEnvironmentVariable("PATH", $null, "Process")
+  }
+}
+
 function Import-LocalEnvironment {
   $file = Join-Path $script:ProjectRoot ".env.local"
   if (-not (Test-Path -LiteralPath $file)) { return }
@@ -54,15 +63,23 @@ function Get-ProcessState {
   try { return Get-Content -LiteralPath $script:StateFile -Raw | ConvertFrom-Json } catch { Remove-Item -LiteralPath $script:StateFile -Force; return $null }
 }
 
-function Test-OwnedProcess($State) {
-  if ($null -eq $State -or -not $State.pid) { return $false }
-  $process = Get-Process -Id ([int]$State.pid) -ErrorAction SilentlyContinue
+function Test-RecordedProcess([int]$ProcessId, [string]$StartedAt) {
+  if ($ProcessId -le 0 -or [string]::IsNullOrWhiteSpace($StartedAt)) { return $false }
+  $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
   if ($null -eq $process) { return $false }
   try {
-    $expected = [datetime]::Parse($State.startedAt).ToUniversalTime()
+    $expected = [datetime]::Parse($StartedAt).ToUniversalTime()
     $actual = $process.StartTime.ToUniversalTime()
     return [Math]::Abs(($actual - $expected).TotalSeconds) -lt 3
   } catch { return $false }
+}
+
+function Test-OwnedProcess($State) {
+  if ($null -eq $State) { return $false }
+  if ($State.PSObject.Properties.Name -contains "serverPid" -and $State.serverPid) {
+    return Test-RecordedProcess ([int]$State.serverPid) ([string]$State.serverStartedAt)
+  }
+  return Test-RecordedProcess ([int]$State.pid) ([string]$State.startedAt)
 }
 
 function Remove-StaleState {
@@ -83,14 +100,21 @@ function Test-PortAvailable([string]$Address, [int]$Port) {
   } catch { return $false } finally { if ($null -ne $listener) { $listener.Stop() } }
 }
 
+function Get-ListeningProcessId([int]$Port) {
+  foreach ($line in & netstat.exe -ano -p tcp) {
+    if ($line -match '^\s*TCP\s+(\S+)\s+\S+\s+LISTENING\s+(\d+)\s*$' -and $Matches[1] -match ":$Port$") {
+      return [int]$Matches[2]
+    }
+  }
+  return $null
+}
+
 function Stop-OwnedProcessTree($State) {
   if (-not (Test-OwnedProcess $State)) { return }
-  $all = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
-  $targets = [Collections.Generic.List[int]]::new()
-  function Add-Children([int]$Parent) {
-    foreach ($child in $all | Where-Object { $_.ParentProcessId -eq $Parent }) { Add-Children ([int]$child.ProcessId); $targets.Add([int]$child.ProcessId) }
+  if ($State.PSObject.Properties.Name -contains "serverPid" -and (Test-RecordedProcess ([int]$State.serverPid) ([string]$State.serverStartedAt))) {
+    Stop-Process -Id ([int]$State.serverPid) -Force -ErrorAction SilentlyContinue
   }
-  Add-Children ([int]$State.pid)
-  foreach ($id in $targets) { Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }
-  Stop-Process -Id ([int]$State.pid) -Force -ErrorAction SilentlyContinue
+  if ($State.pid -and (Test-RecordedProcess ([int]$State.pid) ([string]$State.startedAt))) {
+    Stop-Process -Id ([int]$State.pid) -Force -ErrorAction SilentlyContinue
+  }
 }
