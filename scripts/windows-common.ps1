@@ -102,8 +102,9 @@ function Test-PortAvailable([string]$Address, [int]$Port) {
 
 function Get-ListeningProcessId([int]$Port) {
   foreach ($line in & netstat.exe -ano -p tcp) {
-    if ($line -match '^\s*TCP\s+(\S+)\s+\S+\s+LISTENING\s+(\d+)\s*$' -and $Matches[1] -match ":$Port$") {
-      return [int]$Matches[2]
+    if ($line -match '^\s*TCP\s+(\S+)\s+\S+\s+LISTENING\s+(\d+)\s*$') {
+      $endpoint = $Matches[1]; $listenerPid = [int]$Matches[2]
+      if ($endpoint -match ":$Port$") { return $listenerPid }
     }
   }
   return $null
