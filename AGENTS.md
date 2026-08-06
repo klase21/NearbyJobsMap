@@ -265,3 +265,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Local MVP workspace protection
+
+- Saved-profile import/export covers configuration only. Never restore local profile IDs, imported revisions, or imported hashes as authority; preview writes nothing and confirmed import is transactional with no silent overwrite.
+- Personal workflow state stays in `job_user_state`, separate from source jobs and provenance. Notes are bounded plain text and personal dates never replace source dates.
+- Observation history is append-only and bounded. It never stores raw HTML or full descriptions, field diffs retain only supported changed fields, and stale/not-observed never means closed or deleted.
+- Saved job views use the strict `JobFilterState` schema. They contain no arbitrary property paths, JavaScript, SQL, or collection actions, and applying them never mutates jobs.
+- Salary filters use reliable structured values in their original units. Never fabricate conversions or working-hour assumptions.
+- Backup files and manifests stay in ignored `data/backups`. Restore requires integrity/hash verification, exact `RESTORE DATABASE` confirmation, active-run rejection, and a pre-restore backup. Automated restore tests use temporary databases only.
+- Local feature validation must not contact JobKorea or Albamon and must not start a collection dry-run or write run.
+- The `수집 관리` navigation control remains 42px high, inline-flex, vertically and horizontally centered with controlled line-height; never align it with negative offsets or transforms.

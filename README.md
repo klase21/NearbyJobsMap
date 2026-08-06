@@ -394,3 +394,27 @@ Migration `0006` 이후 write run은 제외 keyword·field와 전후 후보 수�
 확인 단계에서는 `새로 만들기`, `건너뛰기`, `이름을 바꿔 새로 만들기`, 이름 충돌 대상에 한정한 `기존 프로필 바꾸기`를 명시적으로 선택한다. 동일 항목은 기본적으로 건너뛰며 이름 충돌은 자동 덮어쓰지 않는다. 교체는 미리보기에 묶인 expected revision과 확인 checkbox를 요구하고 실행 중인 프로필은 거부한다. 선택한 create/replace는 하나의 transaction으로 적용되어 하나라도 충돌하면 전체가 rollback된다. 생성된 프로필은 새 opaque ID, revision 1, 새 시각, null `lastUsedAt`을 가지며 즐겨찾기와 정규화된 구성은 보존한다. 가져온 프로필은 즉시 실행 목록과 프로필 비교에서 사용할 수 있지만 실행 이력을 만들거나 수집을 자동 시작하지 않는다.
 
 가져오기·내보내기 API는 다른 수집 관리 API와 같이 localhost, `NEARBY_JOBS_ENABLE_COLLECTION_UI=1`, local origin을 모두 요구한다. 원격 URL, 파일 경로, 명령, SQL, JavaScript, 임의 source adapter는 입력으로 받지 않는다. 서버 재시작 시 메모리 미리보기 token은 사라지며 확인 전에 다시 미리보기해야 한다.
+## Local MVP workspace (2026-08-06)
+
+NearbyJobsMap now provides a complete local-first job-search workspace without automatic source access.
+
+- First-run onboarding explains local SQLite storage, fixture/demo/manual labels, list-first navigation, bounded collection, regions, exclusions, and the personal workflow. Completion uses versioned browser storage (`nearby-jobs-onboarding-v1`), and Help can reopen it.
+- Personal state is stored separately in `job_user_state`: favorite, hidden, archived, ten workflow statuses, a plain-text note (maximum 5,000 characters), application date, follow-up date, and personal deadline. It never overwrites source fields.
+- Migration `0009` stores bounded observations and field-level changes without raw HTML or full descriptions. First/last seen, last changed, observation count, and 7/14/30-day not-observed labels are evidence summaries. Not observed does not mean closed or deleted.
+- Existing salary filters remain unit-specific. No hourly/daily/monthly/annual conversion or working-hours assumption is fabricated; ambiguous salary remains unknown.
+- Saved job views persist strict filter configurations in SQLite and can be created, applied, and deleted without changing jobs.
+
+Saved collection profiles use UTF-8 JSON format `nearby-jobs-collection-profiles`, version 1. Export includes configuration and favorite state only—not local IDs, jobs, run history, provenance, authorizations, credentials, or database paths. Import is preview-first, uses a 15-minute opaque token, supports create/skip/rename/replace, and confirms all selected changes in one transaction. Local validation and recomputed hashes are authoritative.
+
+Local backup commands write into ignored `data/backups` and use SQLite's backup API plus a SHA-256 manifest:
+
+```powershell
+npm.cmd run backup:create
+npm.cmd run backup:list
+npm.cmd run backup:verify -- --file "nearby-jobs-<timestamp>.sqlite"
+npm.cmd run backup:restore -- --file "nearby-jobs-<timestamp>.sqlite" --confirm "RESTORE DATABASE"
+```
+
+Restore confines paths to the backup directory, verifies the header, integrity, manifest, and hash, rejects an active run, creates a pre-restore backup, and validates the restored database. Automated restore tests use temporary databases only.
+
+Enable local mutation APIs with `NEARBY_JOBS_ENABLE_COLLECTION_UI=1`. Collection controls, profiles, import/export, saved views, and personal-state writes remain localhost-only. This sprint made no JobKorea or Albamon request, started no collection, and added no scheduler.
