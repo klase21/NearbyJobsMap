@@ -26,6 +26,8 @@
     "db:init": "tsx scripts/db-migrate.ts",
     "db:reset:demo": "tsx scripts/db-reset-demo.ts",
     "release:audit": "tsx scripts/release-audit.ts",
+    "docs:screenshots": "tsx scripts/capture-docs-screenshots.ts",
+    "docs:screenshots:audit": "tsx scripts/docs/audit-docs-screenshots.ts",
     "release:check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-check.ps1",
     "windows:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install.ps1",
     "windows:start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start.ps1",

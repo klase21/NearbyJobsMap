@@ -2,8 +2,9 @@
 . (Join-Path $PSScriptRoot "windows-common.ps1")
 Enter-ProjectRoot
 try {
-  $required=@("README.md","LICENSE","CONTRIBUTING.md","SECURITY.md","CODE_OF_CONDUCT.md","CHANGELOG.md","docs\WINDOWS_INSTALL.md","docs\TROUBLESHOOTING.md","docs\ARCHITECTURE.md",".env.example",".github\workflows\ci.yml")
+  $required=@("README.md","LICENSE","CONTRIBUTING.md","SECURITY.md","CODE_OF_CONDUCT.md","CHANGELOG.md","docs\WINDOWS_INSTALL.md","docs\TROUBLESHOOTING.md","docs\ARCHITECTURE.md","docs\SCREENSHOTS.md","docs\RELEASE_NOTES_0.1.0.md","docs\GITHUB_RELEASE_CHECKLIST.md",".env.example",".github\workflows\ci.yml")
   foreach($file in $required){if(-not(Test-Path -LiteralPath $file)){throw "필수 파일 누락: $file"}}
+  Invoke-Npm @("run","docs:screenshots:audit")
   Invoke-Npm @("run","release:audit")
   Invoke-Npm @("run","typecheck")
   Invoke-Npm @("run","lint")

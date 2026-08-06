@@ -9,10 +9,19 @@ const git = (...args: string[]) => {
 };
 
 const tracked = git("ls-files");
+const approvedScreenshots = new Set([
+  "docs/images/jobs-list-map-desktop.png",
+  "docs/images/collection-dashboard-desktop.png",
+  "docs/images/collection-execution-desktop.png",
+  "docs/images/profile-comparison-desktop.png",
+  "docs/images/job-workspace-mobile.png",
+  "docs/images/onboarding-mobile.png",
+]);
 const forbiddenFiles = tracked.filter((path) =>
   (path !== ".env.example" && /(^|\/)(?:\.env(?:\..+)?|cookies?\.json|session\.json)$/i.test(path))
   || /\.(?:sqlite3?|db|db-wal|db-shm|har|zip|log)$/i.test(path)
-  || /(^|\/)(?:data\/(?:backups|exports|imports|tmp)|browser-profiles|storage-state|artifacts|screenshots)(\/|$)/i.test(path),
+  || /(^|\/)(?:data\/(?:backups|exports|imports|tmp)|browser-profiles|storage-state|artifacts|screenshots)(\/|$)/i.test(path)
+  || (/\.(?:png|jpe?g|webp)$/i.test(path) && !approvedScreenshots.has(path))
 );
 
 const textExtensions = new Set([".ts", ".tsx", ".js", ".mjs", ".cjs", ".json", ".md", ".yml", ".yaml", ".ps1", ".sql", ".css", ".example", ""]);
