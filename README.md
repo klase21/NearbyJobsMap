@@ -370,3 +370,17 @@ Migration `0006` 이후 write run은 제외 keyword·field와 전후 후보 수�
 저장 프로필을 선택하면 기존 실행 화면에 구성이 채워진다. 페이지와 후보 수는 해당 실행에 한해 더 줄일 수 있고, `프로필에 저장`을 선택하면 expected revision을 사용해 영구 반영한다. 실행은 profile ID·name snapshot·revision·configuration hash를 immutable snapshot으로 고정한다. dry-run 이후 프로필 구성이 바뀌거나 삭제되면 기존 write authorization은 거부되고 새 dry-run이 필요하다. 실제 write run은 profile snapshot을 ingestion run에 저장하므로 나중에 프로필이 삭제되어도 과거 실행 이름·revision·hash를 표시할 수 있다. 프로필 삭제는 jobs, ingestion runs/items 또는 provenance를 삭제하지 않는다.
 
 프로필 CRUD API(`/api/collection-profiles`)도 수집 실행 API와 같은 localhost 및 `NEARBY_JOBS_ENABLE_COLLECTION_UI=1` 경계를 사용한다. `/collection` 개요에는 저장 프로필 전체·소스별·즐겨찾기·최근 30일 사용 수와 최근 사용 프로필을 표시하며, 실행 이력과 프로필을 서로 다른 데이터로 다룬다. 이 기능은 scheduler나 자동 실행을 추가하지 않는다. 구현 검증 중 JobKorea·Albamon source request는 수행하지 않는다.
+
+## 저장 프로필 결과 비교
+
+`/collection`은 `개요`, `프로필 비교`, `수집 실행`의 세 탭을 제공한다. `프로필 비교`는 현재 존재하는 저장 프로필 2~4개를 선택해 현재 구성, 제외 설정, persisted write run 성과와 정확한 공고 identity 중복을 읽기 전용으로 보여 준다. 선택한 opaque profile ID, 기간(`7d`, `30d`, `all`)과 revision 범위(`current`, `all`)는 검증된 URL query로 보존되며 stale 또는 삭제된 ID는 안전하게 제거한다. built-in preset은 먼저 저장 프로필로 복사해야 비교할 수 있다.
+
+현재 리비전 모드는 run의 saved profile ID뿐 아니라 revision과 configuration hash가 현재 프로필과 모두 일치하는 write run만 포함한다. 모든 리비전 모드는 같은 profile ID에 연결된 모든 persisted write run을 포함하고 revision 분포와 현재 revision 사용 여부를 표시한다. 이름이 같은 프로필이나 삭제 후 재사용된 이름으로 실행 이력을 연결하지 않는다. dry-run은 DB write history가 아니므로 비교에서 제외하며, 이전 형식 run에 없는 exclusion·분모·hash 정보는 `0`으로 추정하지 않고 `정보 없음`으로 남긴다.
+
+성과율은 명시적으로 저장된 선택 후보를 분모로 한다. 제외율은 `제외 후보 / 제외 전 후보`, 실패율은 `실패 item / 선택 후보`, 삽입·갱신율은 `(inserted + updated) / 선택 후보`, 유효 레코드 수율은 `(inserted + updated + unchanged + lower-completeness skip) / 선택 후보`, 목록 대체율은 `listing fallback / 선택 후보`다. 분모 또는 historical evidence가 없으면 백분율도 `정보 없음`이다.
+
+공고 중복은 profile-linked write run의 성공 item(`inserted`, `updated`, `unchanged`, `skipped`)에 저장된 정확한 `(source, sourcePostingId)`만 사용한다. failed item과 선택 전 제외 후보는 포함하지 않는다. 같은 source 프로필은 공통·고유 identity, 작은 집합 기준 중복률과 Jaccard를 계산하지만 서로 다른 source에는 fuzzy title/company matching을 적용하지 않고 `해당 없음`을 표시한다. 이 수치는 현재 jobs 행을 역추정한 것이 아니라 persisted 실행 기록 기준이므로 현재 공고의 최신 상태와 다를 수 있다.
+
+비교 API `POST /api/collection-profile-comparison`은 다른 collection-control API와 같은 localhost·feature-flag·origin 경계를 사용하며 typed ID 배열만 받는다. parameterized SQLite read만 수행하고 collection 시작, source request, job/run/item/provenance write를 하지 않는다. 프로필 비교 구현 및 로컬 검증에서도 JobKorea·Albamon 요청이나 collection run은 수행하지 않았다.
+
+메인 화면의 `수집 관리` 링크는 inline anchor baseline이 `.button`의 높이 계약과 맞지 않아 글자가 위로 보이던 문제를 해결했다. 전용 `inline-flex`, 수직·수평 중앙 정렬, 일정한 line-height를 적용하되 기존 42px 최소 높이·padding·focus·responsive flex 동작은 그대로 유지한다. pixel offset이나 `translateY` 보정은 사용하지 않는다.

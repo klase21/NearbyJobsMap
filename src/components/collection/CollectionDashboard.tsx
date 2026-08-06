@@ -5,9 +5,10 @@ import type { CollectionRunSnapshot } from "../../server/collection-control/cont
 import type { CollectionDashboardData, CollectionDashboardFilters, CollectionRunDetail } from "../../server/collection-dashboard/contracts";
 import type { CollectionPreset } from "../../sources/collection/collection-presets";
 import { CollectionControl } from "./CollectionControl";
+import { ProfileComparisonPanel } from "./ProfileComparisonPanel";
 
 interface Props { enabled: boolean; presets: CollectionPreset[] }
-type View = "overview" | "execution";
+type View = "overview" | "compare" | "execution";
 const DEFAULT_FILTERS: CollectionDashboardFilters = { period: "30d", source: "all", status: "all" };
 
 export function CollectionDashboard({ enabled, presets }: Props) {
@@ -16,6 +17,7 @@ export function CollectionDashboard({ enabled, presets }: Props) {
   const [dashboard, setDashboard] = useState<CollectionDashboardData | null>(null);
   const [activeRun, setActiveRun] = useState<CollectionRunSnapshot | null>(null);
   const [loading, setLoading] = useState(false); const [error, setError] = useState<string | null>(null);
+  const [comparisonRefreshKey, setComparisonRefreshKey] = useState(0);
   const loadDashboard = useCallback(async () => {
     if (!enabled) return;
     setLoading(true); setError(null);
@@ -31,23 +33,29 @@ export function CollectionDashboard({ enabled, presets }: Props) {
     try { const response = await fetch("/api/collection-runs/active", { cache: "no-store" }); if (response.ok) setActiveRun((await response.json()).run ?? null); }
     catch { /* The execution panel displays actionable run errors. */ }
   }, [enabled]);
-  const handleWriteCompleted = useCallback(() => { void loadDashboard(); void loadActive(); }, [loadDashboard, loadActive]);
+  const handleWriteCompleted = useCallback(() => { void loadDashboard(); void loadActive(); setComparisonRefreshKey((value) => value + 1); }, [loadDashboard, loadActive]);
   const handleRunChange = useCallback((run: CollectionRunSnapshot | null) => setActiveRun(run), []);
 
   useEffect(() => { void loadDashboard(); }, [loadDashboard]);
   useEffect(() => { void loadActive(); }, [loadActive]);
   useEffect(() => { if (!activeRun) return; const timer = window.setInterval(() => void loadActive(), 750); return () => window.clearInterval(timer); }, [activeRun, loadActive]);
   useEffect(() => { if (view === "overview") void loadDashboard(); }, [view, loadDashboard]);
+  useEffect(() => { const tab = new URLSearchParams(window.location.search).get("tab"); if (tab === "compare") setView("compare"); else if (tab === "execution") setView("execution"); }, []);
+
+  const changeView = (next: View) => { setView(next); const query = new URLSearchParams(window.location.search); if (next === "overview") query.delete("tab"); else query.set("tab", next); window.history.replaceState(null, "", `${window.location.pathname}${query.size ? `?${query}` : ""}`); };
 
   return <div className="collection-dashboard-shell">
     <div className="collection-tabs" role="tablist" aria-label="수집 관리 보기">
-      <button id="overview-tab" role="tab" aria-selected={view === "overview"} aria-controls="overview-panel" className={view === "overview" ? "active" : ""} onClick={() => setView("overview")}>개요</button>
-      <button id="execution-tab" role="tab" aria-selected={view === "execution"} aria-controls="execution-panel" className={view === "execution" ? "active" : ""} onClick={() => setView("execution")}>수집 실행</button>
+      <button id="overview-tab" role="tab" aria-selected={view === "overview"} aria-controls="overview-panel" className={view === "overview" ? "active" : ""} onClick={() => changeView("overview")}>개요</button>
+      <button id="compare-tab" role="tab" aria-selected={view === "compare"} aria-controls="compare-panel" className={view === "compare" ? "active" : ""} onClick={() => changeView("compare")}>프로필 비교</button>
+      <button id="execution-tab" role="tab" aria-selected={view === "execution"} aria-controls="execution-panel" className={view === "execution" ? "active" : ""} onClick={() => changeView("execution")}>수집 실행</button>
     </div>
-    {activeRun && <ActiveRunBanner run={activeRun} onOpen={() => setView("execution")} />}
+    {activeRun && <ActiveRunBanner run={activeRun} onOpen={() => changeView("execution")} />}
     {view === "overview" ? <section id="overview-panel" role="tabpanel" aria-labelledby="overview-tab" aria-busy={loading}>
       {!enabled ? <section className="collection-disabled" role="status"><h2>수집 현황 비활성화</h2><p>로컬 서버를 <code>NEARBY_JOBS_ENABLE_COLLECTION_UI=1</code>로 시작하면 읽기 전용 현황을 볼 수 있습니다.</p></section>
         : <CollectionOverview dashboard={dashboard} filters={filters} loading={loading} error={error} onFilters={setFilters} onRefresh={loadDashboard} />}
+    </section> : view === "compare" ? <section id="compare-panel" role="tabpanel" aria-labelledby="compare-tab">
+      <ProfileComparisonPanel enabled={enabled} activeRun={activeRun} refreshKey={comparisonRefreshKey} onOpenExecution={() => changeView("execution")} />
     </section> : <section id="execution-panel" role="tabpanel" aria-labelledby="execution-tab">
       <CollectionControl enabled={enabled} presets={presets} onWriteCompleted={handleWriteCompleted} onRunChange={handleRunChange} />
     </section>}

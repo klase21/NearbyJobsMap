@@ -208,6 +208,19 @@
 - profile 검증·CRUD·dashboard 조회는 source transport를 실행하지 않는다. profile 구현 검증 중 live JobKorea·Albamon run을 만들지 않는다.
 - dry-run의 collection-data 무변경 의미를 유지하기 위해 profile `lastUsedAt`은 saved-profile write run 시작 때만 갱신한다.
 
+### Saved profile comparison
+
+- 저장 프로필 비교는 읽기 전용이며 collection run을 시작·중지·변경하거나 jobs, ingestion runs/items, provenance를 쓰지 않는다.
+- profile ID가 과거 실행 연결의 권위 있는 identity다. profile 이름으로 legacy run이나 삭제된 profile history를 현재 profile에 연결하지 않는다.
+- current-revision 비교는 saved profile ID, revision, configuration hash가 현재 profile evidence와 모두 일치하는 persisted write run만 포함한다. 누락된 historical evidence는 `null`/`정보 없음`으로 유지한다.
+- 비교에는 persisted write run만 포함하고 dry-run과 in-memory active progress를 historical totals에 섞지 않는다.
+- 정확한 overlap은 성공한 ingestion item의 `(source, sourcePostingId)`만 사용한다. failed item과 candidate cap 전에 제외된 공고는 observed identity로 세지 않는다.
+- cross-source title·company fuzzy matching이나 semantic entity resolution을 추가하지 않는다. source가 다른 pair의 exact overlap은 `해당 없음`으로 표시한다.
+- 비교 요청은 현재 저장 profile 2~4개로 제한하고 local-only feature flag·origin 보호와 strict typed body 검증을 유지한다.
+- comparison repository SQL은 parameterized server-only read이며 arbitrary sort, field, SQL expression을 client 입력으로 받지 않는다.
+- temporary comparison 검증을 위해 real database에 synthetic ingestion run을 만들거나 live JobKorea·Albamon source 요청을 수행하지 않는다.
+- primary navigation label은 flex alignment와 controlled line-height로 수직 중앙을 유지한다. 음수 margin, `top` pixel offset 또는 `translateY` hack으로 맞추지 않는다.
+
 ## Validation Policy
 
 모든 변경은 다음 명령을 통과해야 한다.

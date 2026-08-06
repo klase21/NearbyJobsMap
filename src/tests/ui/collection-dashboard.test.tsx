@@ -42,6 +42,7 @@ describe("CollectionDashboard", () => {
   it("defaults to an accessible overview with inventory, source, coverage, and legacy missing labels", async () => {
     mockApi(); render(<CollectionDashboard enabled presets={Object.values(COLLECTION_PRESETS)} />);
     expect(screen.getByRole("tab", { name: "개요" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "프로필 비교" })).toHaveAttribute("aria-selected", "false");
     expect(await screen.findByText("전체 재고")).toBeInTheDocument();
     expect(screen.getByText("46", { selector: "strong" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "소스 현황" })).toBeInTheDocument();
