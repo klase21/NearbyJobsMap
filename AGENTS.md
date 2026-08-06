@@ -266,6 +266,18 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+## Public Packaging Protection
+
+- Public packaging and validation must never contact JobKorea or Albamon or start a collection run.
+- Runtime SQLite, WAL/SHM files, backups, profile exports, PID/log files, browser state, screenshots, and local environment files must remain untracked.
+- `.env.example` contains placeholders only; collection control stays disabled by default and binds to loopback by default.
+- Windows launchers resolve the repository root from their own path, require no administrator privileges, and never change the global PowerShell execution policy.
+- `start.ps1` owns one recorded process tree; `stop.ps1` must never terminate arbitrary Node processes.
+- Update tooling never pulls code or changes remotes. Restore requires verification, a pre-restore backup, and the exact confirmation phrase.
+- Release archives are source distributions, exclude runtime and personal data, and include a SHA-256 checksum and manifest.
+- CI uses temporary databases, disables the collection UI, and never runs live-source collection.
+- The `수집 관리` navigation control remains 42px high with inline-flex centering, controlled line height, and no transform or negative-offset alignment hacks.
+
 ## Local MVP workspace protection
 
 - Saved-profile import/export covers configuration only. Never restore local profile IDs, imported revisions, or imported hashes as authority; preview writes nothing and confirmed import is transactional with no silent overwrite.

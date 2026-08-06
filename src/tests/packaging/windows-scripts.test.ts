@@ -1,0 +1,11 @@
+import{describe,expect,it}from"vitest";import{readFileSync}from"node:fs";import{resolve}from"node:path";
+const read=(name:string)=>readFileSync(resolve(process.cwd(),"scripts",name),"utf8");
+describe("Windows launcher contracts",()=>{
+ it("resolves the project root from the script path and defaults to loopback",()=>{expect(read("windows-common.ps1")).toContain("Split-Path -Parent $PSScriptRoot");expect(read("start.ps1")).toContain('$HostAddress = "127.0.0.1"')});
+ it("rejects nonlocal collection enablement",()=>{const start=read("start.ps1");expect(start).toContain("$EnableCollectionUI -and -not (Test-Loopback $HostAddress)");expect(start).toContain('NEARBY_JOBS_ENABLE_COLLECTION_UI = if ($EnableCollectionUI)')});
+ it("uses owned PID metadata and never broadly kills node",()=>{const common=read("windows-common.ps1"),stop=read("stop.ps1");expect(common).toContain("process.StartTime");expect(stop).toContain("Stop-OwnedProcessTree");expect(common+stop).not.toMatch(/taskkill\s+\/IM|node\.exe\s+\/F/i)});
+ it("requires exact destructive confirmation phrases",()=>{expect(read("restore.ps1")).toContain('$Confirm -ne "RESTORE DATABASE"');expect(read("install.ps1")).toContain('$ResetConfirmation -ne "RESET LOCAL DATABASE"')});
+ it("orders update backup before npm ci and never pulls code",()=>{const update=read("update.ps1");expect(update.indexOf('backup:create')).toBeLessThan(update.indexOf('@("ci")'));expect(update).not.toMatch(/&\s*git\s+pull|Start-Process\s+git|Invoke-Expression/i)});
+ it("packages tracked source with a source-archive fallback and excludes runtime artifacts",()=>{const packaging=read("package-release.ps1");expect(packaging).toContain("git ls-files");expect(packaging).toContain("Get-ChildItem");expect(packaging).toContain('.env.example');for(const value of["node_modules","\\.next","data","artifacts","\\.sqlite","\\.zip","\\.env"])expect(packaging).toContain(value)});
+ it("preserves the centered collection navigation contract",()=>{const css=readFileSync(resolve(process.cwd(),"src/app/globals.css"),"utf8");expect(css).toMatch(/\.collection-nav-link[^}]*inline-flex[^}]*align-items:\s*center[^}]*justify-content:\s*center/s);expect(css).not.toMatch(/\.collection-nav-link[^}]*(?:translateY|top:\s*-|margin-top:\s*-)/s)});
+});

@@ -1,420 +1,226 @@
-# 내 주변 일자리 지도
+# NearbyJobsMap
 
-잡코리아와 알바몬 공고를 하나의 목록에서 급여·근무조건·위치 정확도와 함께 비교하는 로컬 우선 UI MVP다. 소규모 sanitized fixture를 기존 parser로 정규화한 데이터와 명확히 표시된 기능 검증용 가상 공고만 로컬 SQLite에 저장한다. 목록이 주 인터페이스이며 지도는 현재 필터 결과의 공간적 분포를 확인하는 보조 기능이다.
+## 내 주변 일자리 지도
 
-> 이 프로젝트는 잡코리아·알바몬의 공식 파트너 연동이 아니다. production crawler와 실시간 수집 기능은 포함하지 않는다. 공개 페이지의 기술적 접근 가능성은 수집·재사용 허가를 뜻하지 않으므로 실제 연동 전 각 소스의 약관과 권한을 별도로 확인해야 한다. 원본 소스 페이지가 항상 권위 있는 기준이다.
+NearbyJobsMap is a local-first Korean job discovery and application workspace. It keeps a unified job list in SQLite, uses a map as a secondary exploration tool, and provides bounded, manually initiated collection operations for supported source adapters.
 
-잡코리아에는 별도 승인된 수동 명령으로만 실행되는 **bounded 공개 검색 전송 prototype**이 있다. 공개 검색은 격리된 Playwright Chromium으로 렌더링하고, 상세 최대 3건만 기존 parser와 SQLite ingestion에 연결한다. 이는 공식 제휴나 지속적인 실시간 연동이 아니다. 알바몬은 계속 fixture-only다.
+> **Status: local MVP.** This repository is not an official API client or a hosted service. Collection permissions remain unverified and users must review source terms and applicable rules themselves.
 
-## 현재 지원 범위
+## Current status and limitations
 
-- 활성 소스: 잡코리아, 알바몬
-- 통합 공고 목록, 키워드·소스·지역·직종·고용형태·조건·급여·상태·위치 정확도 필터
-- 최신·마감·거리·급여 단위·월 환산 추정·회사명 정렬
-- OpenStreetMap/Leaflet 기반 보조 지도와 목록·마커 선택 동기화
-- GPS 권한 없는 예시 출발지, 수동 좌표 입력, 직선거리 계산
-- 로컬 필터·정렬·출발지·지도 표시·사용자 공고 상태 저장
-- 반응형 데스크톱/모바일 화면과 키보드·스크린리더 기본 접근성
-- 900px 이하에서는 목록을 기본으로 한 단일 패널 전환을 사용하며, 숨긴 지도 인스턴스는 유지하지 않는다.
-- 기존 소스별 fixture parser, 손실 없는 `CanonicalJob`, 급여·위치·중복 판별 서비스
-- 버전형 SQLite migration, exact source identity, 콘텐츠 해시와 ingestion run 추적
-- sanitized fixture 6건과 명시적 가상 공고 10건의 멱등 local ingestion
-- 수동 `--confirm` 전용 잡코리아 bounded 검색: 검색 최대 2페이지, 상세 최대 3건, direct 검증 최대 1회
-- 관찰된 잡코리아 연봉 범위와 알바몬 연봉·별도 인센티브 fixture 계약
-- 후방 호환 `workplaces[]` 구조와 근무지 미정·본사 주소 분리 규칙
-- 고용24: 공식 API 검토 후 별도 승인이 필요한 roadmap 소스이며 현재 adapter·fixture·UI 선택 항목이 없다.
+- Collection is manual only. There is no scheduler, recurring worker, automated login, CAPTCHA bypass, cookie reuse, stealth, or proxy rotation.
+- JobKorea public search-page listing collection and listing-only fallback are implemented. Anonymous detail responses may return login or verification content, so many collected records remain explicitly labeled as listing-only.
+- The Albamon listing adapter is implemented, but public browser transport has not been confirmed to work in every environment. This project does not call undocumented Albamon BFF endpoints or crawl Albamon detail pages.
+- Seoul and Gyeonggi classification is performed locally from visible listing locations. Unknown locations are not guessed.
+- Source permission is `unverified`; the project does not grant collection permission.
+- Work24 integration is deferred.
 
-포함하지 않는 범위는 지속적 실시간 수집, production crawler, pagination, retry loop, scheduler, background worker, 알바몬 live transport, 원격·클라우드 데이터베이스, 인증, 계정, 클라우드 저장, geocoding·교통 API, GPS, 분석·광고·배포다.
+## Features
 
-## 실행
+### Job discovery
 
-Node.js와 npm이 설치된 환경에서 다음 순서로 처음 실행한다.
+- Responsive unified list with a supplementary Leaflet/OpenStreetMap view
+- JobKorea and Albamon source filters plus provenance, completeness, region, status, salary, location, and map filters
+- Seoul/Gyeonggi normalization while preserving original location text
+- Positive search and source-neutral exclusion keywords
+- Synchronized list counts and map markers; jobs without coordinates remain usable in the list
 
-```powershell
-Set-Location C:\NearbyJobsMap
-npm.cmd install
-npm.cmd run setup:local
-npm.cmd run dev
+### Collection operations
+
+- Local-only `/collection` control screen with built-in bounded presets
+- Dry-run before write, opaque 30-minute authorization, and exact typed write confirmation
+- One active run maximum, concurrency maximum 2, and zero retries
+- Progress polling, persisted write history, dashboard analytics, and bounded failure summaries
+- No arbitrary URLs, commands, SQL, source keywords, or environment variables through the control API
+
+### Collection profiles
+
+- SQLite-backed saved profiles with revisions, deterministic configuration hashes, favorites, duplication, and optimistic concurrency
+- Two-to-four profile configuration and persisted-result comparison
+- Preview-first, transactional JSON import/export with conflict-safe create, skip, rename, and replace actions
+
+### Personal job search
+
+- Favorite, hidden, and archived states stored separately from source data
+- Workflow states from unreviewed through planned, applied, interview, offer, hired, rejected, and ignored
+- Plain-text notes plus application, follow-up, and personal-deadline dates
+- Saved filter views and first-run onboarding
+
+### Data operations
+
+- Append-only bounded observations and field-level change history
+- First/last-seen and not-observed freshness labels; stale never means closed
+- SQLite backup, verification, pre-restore backup, and guarded restore
+
+## Screenshots
+
+Public screenshots are intentionally not included yet because the current runtime database contains local operating history. After sanitization, the owner can add:
+
+- Main jobs screen
+- Collection dashboard
+- Saved-profile comparison
+- Personal workflow panel
+
+Place reviewed images under `docs/images/`. Never commit private notes, source HTML, cookies, or identifiable application data.
+
+## Architecture
+
+- Next.js 16.3 App Router and React 19
+- Strict TypeScript and Tailwind CSS 4
+- Local SQLite with append-only migrations and server-only repositories
+- Isolated JobKorea and Albamon source adapters
+- Playwright only for bounded rendering of normal public pages
+- In-memory, manual-only collection run manager
+- No cloud database, account system, telemetry, or required hosted service
+
+See [Architecture](docs/ARCHITECTURE.md) for boundaries and data flow.
+
+Key directories:
+
+```text
+src/app/             Next.js pages and local APIs
+src/components/      List, map, collection, onboarding, and workspace UI
+src/db/              SQLite migrations, repositories, and ingestion services
+src/server/          Server-only run, profile, dashboard, and backup services
+src/sources/         Isolated source adapters and sanitized fixtures
+src/tests/           Offline tests using temporary SQLite databases
+scripts/             Database, backup, release, and Windows launcher tools
+docs/                Public installation, troubleshooting, and architecture guides
 ```
 
-브라우저에서 `http://localhost:3000`을 연다. `setup:local`은 migration 적용, sanitized fixture import, fictional demo seed, 상태 출력을 순서대로 실행하며 반복 실행해도 중복을 만들지 않는다.
+## Requirements
 
-로컬 production 실행은 다음과 같다.
+- Windows 10 or Windows 11
+- Windows PowerShell 5.1 or PowerShell 7
+- Node.js 20.9 or newer (the clean validation environment used Node 24)
+- npm 10 or newer
+- Playwright Chromium only when manual collection is enabled
+- Project storage for dependencies, SQLite data, and optional backups
+
+## Windows quick start
+
+1. Clone or download this repository.
+2. Open PowerShell in the project directory.
+3. Install and initialize:
+
+   ```powershell
+   .\scripts\install.ps1
+   ```
+
+4. Start locally:
+
+   ```powershell
+   .\scripts\start.ps1
+   ```
+
+5. Open <http://127.0.0.1:3000>.
+
+Collection execution stays disabled unless `-EnableCollectionUI` is explicitly supplied.
+
+Manual npm setup remains available:
 
 ```powershell
-Set-Location C:\NearbyJobsMap
+npm.cmd ci
+Copy-Item .env.example .env.local
 npm.cmd run setup:local
-npm.cmd run build
-npm.cmd run start
+npm.cmd run typecheck
+npm.cmd run dev -- --hostname 127.0.0.1 --port 3000
 ```
 
-`npm run build`는 데이터베이스를 만들거나 수정하지 않는다. `/`는 Node.js request 시점에 SQLite를 읽는 동적 server route다.
+For details, see [Windows installation](docs/WINDOWS_INSTALL.md).
 
-## 로컬 SQLite
+## Environment variables
 
-기본 데이터베이스는 `./data/nearby-jobs.sqlite`다. 다른 로컬 파일을 사용하려면 서버와 DB 명령에 `NEARBY_JOBS_DB_PATH` 환경 변수를 지정한다. 이 값은 비밀정보가 아니며 `.env.example`은 필요하지 않다. 생성된 `.sqlite`, `.db`, WAL, SHM 파일과 `data/private`, `data/live`는 Git에서 제외된다.
+Copy `.env.example` to `.env.local` and adjust only local values:
+
+```dotenv
+NEARBY_JOBS_DB_PATH=./data/nearby-jobs.sqlite
+NEARBY_JOBS_ENABLE_COLLECTION_UI=0
+HOSTNAME=127.0.0.1
+PORT=3000
+NEARBY_JOBS_BACKUP_DIR=./data/backups
+```
+
+`NEARBY_JOBS_ENABLE_COLLECTION_UI=1` enables execution endpoints only when the request is also local and passes the existing origin checks. It does not make collection public.
+
+## Database and demo data
+
+The runtime database defaults to `data/nearby-jobs.sqlite` and is ignored by Git.
 
 ```powershell
-npm.cmd run db:migrate
-npm.cmd run db:import:fixtures
-npm.cmd run db:seed:demo
+npm.cmd run db:init
+npm.cmd run setup:local
 npm.cmd run db:status
-npm.cmd run db:reset -- --confirm
-npm.cmd run setup:local
 ```
 
-- `db:migrate`: pending SQL migration만 transaction으로 적용한다.
-- `db:import:fixtures`: 기존 source adapter가 만든 fixture-derived `CanonicalJob` 6건을 멱등 수집한다.
-- `db:seed:demo`: 기존 가상 공고 10건을 멱등 수집한다.
-- `db:status`: 경로, migration, 출처·record 종류·좌표 유무 집계와 최근 ingestion run을 출력한다.
-- `db:reset`: `--confirm`이 있어야 기본 `data` 디렉터리 안의 설정된 DB와 해당 WAL/SHM만 제거한다. migration까지 다시 만들려면 `--migrate`도 명시한다.
-- `setup:local`: 위 준비 작업과 상태 확인을 한 번에 수행한다.
+`setup:local` applies migrations and idempotently loads six sanitized fixture-derived records and ten explicitly fictional demo records. Fixture, demo, listing-only collection, and detail-complete collection remain visibly distinct.
 
-DB가 없거나 migration이 빠졌으면 UI는 raw SQLite 오류 대신 `로컬 데이터베이스가 준비되지 않았습니다`와 `npm.cmd run setup:local` 안내를 표시한다. 앱을 열거나 build하는 것만으로 DB를 seed하지 않는다.
-
-SQLite 파일은 자동 백업되지 않는다. 로컬 데이터를 보존해야 한다면 서버를 중지한 상태에서 DB 파일을 별도로 복사한다. 현재 데이터는 모두 재생성 가능한 fixture/demo이지만 향후 로컬 메타데이터가 늘어나면 명시적인 백업·복원 정책이 필요하다.
-
-## 잡코리아 bounded 검색 transport
-
-과거 사용자가 만든 Playwright crawler는 `https://www.jobkorea.co.kr/Search?stext=AI&tabType=recruit&Page_No={PAGE_NUMBER}` 공개 검색을 Chromium으로 렌더링하고 `a[href*="/Recruit/GI_Read"]`를 관찰했다. 당시 AI 검색은 607페이지, 추출 링크 9,665개, canonical URL dedup 후 9,575개였으며 `지금 주목할 만한 공고`와 `AD`를 일반 결과에서 제외했다. 이 수치는 과거 관찰값이며 현재 페이지 수·결과 수·구조를 보장하지 않는다.
-
-이후 plain server-side HTTP GET으로 같은 계열 listing을 확인한 1회 실험은 로그인 페이지를 받았다. 이는 **그 fetch-only 요청의 결과**이지, 정상 브라우저로 렌더링한 공개 검색 전체가 로그인 필수라는 증거가 아니다. 기존 `transport:jobkorea:once`는 이 진단을 재현하는 legacy fetch-only prototype으로 남기며 새 listing 경로의 기본값으로 사용하지 않는다. URL·redirect·sanitizer·detail parser·ingestion 유틸리티는 계속 재사용한다.
-
-새 명령은 `/Search` 공개 URL만 받고 `tabType=recruit`, `Page_No=1`이 빠졌으면 안전한 기본값으로 명시한다. Windows npm이 URL의 `&`를 shell 구분자로 재해석할 수 있어 아래처럼 단일 query 인자 URL을 권장한다. 실행에는 `--confirm`이 필수다. `--pages`는 1·2, `--max-details`는 0·1·2·3만 허용하며 0은 링크 계약만 검증한다.
+To replace a local database with deterministic demo data, first back it up, then use the exact confirmation:
 
 ```powershell
-Set-Location C:\NearbyJobsMap
-
-npm.cmd run transport:jobkorea:search:once -- `
-  --search-url "https://www.jobkorea.co.kr/Search?stext=AI" `
-  --pages 1 `
-  --transport playwright `
-  --max-details 0 `
-  --dry-run `
-  --confirm `
-  --diagnostic
+npm.cmd run db:reset:demo -- --confirm "RESET LOCAL DATABASE"
 ```
 
-쓰기 실행:
+Never use reset when you intend to preserve an existing database.
+
+## Collection safety
+
+- Manual initiation only; no scheduler or automatic retries
+- JobKorea listing maximum 5 pages and candidate maximum 50; detail concurrency maximum 2
+- Albamon listing maximum 5 pages and candidate maximum 50; no detail requests in the current phase
+- No authentication, cookie/session reuse, access-control bypass, CAPTCHA solving, or stealth
+- Dry-run writes no collection run, item, provenance, or job data
+- Write requires the matching recent dry-run and exact confirmation
+- Failed candidates are not replaced after selection
+
+Collection examples and controls are documented in the application. Review source rules and obtain any required permission before enabling them.
+
+## Backup and restore
 
 ```powershell
-npm.cmd run transport:jobkorea:search:once -- `
-  --search-url "https://www.jobkorea.co.kr/Search?stext=AI" `
-  --pages 1 `
-  --transport playwright `
-  --max-details 1 `
-  --confirm
+.\scripts\backup.ps1
+.\scripts\backup.ps1 -List
+.\scripts\backup.ps1 -Verify -File "nearby-jobs-20260806T120000Z.sqlite"
+.\scripts\restore.ps1 -File "nearby-jobs-20260806T120000Z.sqlite" -Confirm "RESTORE DATABASE"
 ```
 
-- `--transport playwright`는 run마다 새 headless Chromium과 격리 context를 만들고 종료한다. 저장 profile, storage state, imported cookie, login, stealth plugin, webdriver 위장, retry는 사용하지 않는다. JavaScript는 공개 검색 UI 렌더링에만 사용한다.
-- 검색 navigation은 최대 2페이지이고 `Page_No=1,2`만 명시적으로 만든다. 다음 버튼 자동 추적, 종료 페이지 탐색, 607페이지 재실행은 없다. 상세 navigation은 최대 3회이며 실패한 상세를 다음 후보로 대체하지 않는다.
-- `--transport auto`는 현재 검증 상태에서 Playwright를 명시적으로 선택한다. access block 뒤 direct로 몰래 전환하지 않는다.
-- `--transport direct`는 공개 페이지에서 현재 `POST /Recruit/Home/_GI_List/` 요청이 관찰되고 cookie·authorization·token이 없을 때만 최대 1회 익명 POST를 허용한다. `page`, `condition[local]`, `order`, `pagesize`, `tabindex`는 관찰된 internal/public-page form 계약이지 공식 API가 아니다. session 또는 token 신호가 있거나 현재 계약이 관찰되지 않으면 `direct_endpoint_session_required` 또는 `direct_endpoint_unavailable`로 끝난다.
-- 매 명령은 robots.txt를 최대 1회 별도 확인한다. robots 허용은 법적 허가를 의미하지 않는다.
-- page-1/listing-only 진단 명령은 40초 내부 예산을 가진다. robots 사전확인, 브라우저 시작·연결, navigation, DOM readiness, snapshot, page close, browser close/kill에 각각 더 작은 상한이 적용되며 `--diagnostic`은 각 단계의 상태와 소요 시간을 출력한다. DOM readiness는 ordinary 상세 링크, 명시적 no-result, login/verification/block 신호 중 하나를 기다린 뒤 0.4초 안정화 지연을 사용한다.
-- Playwright는 강제 종료 가능한 임시 `BrowserServer`로 실행된다. 정상 close가 제한 안에 끝나지 않으면 해당 run의 server process만 kill하고, 어느 단계가 멈춰도 timeout 또는 unexpected-page 구조화 결과를 반환한다.
-- page snapshot 실패는 evaluation, execution-context destruction, unsupported browser-native value, serialization, runtime validation, size 초과를 구분한 진단 코드로 반환한다. 정상 CLI 출력에는 raw browser stack이나 snapshot payload를 출력하지 않는다.
-- 일반 공고는 `tr.devloopArea[data-gno]` 또는 검색 결과 문맥 안의 `/Recruit/GI_Read/{숫자 ID}` 링크만 후보로 삼는다. `AD`, sponsored, 추천·최근·주목 영역은 별도 집계하고 제외한다.
-- 페이지의 `validEmptyPage`는 source가 명시적으로 no-result를 표시할 때만 true다. `uniqueNewCount=0`, duplicate-only, login, block, timeout, parser failure는 empty가 아니다.
-- raw HTML은 메모리에서만 읽고 저장하지 않는다. sanitizer는 최소 JobPosting·목록 anchor만 남기며 설명 본문·연락처·지원자·script·분석/광고 필드를 제외한다.
-- dry-run은 jobs, child collection, provenance, ingestion run을 포함해 DB에 아무것도 쓰지 않고 예상 inserted/updated/unchanged/rejected만 출력한다.
-- 쓰기 실행은 exact source identity와 content hash를 재사용하며 `bounded_public_browser_observation`, 선택 transport, page 번호, listing 위치를 provenance history에 기록한다.
-- 현재 이용·재가공 권한은 `unverified`다. 결과는 `원샷 전송 검증 데이터`와 관찰 시각으로 표시하며 원문 페이지를 최종 기준으로 확인해야 한다.
+Restore verifies the SQLite header, integrity result, manifest, and SHA-256 checksum; creates a pre-restore backup; and requires the exact phrase `RESTORE DATABASE`. Stop the application before restoring.
 
-2026-08-05 bounded 실제 재검증에서는 명령 전달 오류 3회가 confirmation 단계에서 네트워크 전에 차단됐다. 이후 올바르게 시작된 Playwright Step 1은 외부 60초 실행 한도까지 구조화 결과를 반환하지 못해 강제 종료됐고, source 결과·후보 수·direct contract를 확정하지 못했다. 남은 프로세스와 임시 profile은 확인 후 제거했고 SQLite hash는 동일했다. 따라서 과거 Playwright 성공 이력은 유효한 반증이지만, **현재 Playwright 흐름은 이번 실행에서 성공 또는 접근 차단 어느 쪽으로도 재확인되지 않았다.** `_GI_List`도 현재 익명 요청으로 재검증되지 않아 runtime `auto`는 Playwright를 유지한다.
-
-이후 lifecycle 진단 보강은 위 실패의 원인이 될 수 있던 직렬 15초 navigation + 15초 readiness와 무상한 cleanup을 제거했다. 이 변경은 source 접근 결과를 미리 성공으로 간주하지 않으며, 동일한 page-1/max-details-0 dry-run을 한 번만 다시 실행해 구조화된 분류를 얻기 위한 것이다.
-
-보강 후 단일 page-1/max-details-0 실제 dry-run은 4.282초에 구조화 결과를 반환했다. robots, browser launch/connect/context, navigation, readiness, page close, browser close/kill은 모두 내부 상한 안에서 종료됐다. 현재 확인된 실패 지점은 `page-1-snapshot`이며 결과는 `unexpected_page`다. 이는 로그인·CAPTCHA·접근 차단 판정이 아니며 후보 수를 0으로 확정하는 근거도 아니다. 요청을 반복하지 않았고 상세 navigation, direct 요청, DB write는 없었다.
-
-후속 오프라인 재현에서 snapshot 계약의 구체적인 결함을 확인했다. TypeScript의 `querySelectorAll<HTMLAnchorElement>` 타입 인수는 런타임 검사가 아니므로 SVG `<a>`도 통과할 수 있었고, 이 경우 `anchor.href`는 문자열이 아니라 browser-native `SVGAnimatedString` 객체였다. 이제 page context는 `HTMLAnchorElement`만 명시적으로 허용하고 모든 값을 schema version 1의 plain object로 복사한다. snapshot은 후보 배열을 최대 200개로 제한하고 JSON round-trip과 runtime shape validation을 거치며, 직렬화 크기는 256 KiB를 넘을 수 없다. DOM node, native object, raw `Error`, raw HTML 및 전체 본문은 경계를 넘거나 저장되지 않는다.
-
-synthetic JobKorea형 DOM 테스트는 일반 결과, 일반+광고·추천, 중복·tracking URL, 명시적 빈 결과, 로그인, CAPTCHA, verification, access denied, malformed 결과, recommendation-only, SVG anchor를 외부 네트워크 없이 검증한다. snapshot이 완성되지 않은 경우 후보 수는 0으로 바뀌지 않고 `null`/`unknown`으로 유지된다.
-
-이 변경 뒤 허용된 실제 page-1/max-details-0 dry-run은 정확히 한 번 실행됐고 4.377초에 구조화 종료됐다. navigation과 readiness는 완료됐지만 snapshot은 15ms 후 `ReferenceError: __name is not defined`로 실패해 최종 분류는 `unexpected_page`였다. 이는 TypeScript/tsx가 `page.evaluate` callback에 삽입한 이름 보존 helper가 browser page realm에는 없었던 별도의 실행 경계 결함이다. 최종 구현은 callback 전달 대신 self-contained JavaScript literal을 평가하여 helper 주입을 제거했고, lifecycle 진단은 구조화 오류 code를 보존하며 외부 stack 줄을 제거한다. 실제 실행은 승인된 1회 제한 때문에 반복하지 않았다. 따라서 final URL, title, ordinary/promoted/rejected/duplicate 수는 여전히 `null`이며 로그인·CAPTCHA·verification·access denial도 관찰되지 않았다. robots 1회, search navigation 1회, detail/direct/DB write 0회였다.
-
-별도 승인된 최종 page-1/max-details-0 dry-run에서 corrected evaluator는 실제 공개 검색 페이지에서도 schema 1 snapshot을 20ms에 정상 반환했고 전체 명령은 4.197초에 종료됐다. `__name` 및 serialization 오류는 재발하지 않았다. 최종 URL은 `https://www.jobkorea.co.kr/Search?stext=AI&tabType=recruit&Page_No=1`, 제목은 `'AI' 관련 📢 채용공고 | 총 13,609건의 검색결과`였다. numeric detail-link evidence 88개 중 ordinary 0, promoted 28, rejected 60으로 측정되어 분류는 `malformed_results`였다. 로그인·CAPTCHA·verification·access-denied·명시적 empty 표시는 관찰되지 않았다. 이 결과는 snapshot lifecycle 성공과 현재 ordinary-container 계약 불일치를 함께 뜻하며 후보가 없다는 뜻은 아니다. 상세, page 2, direct, retry, DB write는 모두 0이었다.
-
-후속 오프라인 진단 보강은 snapshot schema를 version 2로 올렸다. 거절된 numeric link는 기계 판독 가능한 단일 사유로 집계되며, 합계는 sample truncation과 무관하게 완전하게 유지된다. rejected 20개, promoted 10개, ordinary 10개의 bounded sample과 최대 8단계의 최소 ancestor signature, 최대 20개의 반복 container signature 요약만 남긴다. signature는 정렬·제한된 class와 명시적으로 허용된 `data-*` 속성만 포함하고 text content나 raw HTML은 포함하지 않는다. readiness 시점과 최종 snapshot의 numeric-link/container 수, DOM 변화 여부, 정확한 직렬화 byte 수, document ready state, failed-resource 유형 집계, classification·extraction·context-close timing도 구조화 결과에 남는다. 전체 snapshot 상한은 계속 256 KiB다.
-
-이 단계에서는 실제 잡코리아 요청을 한 번도 실행하지 않았다. 88 numeric / 28 promoted / 60 rejected / 0 ordinary 형태는 이전 실제 실행의 **집계값**만 재현한 synthetic 테스트이며, card·list-item·nested-div 구조는 진단 계약 검증용 가상 DOM일 뿐 실제 source container의 증거가 아니다. 따라서 production ordinary selector는 변경하지 않았다. 상세 navigation, page 2, `_GI_List`, retry, SQLite write도 실행하지 않았다.
-
-별도 승인된 schema 2 실제 page-1/max-details-0 dry-run은 2026-08-05에 정확히 한 번 실행됐고 4.630초에 종료됐다. 36,189-byte snapshot은 `complete` 상태로 정상 검증됐으며 readiness와 snapshot 모두 numeric link 89개, ordinary container 0개로 같아 DOM 변화는 없었다. result root 1개 안의 numeric link 89개가 모두 promoted로 분류됐고 rejected와 ordinary는 각각 0개였다. promoted container count는 127개였으며 dominant link-container signature는 `div.mb-0.5@1` 30개, `div.w-full@1` 30개, `div.flex.gap-5.p-7.w-full@1` 29개였다. 이는 broad promoted ancestor 판정이 실제 utility class 구조를 과포착했을 가능성을 보여주지만, 어느 class token이 원인인지는 이번 bounded snapshot 출력만으로 확정하지 않는다. production ordinary/promoted selector는 변경하지 않았으며 다음 변경은 이 실측값을 근거로 한 별도 오프라인 계약 작업이어야 한다.
-
-같은 실행에서 failed resource는 image 55개와 font 8개, 합계 63개였으나 readiness와 snapshot extraction을 막지 않았다. 로그인·CAPTCHA·verification·access denial·명시적 empty marker는 모두 0이었다. robots 1회와 search navigation 1회만 수행했고 detail, page 2, direct, retry, DB write는 0이었다. 실행 뒤 진단 renderer는 향후 bounded run이 snapshot에 이미 보존된 signature 세부 필드·sample posting ID와 sanitized failed-resource sample을 누락 없이 출력하도록 오프라인에서 보강했으며 stabilization delay도 별도 lifecycle timing으로 기록한다. 이 출력 보강 후 실제 source 요청은 반복하지 않았다.
-
-원샷 관찰 데이터를 로컬에서 모두 제거하려면 서버를 중지하고 전체 로컬 DB reset 후 fixture/demo를 다시 준비한다. 이 작업은 사용자 상태 localStorage를 지우지 않는다.
+## Testing and release checks
 
 ```powershell
-npm.cmd run db:reset -- --confirm
-npm.cmd run setup:local
+npm.cmd run typecheck
+npm.cmd run lint
+npm.cmd test
+npm.cmd run build
+npm.cmd run db:status
+npm.cmd run release:audit
+.\scripts\release-check.ps1
 ```
 
-원샷만 선택 삭제하는 관리 UI나 명령은 아직 없다. `db:status`는 현재 one-shot 관찰 공고 수와 최근 one-shot run 상태를 표시한다.
+Automated tests use temporary databases and must never access JobKorea or Albamon.
 
-## UI와 데이터 구조
+## Public-data and legal notice
 
-`src/app`은 Next.js App Router 진입점, `src/components`는 표현 계층이다. `src/db`는 server-only SQLite 연결·migration·repository·ingestion 경계이며, `src/data/sqlite-job-provider.ts`만 request-time DB 결과를 compact `UiJobRecord` DTO로 바꿔 client dashboard에 전달한다. UI는 별도 공고 모델을 만들지 않고 `CanonicalJob`을 감싼 최소 파생 타입만 사용한다. 기존 `src/sources` parser는 네트워크와 분리되어 있고 fixture import 때만 실행되며 UI 렌더 중 재실행하지 않는다.
+Users are responsible for complying with third-party terms, robots policies, applicable law, and data-use permissions. This project does not grant permission to collect from any service and includes no access-control bypass. Do not commit personal data, credentials, cookies, private notes, runtime databases, raw source pages, or profile exports.
 
-기존 fixture에서 만들기 어려운 급여·지역·상태 조합은 `src/data/demo-jobs.ts`의 가상 공고로 보완한다. fixture-derived, fictional, one-shot observation provenance와 reference, evidence 유형, content hash, ingestion item 결과를 SQLite에 별도로 보존한다. `job_provenance_history`는 exact identity가 겹쳐도 기존 fixture 증거를 지우지 않는다. 가상 공고는 화면에서 `기능 검증용 가상 공고`로 표시되고 가짜 원문 링크를 제공하지 않는다. 원본 fixture나 transport HTML은 DB나 client bundle에 저장하지 않으며 `dangerouslySetInnerHTML`도 사용하지 않는다.
+## Roadmap
 
-`jobs`의 `(source, source_posting_id)`가 exact identity다. ID가 없는 미래 입력은 같은 source의 canonical HTTPS URL만 fallback으로 쓸 수 있다. probable duplicate와 교차 source 유사 공고는 고유성 제약이나 자동 병합에 사용하지 않는다. 카테고리, 고용형태, `workplaces[]`는 순서가 있는 자식 테이블로 저장하며 한 좌표를 복수 근무지 전체에 복제하지 않는다.
+- Owner-reviewed public screenshots
+- Simpler Windows distribution and signed launcher experience
+- Optional source integrations only after permission and contract review
+- Public GitHub release after repository review
 
-지도는 좌표가 있는 현재 필터 결과만 표시한다. 가상 좌표는 지도 동작 검증용임을 데이터 출처와 함께 유지하며, 관찰되지 않은 구·동 텍스트를 좌표로 변환하지 않는다. `exact_coordinate`·`exact_address`와 추정 위치 표시는 시각적으로 구분된다.
+No dates are promised.
 
-단일 위치 필드는 기존 소비자 호환용 기본 보기이며 `workplaces[]`가 구조화 근거다. 복수 근무지는 신뢰할 수 있는 개수와 개별 위치를 따로 보존하고, 분리된 좌표가 없으면 지도에서 제외한다. `location_undecided`는 원문을 남기되 주소·행정구역·좌표를 채우지 않으며 목록에는 `근무지 미정`, 지도 동작에는 `지도 표시 불가`로 나타난다. 기업정보의 본사 주소는 실제 근무지를 대체하지 않는다.
+## License
 
-## 필터와 로컬 저장
+Licensed under the [MIT License](LICENSE).
 
-원 급여 단위별 최솟값은 서로 다른 단위를 동일 값처럼 비교하지 않는다. 월 환산 금액은 설정된 근무시간·근무일·연간 개월 수에 따른 비교용 추정치이며 원 급여 표현을 대체하지 않는다.
+## Contributing
 
-공유 가능한 source 공고 lifecycle과 provenance는 SQLite에 저장한다. 출발지, 필터, 정렬, 지도 표시 여부와 `검토 중`·`관심`·`지원 예정`·`지원 완료`·`제외` 사용자 상태는 계속 버전형 localStorage repository를 통해 이 브라우저에만 저장된다. 손상된 JSON은 안전한 기본값으로 복구한다. 입력한 출발지와 화면 설정은 기본적으로 이 브라우저에만 저장되며, 브라우저 저장 공간을 지우면 삭제될 수 있다. 쿠키·세션·비밀번호·API 키·실제 대량 공고·위치 이력은 저장하지 않는다.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Fixture와 개인정보 정책
+## Security
 
-sanitized fixture는 공개 페이지에서 관찰한 계약의 작은 축약본이다. 전체 설명, 연락처, 담당자, 이메일, 쿠키, 세션, 토큰, 광고·분석 식별자를 포함하지 않는다. fixture를 추가할 때도 최소 요청 원칙과 `FixtureMetadata`를 유지하고, 실제 대량 데이터나 비공개 응답을 커밋하지 않는다. 소스 구조는 예고 없이 변할 수 있다.
-
-## 검증
-
-```bash
-npm run typecheck
-npm run lint
-npm test
-npm run build
-npm run setup:local
-npm run db:status
-```
-
-## 디자인 기준
-
-화면 구조와 시각 위계는 [Nearby Jobs Map MVP Figma](https://www.figma.com/design/JzTHb8n3QCt0uh6HABXgKi/Nearby-Jobs-Map-MVP?node-id=0-1&p=f&t=OtJEJeyhakylAKK3-0)를 기준으로 브라우저 반응성과 접근성에 맞게 조정했다. 현재 허용 소스 정책에 맞춰 고용24 활성 탭과 CSV 내보내기는 구현하지 않았다.
-
-## 현재 한계
-
-- 데이터 계약은 8개 sanitized fixture와 제한된 가상 공고에 기반하며 현재 실공고 전체를 나타내지 않는다. 화면의 16개 공고 구성은 그대로다.
-- SQLite는 단일 로컬 파일이며 동시 다중 writer, 자동 백업, 복원 UI, server-side pagination은 아직 제공하지 않는다.
-- production build는 DB를 포함하지 않으므로 실행 환경마다 `setup:local` 또는 별도 승인된 ingestion을 먼저 수행해야 한다.
-- 지도 타일은 OpenStreetMap 네트워크 가용성에 의존하지만 공고 목록은 타일 실패와 무관하게 작동한다.
-- 거리는 직선거리이며 실제 이동시간이나 경로가 아니다.
-- 좌표가 없는 실제 fixture에는 지도를 위해 좌표를 만들지 않아 지도에서 제외된다.
-- 연봉 단일값·범위·인센티브 표시는 source fixture로 확인했지만, 복수 근무지와 근무지 미정의 실제 상세 구조는 이번 소스별 3건 제한에서 찾지 못해 여전히 미검증이다.
-- 알바몬의 관찰된 내부 BFF는 공식 API가 아니며 live 코드가 호출하거나 의존하지 않는다.
-- 잡코리아 browser transport의 기술적 접근 가능성·robots 결과는 이용허가가 아니다. 현행 계약·저작권·재가공·보관 범위는 미확인이다.
-- bounded search는 최대 2페이지만 검증하며 전체 pagination, 최신성 보장, 삭제 동기화, 자동 refresh가 없다. page-1 lifecycle과 실제 schema 2 snapshot은 검증됐지만 현재 ordinary-result container는 인식되지 않아 `malformed_results`이며 direct `_GI_List` 익명 계약도 미확정이다.
-
-## 다음 개발 단계
-
-실측된 89/89 promoted 과포착의 구현 원인은 browser evaluator의 `[class*='ad'], [class*='sponsor']` ancestor selector였다. 짧은 `ad` 부분 문자열 때문에 `shadow`, `header`, `badge`, `gradient`, `leading`, `loading` 같은 일반 utility token도 광고 근거가 될 수 있었다. 오프라인 수정은 광고 class를 완전한 token(`ad`, `ads`, `advertisement`, `sponsor`, `sponsored`, `promoted`) 또는 제한된 `ad-`/`ad_`/`sponsored-`/`promoted-` 계열로만 판정한다. `data-type`·`data-section`·`data-track`도 명시적인 광고 token 값만 인정하고, 직접 자식의 짧은 `AD`·`광고`·`Sponsored` 라벨만 의미 근거로 사용한다. 이 검사는 후보에서 최대 6단계 ancestor까지만 적용하며 `BODY`·`MAIN`에서 중단한다.
-
-이 수정 과정에서는 실제 잡코리아 요청을 실행하지 않았다. production ordinary selector도 넓히지 않았다. 실제 측정에서 보인 utility signature는 아직 ordinary container의 충분한 근거가 아니므로, 광고 근거가 없는 미확인 numeric link는 계속 rejected로 남고 페이지는 `JOBKOREA_ORDINARY_CONTAINER_CONTRACT_MISMATCH`가 있는 `malformed_results`로 유지된다. 같은 production evaluator를 실행하는 synthetic acceptance test는 88 numeric / 28 explicit promoted / 60 unknown rejected / 0 ordinary를 확인하며 snapshot은 256 KiB 상한 아래에 있다.
-
-별도 승인된 post-fix 실제 검증은 2026-08-05에 page 1, `max-details=0`, Playwright dry-run으로 정확히 한 번 실행됐다. 명령은 4,438ms 안에 종료됐고 schema 2 snapshot은 `complete` 상태에서 70,441 bytes로 정상 검증됐다. readiness와 snapshot 모두 numeric detail link 88개와 ordinary container 0개를 측정해 DOM 변화는 없었다. result root 1개 안의 88개 링크는 ordinary 0, promoted 0, rejected 88로 상호 배타적으로 분류됐고 duplicate는 0이었다. 전체 rejection aggregate는 `ANCESTOR_SIGNATURE_UNRECOGNIZED: 88`, promotion-signal aggregate는 비어 있어 합계가 각각 후보 수와 일치했다. 로그인·CAPTCHA·verification·access-denied·명시적 empty marker는 모두 0이었다.
-
-이 실측은 broad promoted 과포착이 실제 페이지에서도 제거됐음을 확인한다. 동시에 ordinary contract는 아직 해결되지 않았다. dominant rejected container signature는 `div.mb-0.5@1` 30개, `div.w-full@1` 30개, `div.flex.gap-5.p-7.w-full@1` 28개였으며 모두 generic utility class뿐이라 production ordinary selector로 채택하기에는 충분하지 않다. failed resource는 image 68개와 font 8개로 총 76개였지만 readiness와 extraction을 막지 않았다. 상세 navigation, page 2, direct 요청, retry, SQLite write는 모두 0이었고 로컬 DB hash와 레코드 수는 변하지 않았다.
-
-후속 오프라인 ordinary-contract 평가는 production selector나 최종 `malformed_results` 판정을 바꾸지 않고 schema 2 snapshot에 shadow 구조 진단을 추가했다. numeric posting ID가 같은 relative·absolute·tracking link를 먼저 한 그룹으로 묶고, 최대 8단계 안의 lowest shared ancestor가 단일 posting ID만 포함하는지 확인한다. `HTML`·`BODY`·`MAIN`·전체 result root와 header/footer/navigation은 공고 ancestor가 될 수 없다. 검증되지 않은 구조는 같은 parent 아래 서로 다른 posting ID를 가진 동일 구조 sibling이 최소 3개 반복되고, explicit promoted·recommendation·recent evidence가 전혀 없을 때만 `structurallyEligible` provisional group이 된다. 이 상태는 진단일 뿐 production ordinary candidate가 아니다.
-
-합성 aggregate-shape 검증은 3개 링크를 가진 가상 group 28개와 2개 링크를 가진 group 2개를 구성해 numeric link 88개, 고유 posting ID 30개를 만들었다. 실제 self-contained evaluator는 provisional group 30개와 eligible group 30개, grouped link 88개, ungrouped link 0개를 측정하면서 production ordinary 0, promoted 0, rejected 88 및 `malformed_results`를 그대로 유지했다. 기존 `JOBKOREA_ORDINARY_CONTAINER_CONTRACT_MISMATCH`와 별도로 `JOBKOREA_PROVISIONAL_ORDINARY_STRUCTURE_DETECTED`만 추가한다. utility class는 sibling shape를 비교하는 진단값일 뿐 selector가 아니며 이 합성 DOM도 real-source evidence가 아니다.
-
-별도 승인된 shadow 실측은 2026-08-05에 page 1, `max-details=0`, Playwright dry-run으로 정확히 한 번 실행됐다. 4,543ms 안에 108,830-byte schema-2 snapshot이 완성됐고, result root 1개 안의 numeric link 90개는 production ordinary 0, promoted 0, rejected 90으로 유지됐다. 고유 numeric posting ID와 provisional group은 26개였으며 22개가 반복 sibling 구조로 적격, 4개가 구조적으로 거절됐다. 적격 group은 link 3개짜리 22개였고 최대 sibling count는 25였다. production 분류는 계속 `malformed_results`이며 `JOBKOREA_ORDINARY_CONTAINER_CONTRACT_MISMATCH`와 `JOBKOREA_PROVISIONAL_ORDINARY_STRUCTURE_DETECTED`가 함께 유지된다. 이는 provisional 구조 증거일 뿐 ordinary selector나 실제 공고 승격 근거가 아니다.
-
-같은 실측은 나머지 4개 posting ID가 link 6개씩으로 넓은 공통 ancestor에 걸친 split/duplicate 형태임을 드러냈다. 기존 shadow reason 분기는 descendant 200개 초과를 먼저 기록해 multi-ID ancestor의 `DUPLICATE_GROUP`을 가렸다. 후속 오프라인 수정은 두 사실을 모두 집계하도록 바꾸고 large split synthetic Chromium 회귀 테스트를 추가했다. CLI diagnostic도 고유 ID 수, truncation 상태, 반복 parent summary와 최대 5개의 sanitized group sample을 보존한다. 승인된 실요청은 반복하지 않았으므로 이번 실행의 숨겨졌던 repeated-parent 세부값은 사후에 추정하지 않는다. 상세 navigation, page 2, `_GI_List`, retry, SQLite write는 모두 0이었다. 다음 단계는 이 수정된 진단으로 **별도 승인된 page-1, `max-details=0` dry-run 1회**를 수행해 split-group 및 repeated-parent 값을 직접 재측정하는 것이다.
-
-## 잡코리아 수동 bounded 수집
-
-### 목록 정보 fallback의 실제 수집 결과
-
-2026-08-05 실제 HTTP-first dry-run에서는 검색 1페이지에서 numeric link 90개와 고유 posting ID 25개를 측정하고 5개를 선택했다. 다섯 상세 요청은 모두 HTTP 200, redirect 0회였지만 응답 본문은 `JOBKOREA_LOGIN_REDIRECT`로 분류되어 상세 parser 성공은 0건이었다. 요청 URL과 최종 canonical URL은 일치했고 dry-run 전후 SQLite는 완전히 동일했다.
-
-`--allow-listing-fallback`을 지정하면 상세가 차단된 posting ID에 대해 이미 렌더링된 검색 결과 카드에서 제목과 회사명이 모두 검증되는 경우에만 제한적인 목록 정보 공고를 만든다. 지역, 급여, 고용형태, 경력, 학력, 게시일과 마감일은 명시적인 카드 필드에서 확인될 때만 보존한다. raw HTML, 카드 전체 본문, 상세 설명은 저장하지 않는다. 목록 정보는 `bounded_listing_collection` provenance와 `listing_only` 완성도로 기록되며 상세 확인 데이터보다 우선하지 않고 기존 상세 확인 공고를 절대 downgrade하지 않는다.
-
-```powershell
-Set-Location C:\NearbyJobsMap
-npm.cmd run collect:jobkorea:once -- `
-  --search-url "https://www.jobkorea.co.kr/Search?stext=AI" `
-  --pages 1 `
-  --max-details 5 `
-  --dry-run `
-  --confirm `
-  --allow-listing-fallback
-```
-
-Write mode 역시 수동 실행이며 `--write`, `--confirm`, `--allow-listing-fallback`을 명시한다. 최대 3페이지, 30개 고유 posting ID, 상세 동시성 2, retry 0 제한은 그대로 유지된다.
-
-```powershell
-npm.cmd run collect:jobkorea:once -- `
-  --search-url "https://www.jobkorea.co.kr/Search?stext=AI" `
-  --pages 3 `
-  --max-details 30 `
-  --write `
-  --confirm `
-  --allow-listing-fallback
-```
-
-Fallback dry-run은 5건의 목록 정보 insert를 예측하면서 DB를 변경하지 않았다. 이어진 bounded write는 3페이지에서 numeric link 240개, 고유 posting ID 64개를 측정하고 처음 30개를 처리했다. 상세 결과는 login 분류 29건과 verification 분류 1건이었고 검증된 목록 정보 30건을 insert했다. 완료 후 SQLite는 jobs 46, ingestion runs 9, ingestion items 94, provenance rows 46이며 중복 source identity는 0건이다.
-
-UI는 수집된 공고에 `잡코리아`, `수동 수집`, `목록 정보`를 표시하고 상세 확인 공고에는 `상세 확인`을 표시한다. 목록 정보에는 상세 내용이 확인되지 않았다는 짧은 안내가 노출된다. 좌표가 없는 수집 공고도 목록에서는 사용할 수 있지만 지도 marker는 만들지 않는다. 이 수집은 공식 API나 제휴 feed가 아니며 사용 권한은 여전히 미확인 상태다. scheduler, background crawler, 인증, 쿠키 재사용 또는 접근 제어 우회는 없다.
-
-제품 경계는 이제 `검색 페이지 → result root 안 숫자 posting ID → 상세 페이지 검증 → CanonicalJob → SQLite`로 연결된다. 미해결 ordinary 컨테이너 판정은 목록 provenance metadata일 뿐 상세 방문 gate가 아니다. result root 밖 링크, 비숫자 ID, 비정규 URL은 제외하며 페이지 번호와 최초 source 위치 순서로 posting ID를 중복 제거한다. 상세 페이지의 ID, JobPosting 구조, 제목, 회사명, 기존 parser·normalizer 및 canonical 검증이 저장 여부의 최종 기준이다.
-
-Dry-run은 상세 페이지까지 확인하고 insert/update/unchanged를 예측하지만 ingestion run, item, provenance 또는 job을 쓰지 않는다.
-
-```powershell
-Set-Location C:\NearbyJobsMap
-npm.cmd run collect:jobkorea:once -- `
-  --search-url "https://www.jobkorea.co.kr/Search?stext=AI" `
-  --pages 1 `
-  --max-details 5 `
-  --dry-run `
-  --confirm
-```
-
-Write 모드는 `--write`와 `--confirm`을 모두 요구한다.
-
-```powershell
-npm.cmd run collect:jobkorea:once -- `
-  --search-url "https://www.jobkorea.co.kr/Search?stext=AI" `
-  --pages 3 `
-  --max-details 30 `
-  --write `
-  --confirm
-```
-
-하드 한도는 목록 3페이지, 상세 30건, 상세 동시성 2, retry 0이다. 상세는 기존 bounded plain-HTTP transport를 우선 사용하고, login/root/access-control 응답을 정상 공고로 파싱하지 않는다. 별도 증거 없이 browser fallback으로 요청을 늘리지 않는다. page 4, `_GI_List`, 로그인, 쿠키·프로필 재사용, stealth, 우회, scheduler 및 background crawler는 사용하지 않는다. 실패한 상세는 한도를 소비하며 대체 후보를 요청하지 않는다. write 결과는 exact identity(`jobkorea + sourcePostingId`)와 content hash로 멱등 upsert하고 `bounded_manual_collection` provenance와 listing page·position·classification·관찰 링크 수를 남긴다. UI는 이를 `수동 수집`으로 표시해 fixture와 fictional demo를 구분한다. 좌표가 없는 공고는 목록에는 남지만 지도 marker를 만들지 않는다.
-
-기술적으로 공개 페이지를 읽을 수 있다는 사실은 수집·재사용 허가를 뜻하지 않는다. 이 명령은 명시적으로 실행하는 제한된 로컬 도구이며 공식 API, 제휴 feed 또는 지속적인 실시간 연동이 아니다.
-
-2026-08-05에 최초 product dry-run을 승인된 한 번만 수행했다. listing page 1에서 numeric link 90개와 고유 posting ID 26개를 얻어 앞의 5개를 선택했으나, 당시 browser detail 경계의 5개 요청은 모두 `JOBKOREA_LOGIN_REDIRECT`였고 parser 성공은 0개였다. 따라서 write gate는 실패했고 3페이지/30건 write 명령은 실행하지 않았다. DB hash와 jobs 16, ingestion runs 8, provenance 16, ingestion items 64는 모두 변하지 않았다. 이 측정 뒤 구현은 요구된 bounded HTTP detail 우선 경계로 오프라인 교정했으며 mock test만 수행했다.
-
-별도 승인된 HTTP-first 실제 dry-run도 page 1의 numeric link 90개와 고유 posting ID 26개에서 동일한 앞 5개를 선택했다. 명령은 6.171초에 종료됐고 다섯 canonical desktop 상세 URL 모두 첫 HTTP redirect에서 `JOBKOREA_LOGIN_REDIRECT`로 분류됐다. 유효 상세 body가 없었으므로 parser·normalizer·canonical validation은 실행되지 않았고 예상 insert/update/unchanged는 모두 0이었다. dry-run 전후 DB SHA-256과 jobs 16, ingestion runs 8, provenance 16, ingestion items 64, one-shot records 0은 동일했다. 이 결과는 **그 anonymous HTTP 요청 계약의 로그인 redirect**를 뜻하며 공개 browser 상세의 일반 접근 가능성까지 부정하지 않는다.
-
-같은 실행 뒤 오프라인 점검에서 HTTP-first client가 요구된 browser-like 식별자 대신 이전 prototype UA를 계속 사용하고, redirect의 sanitized target/status/hop을 결과에서 버리는 구현 격차를 확인했다. client는 이제 `Mozilla/5.0` 호환 문자열 끝에 `NearbyJobsMap/0.1 bounded-manual-collection`을 명시하고 공개 페이지용 `Accept`, `Accept-Language`, `Cache-Control`만 전송한다. cookie, authorization, referer는 보내지 않는다. redirect는 최대 3 hop, HTTPS allowlist, 동일 posting ID를 강제하며 query를 제거한 host/path와 status만 보존한다. desktop↔mobile 동일-ID redirect, login, root, malformed/ID 변경을 분리한다. 이후 승인된 실제 HTTP-first dry-run에서는 다섯 요청 모두 HTTP 200과 redirect 0회를 측정했지만 응답 본문이 login 페이지로 분류되어 상세 parser는 성공하지 못했다. 따라서 상세 transport 성공을 가장하지 않고 검증된 listing fallback으로 bounded write를 완료했다.
-
-## 잡코리아 지역 preset과 UI 필터
-
-수동 collection preset은 공개 keyword search를 사용한 뒤 listing card의 원본 location을 로컬에서 정규화한다. JobKorea의 undocumented region query parameter에는 의존하지 않는다. `seoul-ai`는 서울·3페이지·30건, `gyeonggi-ai`는 경기·3페이지·30건, `capital-ai`는 서울과 경기·5페이지·50건이며 모두 listing fallback을 활성화한다. hard cap은 5페이지·50건, detail 동시성 2, retry 0이다. override는 preset 한도를 줄일 수만 있다.
-
-```powershell
-npm.cmd run collect:jobkorea:once -- --preset seoul-ai --dry-run --confirm
-npm.cmd run collect:jobkorea:once -- --preset gyeonggi-ai --write --confirm
-npm.cmd run collect:jobkorea:once -- --preset capital-ai --pages 2 --max-details 20 --write --confirm
-```
-
-서울의 직접 표기와 25개 자치구, 경기의 직접 표기와 31개 시·군을 명시적 mapping으로 판정한다. 복수 location은 일치하는 모든 region을 보존하고 어느 하나가 요청 region과 일치하면 포함한다. 누락·모호한 location은 `unknown`이며 서울/경기 preset에서 제외된다. original location은 덮어쓰지 않고 normalized region, confidence, preset ID·label, keyword, requested region, 관찰 시각을 provenance metadata로 보존한다. 기존 30개 listing observation 중 원본 location으로 결정 가능한 20개는 이번 preset write에서 서울 10개·경기 10개로 갱신됐고, location이 없는 10개는 unknown으로 남았다.
-
-2026-08-06 승인된 `capital-ai --pages 2 --max-details 20` 실제 dry-run은 2페이지에서 numeric link 156개와 region filter 전 unique posting ID 44개를 측정했다. 서울 27개, 경기 13개, 복수 0개, unknown 4개였고 unknown 4개를 제외한 뒤 앞의 20개를 선택했다. detail은 login 19개와 verification 1개로 모두 차단됐지만 title/company가 검증된 listing fallback 20개가 기존 identity의 update로 예측됐으며 DB SHA-256과 46 jobs·9 runs·94 items·46 provenance는 변하지 않았다.
-
-이어진 단 한 번의 write도 2페이지·20개 후보로 완료됐다. detail parse는 0개, listing-only fallback은 20개, insert/update/unchanged는 0/20/0이었다. 최종 SQLite는 46 jobs, 10 ingestion runs, 114 ingestion items, 66 provenance rows이며 duplicate source identity는 0개다. 이는 공식 API나 source-provided region filter가 아니며 permission은 계속 `unverified`다.
-
-UI filter는 source, provenance(수동 수집·픽스처·데모), completeness(목록 정보·상세 확인), region(서울·경기·기타·지역 미확인), posting status, map eligibility를 제공한다. category 간에는 AND로 결합하고 keyword search는 title·company·location·employment type·source를 포함한다. 결과는 `전체 중 표시 · 지도 가능` 수로 요약되며 reset은 기본값을 복원한다. preference는 version 2 localStorage에 저장되고 이전 version 1 값은 안전하게 보완하며 알 수 없는 stale 값은 무시한다. 실제 46개 데이터에서 잡코리아+수동 수집+목록 정보 조합은 서울 10개, 경기 10개, 지역 미확인 10개이고 좌표가 없어 map-eligible은 0개다. reset 결과는 46개 목록과 8개 marker다.
-# 로컬 수집 관리 화면
-
-`NEARBY_JOBS_ENABLE_COLLECTION_UI=1`로 로컬 개발 서버를 시작하면 `/collection`에서 기존 잡코리아 프리셋(`seoul-ai`, `gyeonggi-ai`, `capital-ai`)을 수동 실행할 수 있다. 공개 환경과 비로컬 호스트에서는 실행 API가 기본적으로 거부된다. 화면은 프리셋 기본값보다 작은 페이지 수와 후보 수만 허용하며 동시성 2, 재시도 0, 목록 대체 정책은 기존 CLI 수집 서비스와 동일하다.
-
-먼저 드라이런을 확인하고 실행한다. 유효한 상세 또는 목록 대체 레코드가 하나 이상 만들어진 경우에만 서버가 동일한 preset/pages/max-details 설정에 묶인 30분짜리 쓰기 승인을 발급한다. 실제 쓰기는 `WRITE <preset-id>` 문구가 정확히 일치해야 하며 한 번 사용한 승인은 재사용할 수 없다. 진행 상태는 750ms 로컬 polling으로 표시되고, 최근 실제 수집 10건은 기존 ingestion run 데이터에서 읽는다. 드라이런 상태는 SQLite에 쓰지 않는다.
-
-이 기능은 scheduler나 원격 queue가 아니다. 프로세스 안에서 한 번에 하나의 수동 실행만 유지하므로 개발 서버가 재시작되면 메모리의 진행 상태와 쓰기 승인이 사라질 수 있다. 이 경우 화면은 실행 상태를 찾을 수 없다고 표시하며 완료를 추정하지 않는다.
-
-2026-08-06 실제 UI 계약 검증은 `seoul-ai`, 1페이지, 후보 5건 드라이런으로 한 번 수행됐다. 명령 시작과 polling은 정상 동작했고 4.3초 내 구조화된 결과가 반환됐지만, 당시 공개 검색 페이지가 `unexpected_page`로 분류되어 숫자 링크와 유효 레코드는 0건이었다. SQLite SHA-256과 jobs 46, ingestion runs 10, ingestion items 114, provenance 66은 모두 그대로였다. 따라서 쓰기 승인은 발급되지 않았고 실제 쓰기 실행은 수행하지 않았다. 이 결과는 잡코리아 접근 제한이나 빈 검색 결과를 의미하지 않는다.
-
-## 다중 소스 제외 키워드
-
-잡코리아와 알바몬 수동 수집은 공통 제외 엔진을 사용한다. 문자열은 Unicode NFKC, 앞뒤 공백 제거, 연속 공백 축약, 영문 소문자화 후 리터럴 부분 문자열로 비교한다. 정규식·wildcard·실행 가능한 표현식은 지원하지 않는다. 키워드는 최대 30개, 정규화 후 2~50자이며 중복은 첫 입력 순서를 유지한 채 제거한다. 선택 필드는 공고명(`title`), 회사명(`company`), 지역(`location`), 직종·카테고리(`category`), 고용형태(`employment_type`), 근무 일정(`work_schedule`)이고 기본값은 공고명과 직종·카테고리다.
-
-수집 순서는 카드 검증과 posting ID 중복 제거, 지역 정규화·필터, 제외 키워드 필터, 후보 상한 순이다. 따라서 제외 공고는 상세 시도나 ingestion item을 소비하지 않는다. dry-run 결과에는 제외 전·제외·제외 후 후보 수, 키워드·필드별 aggregate, 최대 20개의 posting ID/page/position sample만 표시한다. write 승인은 source, preset, pages, max-details와 함께 정규화된 키워드 순서와 필드 및 SHA-256 설정 hash에 묶인다. 변경 시 같은 설정으로 dry-run을 다시 실행해야 한다. write run은 migration `0006`의 ingestion-run metadata에 설정과 aggregate를 기록한다.
-
-```powershell
-npm.cmd run collect:jobkorea:once -- --preset capital-ai --pages 2 --max-details 20 --exclude-keyword "전기" --exclude-keyword "강사" --exclude-field title --exclude-field category --dry-run --confirm
-npm.cmd run collect:albamon:once -- --preset albamon-capital-today --pages 2 --max-details 20 --exclude-keyword "강사" --exclude-field title --dry-run --confirm
-```
-
-`/collection`은 쉼표·줄바꿈 paste, removable chip, field checkbox와 전체 지우기를 제공하며 versioned localStorage에는 편의를 위한 최신 설정만 둔다. 서버 검증이 권위 있는 경계다. jobs 화면의 “화면 제외 키워드”는 같은 규칙으로 기존 목록과 marker를 임시로 숨길 뿐 SQLite를 변경하지 않는다. 양수 keyword search와 기존 source/provenance/completeness/region/status/map 필터 뒤에 적용하며 전체 필터 초기화에 함께 초기화된다.
-
-알바몬 live 요청은 이 기능 작업에서 수행하지 않았고 정상 live listing dry-run이 성공하기 전까지 write gate는 그대로 유지한다. 2026-08-06 실제 잡코리아 UI service-path dry-run은 `capital-ai`, 1페이지, 후보 10건, 키워드 `전기·스트리머·강사·수학·공인중개사·웨이터`, 필드 `title·category`로 정확히 한 번 실행됐다. 4.36초 안에 완료됐지만 검색 페이지가 `unexpected_page`로 분류되어 numeric link, 지역 후보, 제외 전·제외·제외 후 후보, 선택 후보가 모두 0이었다. 따라서 제외 aggregate도 비어 있었고 write authorization은 발급되지 않아 write는 실행하지 않았다. dry-run 전후 SQLite는 SHA-256 `5524DCF962B00B43C027626BB7781AC2B9B329A9D33287B44C754EDE32D4E356`, jobs 46, ingestion runs 10, ingestion items 114, provenance rows 66, source identity duplicate 0으로 동일했다. 이 hash는 데이터 변경이 아니라 forward migration `0006` 적용 뒤의 기준값이다. 연결 가능한 UI browser가 없어 실제 클릭 재현은 수행하지 못했으며 `/collection`과 `/` HTTP 200, jsdom 상호작용 테스트, 전체 build로 화면 경계를 검증했다.
-
-## 알바몬 bounded 목록 수집
-
-알바몬 첫 live 수집 경계는 공개 browser-rendered `https://www.albamon.com/jobs/total` 목록만 사용한다. `/jobs/detail/{numeric-id}`는 identity와 안전한 source link로만 정규화하며 상세 페이지나 undocumented BFF는 요청하지 않는다. 각 페이지는 `page`, `sortType=POSTED_DATE`, `size=50`, `searchPeriodType=TODAY`를 `URLSearchParams`로 만들고 사용자가 정한 페이지 수를 정확히 방문한다. duplicate-only 또는 신규 ID 0개 페이지를 empty로 간주하거나 조기 종료하지 않는다.
-
-내장 preset은 `albamon-seoul-today`(3페이지·30건), `albamon-gyeonggi-today`(3페이지·30건), `albamon-capital-today`(5페이지·50건)다. CLI에서도 같은 source adapter와 collection service를 사용한다. `--max-details`는 호환성을 위해 유지한 이름이며 이 단계에서는 상세 요청 수가 아니라 최대 선택 listing record 수다.
-
-```powershell
-npm.cmd run collect:albamon:once -- --preset albamon-seoul-today --pages 1 --max-details 5 --dry-run --confirm
-npm.cmd run collect:albamon:once -- --preset albamon-capital-today --pages 2 --max-details 20 --write --confirm
-```
-
-카드는 numeric posting ID 하나만 포함하는 bounded row/card여야 하며 제목과 회사명이 모두 있어야 저장 후보가 된다. 원본 location은 보존하고 서울·경기 판정은 카드 추출 후 candidate cap 전에 로컬로 수행한다. 저장 레코드는 `bounded_listing_collection`, `listing_only`, detail access `not_attempted`, permission `unverified`로 구분되며 raw HTML·전체 card text·description·개인 연락처를 보존하지 않는다. 이후 detail-complete 데이터가 생겨도 listing-only 데이터가 이를 downgrade하지 않는다.
-
-`/collection`은 잡코리아와 알바몬 preset을 source-aware 카드로 함께 보여 주며 기존 로컬 전용 flag, one-active-run, 750ms polling, 30분 dry-run binding과 `WRITE <preset-id>` 확인을 그대로 사용한다. 최근 실제 수집에는 source badge가 표시되고, jobs 화면은 알바몬 레코드가 존재할 때 동적 source filter와 `알바몬`·`수동 수집`·`목록 정보` 표기를 사용한다. 좌표가 없는 목록 공고에는 marker를 만들지 않는다.
-
-2026-08-06 승인된 실제 `albamon-capital-today`, 2페이지, 후보 20건 UI dry-run은 로컬 run manager를 통해 한 번 실행되어 3.43초 안에 종료됐다. 두 listing navigation 모두 `transport_failed`였고 완료 페이지·숫자 링크·고유 ID·유효 listing record는 모두 0이었다. 따라서 write authorization은 발급되지 않았고 실제 write run은 실행하지 않았다. dry-run 전후 SQLite SHA-256은 `1FA4E0AD4CD2AAF1AEC3B83C7E4BFC9DD30EE3231DF039270CB9CBAF3181FD21`, jobs 46, ingestion runs 10, ingestion items 114, provenance rows 66으로 동일했다. 이 실측 뒤 navigation 예외가 민감한 메시지 없이 DNS/TLS/timeout/일반 실패 enum으로 남도록 오프라인 보강했으며 실요청은 반복하지 않았다.
-
-## 통합 수집 대시보드
-
-로컬에서 `NEARBY_JOBS_ENABLE_COLLECTION_UI=1`로 서버를 시작하면 `/collection`은 기본 `개요`와 기존 `수집 실행` 탭을 제공한다. 개요는 읽기 전용이며 현재 jobs 행, 소스·provenance·완성도·지역·좌표 범위, persisted write run, 제외 키워드 설정 영향을 보여 준다. `수집 실행`에는 기존 preset, 제외 키워드, dry-run, 동일 설정 write 승인, 진행 polling과 확인 문구 흐름이 그대로 남아 있다.
-
-현재 재고는 SQLite `jobs` 행을 한 번씩 세므로 여러 provenance 관찰을 공고 여러 건으로 중복 집계하지 않는다. fixture, fictional demo, 수동 수집, 목록 정보, 상세 확인과 완성도 미상은 서로의 의미를 숨기지 않는다. 지역 미확인은 추측하지 않고, 지도 커버리지는 이미 저장된 표시 좌표만 사용하며 geocoding을 실행하지 않는다.
-
-실행 분석의 기간(7일·30일·전체), 소스(전체·잡코리아·알바몬), 상태(전체·완료·실패) 필터는 persisted write history와 최근 20건에만 적용된다. 전체 재고 카드는 항상 현재 DB 전체를 나타낸다. dry-run은 DB history에 섞지 않고 in-memory active run 또는 임시 결과로만 다룬다. run 상세는 preset, 지역, 페이지와 후보 한도, 제외 설정, 처리 결과와 bounded failure category만 노출하며 raw source payload, stack trace, description, cookie, header를 반환하지 않는다.
-
-Migration `0006` 이후 write run은 제외 keyword·field와 전후 후보 수를 집계할 수 있다. 대시보드는 사용 빈도가 높은 keyword 최대 10개와 지원 field 사용 수를 보여 준다. 이전 run에 저장되지 않은 preset, 제외 설정, 수율 분모 또는 timing은 `0`으로 꾸미지 않고 `정보 없음` 또는 `이전 형식`으로 표시한다.
-
-대시보드 데이터는 parameterized read-only SQLite 집계와 `GET /api/collection-dashboard`, `GET /api/collection-dashboard/runs/{runId}`에서 제공된다. 새로고침, 개요 탭 복귀, write 완료 시 한 번 새로 읽으며 active run이 없을 때 지속 polling하지 않는다. 대시보드를 표시하거나 필터링하는 동작은 JobKorea·Albamon source request나 SQLite write를 시작하지 않는다.
-
-## 저장된 수집 프로필
-
-`/collection`의 `수집 실행` 탭에서는 불변인 기본 프리셋을 SQLite 기반 저장 프로필로 복사할 수 있다. 저장 프로필은 이름, 승인된 source adapter와 base preset, 잡코리아 keyword 또는 알바몬 `오늘 등록` 전략, 서울·경기 범위, 페이지·후보 상한, 제외 keyword·field, 즐겨찾기를 보존한다. 임의 URL·host·명령·SQL·정규식·cookie·환경 변수는 저장하지 않으며, 페이지와 후보 수는 base preset의 기본값과 전역 5페이지·50건 상한을 늘릴 수 없다.
-
-기본 프리셋은 이름 변경·편집·삭제할 수 없고 저장 프로필만 편집·복제·삭제·즐겨찾기할 수 있다. 프로필 ID는 opaque UUID이고 이름은 NFKC·공백 정규화 및 영문 대소문자 무시 기준으로 고유하다. source와 base preset은 생성 후 불변이다. 구성 편집은 optimistic `expectedRevision`을 요구하고 revision과 SHA-256 configuration hash를 바꾼다. 이름과 즐겨찾기는 configuration hash에 포함되지 않으며, 즐겨찾기 전환은 revision이나 기존 dry-run 승인을 무효화하지 않는다. `lastUsedAt`은 엄격한 dry-run DB 무변경을 유지하기 위해 저장 프로필 write run이 시작될 때만 갱신한다.
-
-저장 프로필을 선택하면 기존 실행 화면에 구성이 채워진다. 페이지와 후보 수는 해당 실행에 한해 더 줄일 수 있고, `프로필에 저장`을 선택하면 expected revision을 사용해 영구 반영한다. 실행은 profile ID·name snapshot·revision·configuration hash를 immutable snapshot으로 고정한다. dry-run 이후 프로필 구성이 바뀌거나 삭제되면 기존 write authorization은 거부되고 새 dry-run이 필요하다. 실제 write run은 profile snapshot을 ingestion run에 저장하므로 나중에 프로필이 삭제되어도 과거 실행 이름·revision·hash를 표시할 수 있다. 프로필 삭제는 jobs, ingestion runs/items 또는 provenance를 삭제하지 않는다.
-
-프로필 CRUD API(`/api/collection-profiles`)도 수집 실행 API와 같은 localhost 및 `NEARBY_JOBS_ENABLE_COLLECTION_UI=1` 경계를 사용한다. `/collection` 개요에는 저장 프로필 전체·소스별·즐겨찾기·최근 30일 사용 수와 최근 사용 프로필을 표시하며, 실행 이력과 프로필을 서로 다른 데이터로 다룬다. 이 기능은 scheduler나 자동 실행을 추가하지 않는다. 구현 검증 중 JobKorea·Albamon source request는 수행하지 않는다.
-
-## 저장 프로필 결과 비교
-
-`/collection`은 `개요`, `프로필 비교`, `수집 실행`의 세 탭을 제공한다. `프로필 비교`는 현재 존재하는 저장 프로필 2~4개를 선택해 현재 구성, 제외 설정, persisted write run 성과와 정확한 공고 identity 중복을 읽기 전용으로 보여 준다. 선택한 opaque profile ID, 기간(`7d`, `30d`, `all`)과 revision 범위(`current`, `all`)는 검증된 URL query로 보존되며 stale 또는 삭제된 ID는 안전하게 제거한다. built-in preset은 먼저 저장 프로필로 복사해야 비교할 수 있다.
-
-현재 리비전 모드는 run의 saved profile ID뿐 아니라 revision과 configuration hash가 현재 프로필과 모두 일치하는 write run만 포함한다. 모든 리비전 모드는 같은 profile ID에 연결된 모든 persisted write run을 포함하고 revision 분포와 현재 revision 사용 여부를 표시한다. 이름이 같은 프로필이나 삭제 후 재사용된 이름으로 실행 이력을 연결하지 않는다. dry-run은 DB write history가 아니므로 비교에서 제외하며, 이전 형식 run에 없는 exclusion·분모·hash 정보는 `0`으로 추정하지 않고 `정보 없음`으로 남긴다.
-
-성과율은 명시적으로 저장된 선택 후보를 분모로 한다. 제외율은 `제외 후보 / 제외 전 후보`, 실패율은 `실패 item / 선택 후보`, 삽입·갱신율은 `(inserted + updated) / 선택 후보`, 유효 레코드 수율은 `(inserted + updated + unchanged + lower-completeness skip) / 선택 후보`, 목록 대체율은 `listing fallback / 선택 후보`다. 분모 또는 historical evidence가 없으면 백분율도 `정보 없음`이다.
-
-공고 중복은 profile-linked write run의 성공 item(`inserted`, `updated`, `unchanged`, `skipped`)에 저장된 정확한 `(source, sourcePostingId)`만 사용한다. failed item과 선택 전 제외 후보는 포함하지 않는다. 같은 source 프로필은 공통·고유 identity, 작은 집합 기준 중복률과 Jaccard를 계산하지만 서로 다른 source에는 fuzzy title/company matching을 적용하지 않고 `해당 없음`을 표시한다. 이 수치는 현재 jobs 행을 역추정한 것이 아니라 persisted 실행 기록 기준이므로 현재 공고의 최신 상태와 다를 수 있다.
-
-비교 API `POST /api/collection-profile-comparison`은 다른 collection-control API와 같은 localhost·feature-flag·origin 경계를 사용하며 typed ID 배열만 받는다. parameterized SQLite read만 수행하고 collection 시작, source request, job/run/item/provenance write를 하지 않는다. 프로필 비교 구현 및 로컬 검증에서도 JobKorea·Albamon 요청이나 collection run은 수행하지 않았다.
-
-메인 화면의 `수집 관리` 링크는 inline anchor baseline이 `.button`의 높이 계약과 맞지 않아 글자가 위로 보이던 문제를 해결했다. 전용 `inline-flex`, 수직·수평 중앙 정렬, 일정한 line-height를 적용하되 기존 42px 최소 높이·padding·focus·responsive flex 동작은 그대로 유지한다. pixel offset이나 `translateY` 보정은 사용하지 않는다.
-
-## 저장 프로필 가져오기와 내보내기
-
-`/collection`의 `수집 실행` 탭에서 저장 프로필 하나, 선택한 여러 프로필 또는 전체 프로필을 JSON으로 내보낼 수 있다. 파일 형식은 `nearby-jobs-collection-profiles` version 1이며 UTF-8로 기록한다. 파일에는 이름, 승인된 source/base preset/strategy, JobKorea keyword, 지역, 페이지와 후보 한도, listing fallback, 제외 keyword·field, 즐겨찾기와 정보용 source revision/hash만 들어간다. 로컬 profile ID, 생성·수정·최근 사용 시각, jobs, ingestion history, provenance, 활성 run, write authorization, cookie·credential·DB 경로는 포함하지 않는다.
-
-가져오기는 최대 512 KiB, 100개 프로필의 JSON 파일 하나만 받는다. 첫 단계의 15분짜리 opaque 미리보기는 SQLite를 쓰지 않으며 각 행을 현재 프로필 생성 validator로 다시 정규화하고 hash를 계산한다. 미리보기는 새 프로필, 동일 프로필, 이름 충돌·다른 구성, 같은 구성·다른 이름, 오류 및 지원하지 않는 source/preset을 구분한다. 파일의 revision과 configuration hash는 진단 정보일 뿐 권위가 없고, 로컬 계산 hash가 항상 기준이다.
-
-확인 단계에서는 `새로 만들기`, `건너뛰기`, `이름을 바꿔 새로 만들기`, 이름 충돌 대상에 한정한 `기존 프로필 바꾸기`를 명시적으로 선택한다. 동일 항목은 기본적으로 건너뛰며 이름 충돌은 자동 덮어쓰지 않는다. 교체는 미리보기에 묶인 expected revision과 확인 checkbox를 요구하고 실행 중인 프로필은 거부한다. 선택한 create/replace는 하나의 transaction으로 적용되어 하나라도 충돌하면 전체가 rollback된다. 생성된 프로필은 새 opaque ID, revision 1, 새 시각, null `lastUsedAt`을 가지며 즐겨찾기와 정규화된 구성은 보존한다. 가져온 프로필은 즉시 실행 목록과 프로필 비교에서 사용할 수 있지만 실행 이력을 만들거나 수집을 자동 시작하지 않는다.
-
-가져오기·내보내기 API는 다른 수집 관리 API와 같이 localhost, `NEARBY_JOBS_ENABLE_COLLECTION_UI=1`, local origin을 모두 요구한다. 원격 URL, 파일 경로, 명령, SQL, JavaScript, 임의 source adapter는 입력으로 받지 않는다. 서버 재시작 시 메모리 미리보기 token은 사라지며 확인 전에 다시 미리보기해야 한다.
-## Local MVP workspace (2026-08-06)
-
-NearbyJobsMap now provides a complete local-first job-search workspace without automatic source access.
-
-- First-run onboarding explains local SQLite storage, fixture/demo/manual labels, list-first navigation, bounded collection, regions, exclusions, and the personal workflow. Completion uses versioned browser storage (`nearby-jobs-onboarding-v1`), and Help can reopen it.
-- Personal state is stored separately in `job_user_state`: favorite, hidden, archived, ten workflow statuses, a plain-text note (maximum 5,000 characters), application date, follow-up date, and personal deadline. It never overwrites source fields.
-- Migration `0009` stores bounded observations and field-level changes without raw HTML or full descriptions. First/last seen, last changed, observation count, and 7/14/30-day not-observed labels are evidence summaries. Not observed does not mean closed or deleted.
-- Existing salary filters remain unit-specific. No hourly/daily/monthly/annual conversion or working-hours assumption is fabricated; ambiguous salary remains unknown.
-- Saved job views persist strict filter configurations in SQLite and can be created, applied, and deleted without changing jobs.
-
-Saved collection profiles use UTF-8 JSON format `nearby-jobs-collection-profiles`, version 1. Export includes configuration and favorite state only—not local IDs, jobs, run history, provenance, authorizations, credentials, or database paths. Import is preview-first, uses a 15-minute opaque token, supports create/skip/rename/replace, and confirms all selected changes in one transaction. Local validation and recomputed hashes are authoritative.
-
-Local backup commands write into ignored `data/backups` and use SQLite's backup API plus a SHA-256 manifest:
-
-```powershell
-npm.cmd run backup:create
-npm.cmd run backup:list
-npm.cmd run backup:verify -- --file "nearby-jobs-<timestamp>.sqlite"
-npm.cmd run backup:restore -- --file "nearby-jobs-<timestamp>.sqlite" --confirm "RESTORE DATABASE"
-```
-
-Restore confines paths to the backup directory, verifies the header, integrity, manifest, and hash, rejects an active run, creates a pre-restore backup, and validates the restored database. Automated restore tests use temporary databases only.
-
-Enable local mutation APIs with `NEARBY_JOBS_ENABLE_COLLECTION_UI=1`. Collection controls, profiles, import/export, saved views, and personal-state writes remain localhost-only. This sprint made no JobKorea or Albamon request, started no collection, and added no scheduler.
+See [SECURITY.md](SECURITY.md).
