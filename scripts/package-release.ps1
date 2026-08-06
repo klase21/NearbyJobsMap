@@ -2,6 +2,11 @@
 param([string]$OutputDirectory="artifacts",[string]$Version="0.1.0")
 . (Join-Path $PSScriptRoot "windows-common.ps1")
 Enter-ProjectRoot
+function Get-RelativeReleasePath([string]$Root,[string]$FullName) {
+  $rootUri = [Uri]::new(([IO.Path]::GetFullPath($Root).TrimEnd('\') + '\'))
+  $fileUri = [Uri]::new([IO.Path]::GetFullPath($FullName))
+  return [Uri]::UnescapeDataString($rootUri.MakeRelativeUri($fileUri).ToString())
+}
 try {
   if($Version -notmatch '^\d+\.\d+\.\d+$'){throw "version 형식이 올바르지 않습니다."}
   $output=[IO.Path]::GetFullPath((Join-Path $script:ProjectRoot $OutputDirectory));$artifactRoot=[IO.Path]::GetFullPath((Join-Path $script:ProjectRoot "artifacts"));if(-not $output.StartsWith($artifactRoot,[StringComparison]::OrdinalIgnoreCase)){throw "release 출력은 artifacts 안에 있어야 합니다."}
@@ -11,7 +16,7 @@ try {
     if (Test-Path -LiteralPath (Join-Path $script:ProjectRoot ".git")) {
       $files=@(git ls-files);if($LASTEXITCODE-ne 0){throw "git ls-files 실패"}
     } else {
-      $files=@(Get-ChildItem -LiteralPath $script:ProjectRoot -File -Recurse | ForEach-Object { [IO.Path]::GetRelativePath($script:ProjectRoot,$_.FullName).Replace('\','/') })
+      $files=@(Get-ChildItem -LiteralPath $script:ProjectRoot -File -Recurse | ForEach-Object { Get-RelativeReleasePath $script:ProjectRoot $_.FullName })
     }
     $exclude='^(?:node_modules|\.next|data|artifacts|coverage|test-results|playwright-report|blob-report|\.git)(/|$)|(?:\.sqlite3?|\.db(?:-wal|-shm)?|\.zip|\.log|\.env\.local)$'
     $included=@($files|Where-Object{$_ -notmatch $exclude -and ($_ -eq ".env.example" -or $_ -notmatch '(^|/)\.env(?:\.|$)')})
