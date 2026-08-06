@@ -7,11 +7,11 @@ import type { CollectionPreset } from "../../sources/collection/collection-prese
 import { canonicalizeExclusionConfig, DEFAULT_EXCLUSION_FIELDS, EXCLUSION_FIELDS, normalizeCollectionExclusionConfig, splitExclusionKeywordInput, type CollectionExclusionConfig, type ExclusionField } from "../../services/collection-exclusion";
 import { loadCollectionExclusionPreferences, saveCollectionExclusionPreferences } from "../../repositories/collection-exclusion-preferences";
 
-interface Props { enabled: boolean; presets: CollectionPreset[] }
+interface Props { enabled: boolean; presets: CollectionPreset[]; onWriteCompleted?: () => void; onRunChange?: (run: CollectionRunSnapshot | null) => void }
 type ApiError = { error?: { message?: string } };
 const terminal = (run: CollectionRunSnapshot | null) => run?.status === "completed" || run?.status === "failed";
 
-export function CollectionControl({ enabled, presets }: Props) {
+export function CollectionControl({ enabled, presets, onWriteCompleted, onRunChange }: Props) {
   const [selectedId, setSelectedId] = useState(presets[0]?.id ?? "seoul-ai");
   const preset = useMemo(() => presets.find((item) => item.id === selectedId) ?? presets[0]!, [presets, selectedId]);
   const [pages, setPages] = useState<number>(preset.pages); const [maxDetails, setMaxDetails] = useState<number>(preset.maxDetails);
@@ -31,12 +31,12 @@ export function CollectionControl({ enabled, presets }: Props) {
 
   const loadHistory = useCallback(async () => { if (!enabled) return; const response = await fetch("/api/collection-runs/recent", { cache: "no-store" }); if (response.ok) setHistory((await response.json()).runs ?? []); }, [enabled]);
   useEffect(() => { void loadHistory(); if (!enabled) return; void fetch("/api/collection-runs/active", { cache: "no-store" }).then(async (response) => {
-    if (response.ok) { const active = (await response.json()).run as CollectionRunSnapshot | null; if (active) { setRun(active); setSelectedId(active.presetId); setPages(active.listingPagesRequested); setMaxDetails(active.maxDetailsRequested); setExclusion(active.exclusion ?? { keywords: [], fields: [] }); } }
-  }); }, [enabled, loadHistory]);
+    if (response.ok) { const active = (await response.json()).run as CollectionRunSnapshot | null; if (active) { setRun(active); onRunChange?.(active); setSelectedId(active.presetId); setPages(active.listingPagesRequested); setMaxDetails(active.maxDetailsRequested); setExclusion(active.exclusion ?? { keywords: [], fields: [] }); } }
+  }); }, [enabled, loadHistory, onRunChange]);
   useEffect(() => { if (!busy || !run) return; const timer = window.setInterval(async () => { const response = await fetch(`/api/collection-runs/${run.runId}`, { cache: "no-store" });
     if (response.status === 404) { setError("실행 상태를 찾을 수 없습니다. 서버가 재시작되었을 수 있습니다."); setRun(null); window.clearInterval(timer); return; }
-    if (response.ok) { const next = (await response.json()).run as CollectionRunSnapshot; setRun(next); if (terminal(next)) { window.clearInterval(timer); void loadHistory(); } }
-  }, 750); return () => window.clearInterval(timer); }, [busy, run, loadHistory]);
+    if (response.ok) { const next = (await response.json()).run as CollectionRunSnapshot; setRun(next); onRunChange?.(terminal(next) ? null : next); if (terminal(next)) { window.clearInterval(timer); void loadHistory(); if (next.mode === "write" && next.status === "completed") onWriteCompleted?.(); } }
+  }, 750); return () => window.clearInterval(timer); }, [busy, run, loadHistory, onWriteCompleted, onRunChange]);
   useEffect(() => { if (!busy) return; const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); }; window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn); }, [busy]);
 
   const choosePreset = (next: CollectionPreset) => { setSelectedId(next.id); setPages(next.pages); setMaxDetails(next.maxDetails); setRun(null); setWritePhrase(""); setError(null); };
@@ -49,7 +49,7 @@ export function CollectionControl({ enabled, presets }: Props) {
     if (mode === "write") { payload.writeAuthorizationToken = run?.writeAuthorizationToken; payload.confirmationPhrase = writePhrase; }
     const response = await fetch("/api/collection-runs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
     const body = await response.json() as CollectionRunSnapshot & ApiError; if (!response.ok) { setError(body.error?.message ?? "수집을 시작하지 못했습니다."); return; }
-    setRun(body); setConfirmingDryRun(false); if (mode === "write") setWritePhrase("");
+    setRun(body); onRunChange?.(body); setConfirmingDryRun(false); if (mode === "write") setWritePhrase("");
   };
 
   if (!enabled) return <section className="collection-disabled" role="status"><h2>수집 관리 비활성화</h2><p>로컬 서버를 <code>NEARBY_JOBS_ENABLE_COLLECTION_UI=1</code>로 시작해야 합니다. 공개 환경에서는 기본적으로 실행할 수 없습니다.</p></section>;

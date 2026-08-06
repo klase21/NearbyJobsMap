@@ -185,6 +185,18 @@
 - jobs 화면의 display exclusion은 SQLite를 변경하지 않으며 기존 filter preference의 versioned localStorage 경계와 reset 동작을 유지한다.
 - 이 기능 작업에서는 실제 알바몬 요청을 실행하지 않는다. 수집은 계속 수동 실행, 동시성 최대 2, retry 0이며 scheduler나 접근 제어 우회를 추가하지 않는다.
 
+## Collection Dashboard Protection
+
+- `/collection` 개요와 dashboard read API는 SQLite만 읽고 JobKorea·Albamon transport, parser collection 또는 write ingestion을 시작하지 않는다.
+- 현재 inventory는 `jobs` identity를 한 번씩 집계하며 여러 provenance observation이나 ingestion item을 공고 수로 중복 계산하지 않는다.
+- dry-run은 메모리의 임시 실행이며 persisted write-run history에 포함하거나 SQLite run으로 만들어서는 안 된다.
+- legacy run에 저장되지 않은 preset, exclusion, completeness, timing 또는 분모는 `null`/`정보 없음`으로 유지하고 기본값 `0`을 측정값처럼 표시하지 않는다.
+- 기간·source·status analytics filter는 run history에만 적용한다. 전체 inventory를 필터링할 때는 화면에 그 의미를 명확히 표시해야 한다.
+- dashboard SQL은 server-only repository에서 parameterized query로 실행하고 client 입력으로 SQL sort, column, expression을 조립하지 않는다.
+- dashboard 응답과 run detail에는 raw source payload, HTML, description, cookie, request header, response body 또는 stack trace를 포함하지 않는다.
+- collection 실행 controls와 mutation API의 localhost·feature flag·one-active-run·dry-run binding 보호를 유지한다.
+- dashboard 검증을 위해 live source collection이나 추가 transport run을 실행하지 않는다.
+
 ## Validation Policy
 
 모든 변경은 다음 명령을 통과해야 한다.

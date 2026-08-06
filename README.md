@@ -348,3 +348,15 @@ npm.cmd run collect:albamon:once -- --preset albamon-capital-today --pages 2 --m
 `/collection`은 잡코리아와 알바몬 preset을 source-aware 카드로 함께 보여 주며 기존 로컬 전용 flag, one-active-run, 750ms polling, 30분 dry-run binding과 `WRITE <preset-id>` 확인을 그대로 사용한다. 최근 실제 수집에는 source badge가 표시되고, jobs 화면은 알바몬 레코드가 존재할 때 동적 source filter와 `알바몬`·`수동 수집`·`목록 정보` 표기를 사용한다. 좌표가 없는 목록 공고에는 marker를 만들지 않는다.
 
 2026-08-06 승인된 실제 `albamon-capital-today`, 2페이지, 후보 20건 UI dry-run은 로컬 run manager를 통해 한 번 실행되어 3.43초 안에 종료됐다. 두 listing navigation 모두 `transport_failed`였고 완료 페이지·숫자 링크·고유 ID·유효 listing record는 모두 0이었다. 따라서 write authorization은 발급되지 않았고 실제 write run은 실행하지 않았다. dry-run 전후 SQLite SHA-256은 `1FA4E0AD4CD2AAF1AEC3B83C7E4BFC9DD30EE3231DF039270CB9CBAF3181FD21`, jobs 46, ingestion runs 10, ingestion items 114, provenance rows 66으로 동일했다. 이 실측 뒤 navigation 예외가 민감한 메시지 없이 DNS/TLS/timeout/일반 실패 enum으로 남도록 오프라인 보강했으며 실요청은 반복하지 않았다.
+
+## 통합 수집 대시보드
+
+로컬에서 `NEARBY_JOBS_ENABLE_COLLECTION_UI=1`로 서버를 시작하면 `/collection`은 기본 `개요`와 기존 `수집 실행` 탭을 제공한다. 개요는 읽기 전용이며 현재 jobs 행, 소스·provenance·완성도·지역·좌표 범위, persisted write run, 제외 키워드 설정 영향을 보여 준다. `수집 실행`에는 기존 preset, 제외 키워드, dry-run, 동일 설정 write 승인, 진행 polling과 확인 문구 흐름이 그대로 남아 있다.
+
+현재 재고는 SQLite `jobs` 행을 한 번씩 세므로 여러 provenance 관찰을 공고 여러 건으로 중복 집계하지 않는다. fixture, fictional demo, 수동 수집, 목록 정보, 상세 확인과 완성도 미상은 서로의 의미를 숨기지 않는다. 지역 미확인은 추측하지 않고, 지도 커버리지는 이미 저장된 표시 좌표만 사용하며 geocoding을 실행하지 않는다.
+
+실행 분석의 기간(7일·30일·전체), 소스(전체·잡코리아·알바몬), 상태(전체·완료·실패) 필터는 persisted write history와 최근 20건에만 적용된다. 전체 재고 카드는 항상 현재 DB 전체를 나타낸다. dry-run은 DB history에 섞지 않고 in-memory active run 또는 임시 결과로만 다룬다. run 상세는 preset, 지역, 페이지와 후보 한도, 제외 설정, 처리 결과와 bounded failure category만 노출하며 raw source payload, stack trace, description, cookie, header를 반환하지 않는다.
+
+Migration `0006` 이후 write run은 제외 keyword·field와 전후 후보 수를 집계할 수 있다. 대시보드는 사용 빈도가 높은 keyword 최대 10개와 지원 field 사용 수를 보여 준다. 이전 run에 저장되지 않은 preset, 제외 설정, 수율 분모 또는 timing은 `0`으로 꾸미지 않고 `정보 없음` 또는 `이전 형식`으로 표시한다.
+
+대시보드 데이터는 parameterized read-only SQLite 집계와 `GET /api/collection-dashboard`, `GET /api/collection-dashboard/runs/{runId}`에서 제공된다. 새로고침, 개요 탭 복귀, write 완료 시 한 번 새로 읽으며 active run이 없을 때 지속 polling하지 않는다. 대시보드를 표시하거나 필터링하는 동작은 JobKorea·Albamon source request나 SQLite write를 시작하지 않는다.
