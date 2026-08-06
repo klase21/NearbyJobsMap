@@ -1,0 +1,1 @@
+import{resolve}from"node:path";import{getDatabasePath}from"../src/db/connection";import{createBackup}from"../src/server/backups/backup-service";const result=await createBackup(getDatabasePath(),resolve("data/backups"));console.log(`backup=${result.filePath}`);console.log(`sha256=${result.manifest.sha256}`);
