@@ -12,9 +12,10 @@ interface AppHeaderProps {
   onToggleMap(): void;
   availableSources: Array<"jobkorea" | "albamon">;
   activeFilterCount: number;
+  onOpenHelp?(): void;
 }
 
-export function AppHeader({ filters, mapVisible, onFiltersChange, onToggleFilters, onToggleMap, availableSources, activeFilterCount }: AppHeaderProps) {
+export function AppHeader({ filters, mapVisible, onFiltersChange, onToggleFilters, onToggleMap, availableSources, activeFilterCount, onOpenHelp=()=>{} }: AppHeaderProps) {
   const setSource = (source: JobFilterState["source"]) => onFiltersChange({ ...filters, source });
   return (
     <header className="app-header">
@@ -37,6 +38,7 @@ export function AppHeader({ filters, mapVisible, onFiltersChange, onToggleFilter
           <span className="roadmap-tab" aria-label="고용24는 추후 지원 예정">고용24 · 추후 지원</span>
         </nav>
         <div className="header-actions">
+          <button type="button" className="button soft" onClick={onOpenHelp}>도움말</button>
           <Link className="button soft collection-nav-link" href="/collection">수집 관리</Link>
           <button type="button" className="button" onClick={onToggleFilters} aria-haspopup="dialog" aria-controls="filter-panel">필터{activeFilterCount ? ` ${activeFilterCount}` : ""}</button>
           <button type="button" className={`button ${mapVisible ? "primary" : "soft"}`} onClick={onToggleMap} aria-pressed={mapVisible} aria-controls="dashboard-map">

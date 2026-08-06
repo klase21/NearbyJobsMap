@@ -256,6 +256,7 @@ input:disabled { cursor: not-allowed; background: #f4f6f8; color: #8a94a3; }
 .profile-export-toolbar p { margin: 3px 0 0; color: var(--muted); font-size: .82rem; }
 .profile-export-check { display: inline-flex; align-items: center; gap: 5px; font-size: .75rem; font-weight: 700; }
 .profile-import-dialog { width: min(920px, calc(100vw - 32px)); max-height: min(820px, calc(100vh - 32px)); overflow: auto; }
+.onboarding-backdrop{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;padding:16px;background:rgba(20,27,39,.55)}.onboarding-dialog{width:min(620px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:28px;border-radius:20px;background:#fff;box-shadow:0 24px 80px rgba(0,0,0,.25)}.onboarding-dialog h2{margin:18px 0 10px}.onboarding-dialog>p{line-height:1.7}.onboarding-progress{display:flex;align-items:center;gap:12px}.onboarding-progress progress{flex:1;accent-color:var(--blue)}.onboarding-labels,.onboarding-actions{display:flex;gap:8px;flex-wrap:wrap}.onboarding-labels span{padding:6px 10px;border-radius:999px;background:var(--blue-soft);font-weight:700}.onboarding-actions{margin-top:24px}.onboarding-dialog:focus-within{outline:0}
 .profile-drop-zone { display: grid; place-items: center; min-height: 140px; border: 2px dashed var(--line); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; }
 .profile-drop-zone:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 .profile-drop-zone input { margin-top: 12px; max-width: 100%; }
@@ -287,5 +288,6 @@ input:disabled { cursor: not-allowed; background: #f4f6f8; color: #8a94a3; }
   .profile-export-toolbar { align-items: stretch; flex-direction: column; }
   .profile-export-toolbar .profile-actions { display: grid; grid-template-columns: 1fr; }
   .profile-import-dialog { width: calc(100vw - 16px); max-height: calc(100vh - 16px); padding: 14px; }
+  .onboarding-dialog{padding:20px}.onboarding-actions{display:grid}.onboarding-actions .button{width:100%}
   .comparison-profile-list,.comparison-grid{grid-template-columns:1fr}.comparison-actions{display:grid;align-items:stretch}.comparison-actions label,.comparison-actions select,.comparison-actions .button{width:100%}.comparison-table th,.comparison-table td{min-width:145px}.comparison-table th:first-child{min-width:130px}
 }
