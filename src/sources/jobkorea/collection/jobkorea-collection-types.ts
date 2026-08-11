@@ -26,6 +26,7 @@ export interface JobKoreaCollectionCandidate {
   sourceUrl: string;
   pageNumber: number;
   sourcePosition: number;
+  observedAt?: string | null;
   observedLinkCount: number;
   listingClassification: JobKoreaListingClassificationMetadata;
   listingFields: JobKoreaListingCardFields | null;

@@ -76,7 +76,7 @@ function observeDirectRequest(request: Request): JobKoreaDirectContractObservati
 }
 
 export function failedSearchPageResult(pageNumber: number, classification: "timeout" | "unexpected_page" | "direct_endpoint_unavailable" | "direct_endpoint_session_required", code: string): JobKoreaListingPageResult {
-  return { pageNumber, snapshotSchemaVersion: null, serializedSnapshotBytes: null, finalUrl: null, pageTitle: null,
+  return { pageNumber, observedAt: null, snapshotSchemaVersion: null, serializedSnapshotBytes: null, finalUrl: null, pageTitle: null,
     documentReadyState: null, readinessReason: null, readinessNumericDetailLinkCount: null, readinessOrdinaryContainerCount: null,
     domChangedAfterReadiness: null, classificationDurationMs: null, extractionDurationMs: null,
     classification, extractedCount: null, ordinaryPostingCount: null, promotedPostingCount: null, rejectedCandidateCount: null,
@@ -137,7 +137,7 @@ export class JobKoreaPlaywrightSearchExecution implements JobKoreaSearchExecutio
         page.on("requestfailed", (request) => this.failedResourceInputs.push(failedResourceInputFromRequest(request)));
         page.on("request", (request) => { observedDirect ??= observeDirectRequest(request); });
         await runBoundedLifecyclePhase(`page-${pageNumber}-navigation`, NAVIGATION_TIMEOUT_MS + 250,
-          () => page!.goto(jobKoreaSearchPageUrl(this.options.searchUrl, pageNumber), { waitUntil: "commit", timeout: NAVIGATION_TIMEOUT_MS }).then(() => undefined),
+          () => page!.goto(jobKoreaSearchPageUrl(this.options.searchUrl, pageNumber, this.options.localTodayMode ? 50 : 10), { waitUntil: "commit", timeout: NAVIGATION_TIMEOUT_MS }).then(() => undefined),
           this.lifecycleDiagnostics);
         const readiness = await runBoundedLifecyclePhase(`page-${pageNumber}-readiness`, READINESS_TIMEOUT_MS + 250, async () => {
           await page!.waitForFunction(() => {
@@ -149,10 +149,11 @@ export class JobKoreaPlaywrightSearchExecution implements JobKoreaSearchExecutio
         }, this.lifecycleDiagnostics);
         await runBoundedLifecyclePhase(`page-${pageNumber}-stabilization`, STABILITY_DELAY_MS + 250,
           () => page!.waitForTimeout(STABILITY_DELAY_MS), this.lifecycleDiagnostics);
+        const observedAt = new Date().toISOString();
         const snapshot = await runBoundedLifecyclePhase(`page-${pageNumber}-snapshot`, SNAPSHOT_TIMEOUT_MS,
           () => captureJobKoreaPageSnapshot(page!, readiness), this.lifecycleDiagnostics);
         this.snapshotCompleted = snapshot.extractionCompleted;
-        const result = buildJobKoreaListingPageResult(snapshot, pageNumber, globalSeen);
+        const result = buildJobKoreaListingPageResult(snapshot, pageNumber, globalSeen, observedAt);
         this.pages.push(result);
         if (result.blocked) break;
       } catch (error) {

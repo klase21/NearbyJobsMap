@@ -6,8 +6,9 @@ import { jobKoreaCandidate as candidate, jobKoreaSnapshot as snapshot } from "./
 
 describe("잡코리아 browser listing classification", () => {
   it("ordinary candidates를 source 순서와 canonical URL로 만든다", () => {
-    const result = buildJobKoreaListingPageResult(snapshot([candidate("11", { position: 1 }), candidate("12", { position: 2 })]), 1);
+    const result = buildJobKoreaListingPageResult(snapshot([candidate("11", { position: 1 }), candidate("12", { position: 2 })]), 1, new Set(), "2026-08-07T00:52:00.000Z");
     expect(result).toMatchObject({ classification: "valid_search_results", extractedCount: 2, ordinaryPostingCount: 2, validEmptyPage: false });
+    expect(result.observedAt).toBe("2026-08-07T00:52:00.000Z");
     expect(result.candidates.map(({ sourcePostingId, listingPosition }) => [sourcePostingId, listingPosition])).toEqual([["11", 1], ["12", 2]]);
     expect(result.candidates[0]?.sourceUrl).toBe("https://www.jobkorea.co.kr/Recruit/GI_Read/11");
   });

@@ -78,7 +78,7 @@ export function selectJobKoreaCollectionCandidates(pages: JobKoreaCollectionResu
         continue;
       }
       all.push({ sourcePostingId: candidate.postingId, sourceUrl: candidate.canonicalUrl, pageNumber: page.pageNumber,
-        sourcePosition: candidate.firstSourcePosition, observedLinkCount: candidate.observedLinkCount,
+        sourcePosition: candidate.firstSourcePosition, observedAt: page.observedAt ?? null, observedLinkCount: candidate.observedLinkCount,
         listingClassification: candidate.listingClassification, listingFields: candidate.listingFields ?? null,
         normalizedRegions: region.regions, regionConfidence: region.confidence });
     }

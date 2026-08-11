@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseJobKoreaSearchCliArgs } from "../../sources/jobkorea/transport/jobkorea-search-cli";
-import { jobKoreaSearchPageUrl, normalizeJobKoreaSearchUrl, parseJobKoreaSearchPageNumber } from "../../sources/jobkorea/transport/jobkorea-url-policy";
+import { jobKoreaSearchPageUrl, normalizeJobKoreaSearchUrl, normalizeJobKoreaTodayListUrl, parseJobKoreaSearchPageNumber } from "../../sources/jobkorea/transport/jobkorea-url-policy";
 
 const search = "https://www.jobkorea.co.kr/Search?stext=AI&tabType=recruit&Page_No=1";
 const args = (...extra: string[]) => ["--search-url", search, "--pages", "1", "--max-details", "0", ...extra, "--confirm"];
@@ -28,4 +28,9 @@ describe("잡코리아 search URL 정책", () => {
     expect(normalizeJobKoreaSearchUrl("https://www.jobkorea.co.kr/Search?stext=AI")).toContain("tabType=recruit");
   });
   it.each(["http://www.jobkorea.co.kr/Search?stext=AI", "https://evil.test/Search?stext=AI", "https://user:pass@www.jobkorea.co.kr/Search?stext=AI", "https://www.jobkorea.co.kr/Search?Page_No=3"])("위험하거나 범위를 벗어난 URL을 거부한다", (url) => expect(() => normalizeJobKoreaSearchUrl(url)).toThrow());
+  it("오늘 수집 전용 공개 joblist만 별도로 허용한다", () => {
+    expect(normalizeJobKoreaTodayListUrl("https://www.jobkorea.co.kr/recruit/joblist")).toContain("Page_No=1");
+    expect(jobKoreaSearchPageUrl("https://www.jobkorea.co.kr/recruit/joblist", 2, 50)).toContain("Page_No=2");
+    expect(() => normalizeJobKoreaTodayListUrl(search)).toThrow("/recruit/joblist");
+  });
 });

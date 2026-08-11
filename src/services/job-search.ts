@@ -9,7 +9,7 @@ export const DEFAULT_FILTERS: JobFilterState = {
   keyword: "", source: "all", provenance: "all", completeness: "all", region: "all", mapEligibility: "all", city: "", district: "", category: "", employmentType: "",
   experienceRequirement: "", educationRequirement: "", salaryType: "all",
   salaryThresholds: { hourly: 0, daily: 0, monthly: 0, annual: 0, normalizedMonthly: 0 },
-  postingStatus: "all", locationAccuracy: "all", locationMode: "all", deadline: "all", showDemo: true,
+  postingStatus: "all", locationAccuracy: "all", locationMode: "all", deadline: "all", discoveryDate: "all", maxDistanceKm: 0, showDemo: true,
   exclusionKeywords: [], exclusionFields: ["title", "category"],
 };
 
@@ -41,16 +41,16 @@ export function getNormalizedRegions(record: UiJobRecord): RegionValue[] {
   return normalizeRegionText(evidence).regions;
 }
 
-export function getRegionGroup(record: UiJobRecord): "서울" | "경기" | null {
+export function getRegionGroup(record: UiJobRecord): "서울" | "경기" | "서울·경기 검색범위" | null {
   const regions = getNormalizedRegions(record);
-  return regions.includes("seoul") ? "서울" : regions.includes("gyeonggi") ? "경기" : null;
+  return regions.includes("seoul") ? "서울" : regions.includes("gyeonggi") ? "경기" : regions.includes("capital_scope") ? "서울·경기 검색범위" : null;
 }
 
 export function countActiveFilters(filters: JobFilterState): number {
   return [filters.keyword.trim(), filters.source !== "all", filters.provenance !== "all", filters.completeness !== "all", filters.region !== "all",
     filters.mapEligibility !== "all", filters.city, filters.district, filters.category, filters.employmentType, filters.experienceRequirement,
     filters.educationRequirement, filters.salaryType !== "all", filters.postingStatus !== "all", filters.locationAccuracy !== "all",
-    filters.locationMode !== "all", filters.deadline !== "all", !filters.showDemo,
+    filters.locationMode !== "all", filters.deadline !== "all", filters.discoveryDate !== "all", filters.maxDistanceKm > 0, !filters.showDemo,
     Object.values(filters.salaryThresholds).some((value) => value > 0), filters.exclusionKeywords.length > 0].filter(Boolean).length;
 }
 
@@ -95,6 +95,7 @@ export function filterJobs(records: UiJobRecord[], filters: JobFilterState, now:
     const normalizedRegions = getNormalizedRegions(record);
     if (filters.region === "seoul" && !normalizedRegions.includes("seoul")) return false;
     if (filters.region === "gyeonggi" && !normalizedRegions.includes("gyeonggi")) return false;
+    if (filters.region === "capital_scope" && !normalizedRegions.includes("capital_scope")) return false;
     if (filters.region === "other" && !normalizedRegions.some((region) => region === "other" || region === "incheon")) return false;
     if (filters.region === "unknown" && normalizedRegions.length > 0) return false;
     if (filters.mapEligibility === "map" && !isMapEligible(record)) return false;
@@ -111,6 +112,9 @@ export function filterJobs(records: UiJobRecord[], filters: JobFilterState, now:
     if (filters.locationMode === "exact" && !EXACT_LOCATION.has(job.locationAccuracy)) return false;
     if (filters.locationMode === "estimated" && !ESTIMATED_LOCATION.has(job.locationAccuracy)) return false;
     if (!salaryThresholdMatches(record, filters) || !deadlineMatches(record, filters.deadline, now)) return false;
+    const localDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+    if (filters.discoveryDate === "today_posted" && record.postingDateLocalDate !== localDate) return false;
+    if (filters.discoveryDate === "today_first_seen" && (!record.firstSeenAt || new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(record.firstSeenAt)) !== localDate)) return false;
     if (query) {
       const values = [job.title, job.companyName, job.addressOriginalText, job.city, job.district, job.neighborhood, job.nearestStation,
         ...job.categories, ...job.employmentTypes, job.source, job.source === "jobkorea" ? "잡코리아" : job.source === "albamon" ? "알바몬" : ""];
@@ -134,6 +138,22 @@ const salaryValue = (record: UiJobRecord, type: SalaryType): number | null => re
 const dateValue = (value: string | null): number | null => value && Number.isFinite(new Date(value).getTime()) ? new Date(value).getTime() : null;
 
 export function sortJobs(records: UiJobRecord[], sort: SortOption, origin: UserOrigin): UiJobRecord[] {
+  if (sort === "monthly_distance") {
+    const eligible = records.flatMap((record) => {
+      const salary = record.job.salary.type === "monthly" ? record.job.salary.minimumAmount : null;
+      const distance = distanceFromOrigin(record, origin);
+      return salary !== null && distance !== null ? [{ record, salary, distance }] : [];
+    });
+    const salaries = eligible.map(({ salary }) => salary);
+    const minimum = Math.min(...salaries); const maximum = Math.max(...salaries); const ceiling = 50;
+    return eligible.map((value) => ({ ...value,
+      score: (maximum === minimum ? 100 : 100 * (value.salary - minimum) / (maximum - minimum)) * 0.7
+        + Math.max(0, Math.min(100, 100 * (1 - Math.min(value.distance, ceiling) / ceiling))) * 0.3,
+    })).sort((left, right) => right.score - left.score || right.salary - left.salary || left.distance - right.distance
+      || left.record.job.source.localeCompare(right.record.job.source)
+      || left.record.job.sourcePostingId.localeCompare(right.record.job.sourcePostingId, undefined, { numeric: true }))
+      .map(({ record }) => record);
+  }
   return records.map((record, index) => ({ record, index })).sort((a, b) => {
     let result = 0;
     switch (sort) {

@@ -61,7 +61,7 @@
 - 알려진 검색 result root 안의 정규화 가능한 숫자 posting ID는 listing classification과 무관하게 상세 검증 후보가 될 수 있다.
 - listing classification은 provenance metadata이며 상세 방문의 필수 gate가 아니다.
 - JobKorea 상세 페이지의 ID·parser·normalizer·canonical 검증이 수동 수집의 최종 저장 경계다.
-- JobKorea 수동 preset 수집은 목록 5페이지·상세 50건·상세 동시성 2를 넘지 않는다.
+- JobKorea 일반 수동 preset 수집은 목록 5페이지·상세 50건·상세 동시성 2를 넘지 않는다. 명시적 사용자 실행 historical backfill은 별도 보호 정책을 따른다.
 - JobKorea 수동 수집은 retry를 수행하지 않으며 실패 후보를 다른 후보로 대체하지 않는다.
 - JobKorea collection은 수동 명령으로만 실행하며 scheduler나 background worker에 연결하지 않는다.
 - 인증, 쿠키·프로필 재사용 또는 접근 제어 우회를 수집 경계에 추가하지 않는다.
@@ -155,7 +155,7 @@
 - Albamon 공개 listing URL은 `excludeBar=true`를 포함하고 `DOMContentLoaded` 뒤 최대 15회 bounded scroll과 두 번의 안정된 card count로 정리한다. 허용된 HTTPS Albamon host의 `/jobs/total` canonical redirect 외에는 성공으로 처리하지 않는다.
 - Albamon 목록 레코드는 `bounded_listing_collection`, `listing_only`, `not_attempted`, permission `unverified`로 표시하며 future detail-complete 데이터를 downgrade하지 않는다.
 - CLI와 로컬 collection UI는 같은 Albamon collection service를 사용한다. UI는 내장 preset만 받고 한 active run, 30분 dry-run binding, typed write confirmation을 그대로 적용한다.
-- Albamon 수집도 수동 실행만 허용하고 retry 0, 페이지 최대 5, 후보 최대 50을 유지하며 scheduler, recurring worker, 로그인·접근제어 우회를 추가하지 않는다.
+- Albamon 일반 수동 수집도 retry 0, 페이지 최대 5, 후보 최대 50을 유지하며 scheduler, recurring worker, 로그인·접근제어 우회를 추가하지 않는다. 명시적 사용자 실행 historical backfill은 별도 보호 정책을 따른다.
 
 - 광고 판정에 `[class*="ad"]`, `className.includes("ad")`, `/ad/`처럼 짧은 부분 문자열을 사용하지 않는다.
 - 광고 class는 완전한 token 또는 근거가 있는 제한적 prefix pattern으로만 판정하며 `shadow`, `badge`, `header`, `gradient` 같은 utility token은 광고 근거가 아니다.
@@ -182,11 +182,16 @@
 
 ## Exclusion Keyword Protection
 
+- 알바몬 개인 검색조건 백필의 권위 있는 제외어 프로필은 Git에서 제외된 `data/private/personal-search-profile.json`에 원자적으로 저장한다. 브라우저 localStorage는 화면 필터 편의를 위한 mirror일 뿐 백필 승인 근거가 아니다.
+- `/collection`, 백필 manager, preview/write, CLI는 같은 server-only 개인 프로필 service와 canonical hash를 사용한다. 프로필 파일이 없거나 손상됐으면 명시적으로 거부하고 빈 프로필로 대체하지 않는다.
+- 개인 프로필 저장 API는 localhost 개인 workspace 경계를 사용하며 collection 실행 feature flag를 개인 설정 읽기·저장의 우회 수단으로 재사용하지 않는다. 프로필 저장과 검증은 source network 요청을 만들지 않는다.
+- 알바몬 개인 프로필 write 승인은 preview 이후 서버 프로필을 다시 읽어 동일 hash임을 확인해야 하며, page 값은 프로필 또는 hash에 포함하지 않는다.
+
 - 잡코리아와 알바몬 수집 및 jobs 화면은 하나의 source-neutral 제외 matcher와 정규화 규칙을 공유한다.
 - 제외 입력은 literal substring만 허용하며 regex, wildcard, JavaScript, shell, SQL 또는 arbitrary property path로 해석하지 않는다.
 - 수집 제외는 posting ID 중복 제거와 지역 필터 뒤, candidate cap 전에 적용한다. 제외 후보는 상세 시도·후보 slot·ingestion item·job provenance를 소비하지 않는다.
 - 정규화된 keyword 순서, 선택 field, source, preset, pages, max-details를 dry-run/write authorization에 묶고 어느 하나가 바뀌면 write를 거부한다.
-- keyword는 최대 30개, 2~50자이고 지원 field allowlist를 client와 server 양쪽에서 검증한다.
+- 일반 수동 입력 keyword는 최대 30개, 2~50자다. 검증된 `https://www.albamon.com/jobs/total` URL 가져오기는 사용자 원본 프로필을 손실 없이 보존하기 위해 최대 500개의 정규화 keyword를 허용하며, 동일한 field allowlist와 literal substring matcher를 client와 server 양쪽에서 검증한다.
 - CLI, collection UI, 두 source adapter는 같은 matcher를 사용하고 raw HTML, description, 연락처, hidden state를 비교 대상으로 추가하지 않는다.
 - jobs 화면의 display exclusion은 SQLite를 변경하지 않으며 기존 filter preference의 versioned localStorage 경계와 reset 동작을 유지한다.
 - 이 기능 작업에서는 실제 알바몬 요청을 실행하지 않는다. 수집은 계속 수동 실행, 동시성 최대 2, retry 0이며 scheduler나 접근 제어 우회를 추가하지 않는다.
@@ -317,7 +322,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## JobKorea listing-only backfill protection
 
 - `backfill:jobkorea:once` is a separately authorized manual maintenance boundary. It requires explicit page range, `--listing-only`, a dry-run, and exact `BACKFILL JOBKOREA CAPITAL` write confirmation; it never runs from the app, build, test, migration, scheduler, or background process.
-- The first backfill hard cap is pages 1–10, 200 selected candidates, listing concurrency 1, detail requests 0, and retries 0. These limits do not widen the normal collection-control cap of 5 pages and 50 candidates.
+- The legacy `backfill:jobkorea:once` maintenance command remains capped at pages 1–10 and 200 selected candidates. The local user-triggered historical backfill UI/CLI follows its separate policy below. Neither widens the normal collection-control cap of 5 pages and 50 candidates.
 - Backfill eligibility requires a known result-root numeric posting ID plus an isolated nonempty title and company. Legacy ordinary classification remains provenance metadata; a page without bounded valid-card evidence is unresolved and blocks the write before the transaction starts.
 - Region normalization and optional literal exclusions run before the candidate cap. Unknown regions are not guessed, duplicate-only pages are not empty, and every explicitly requested page is visited once.
 - Listing-only rows use `bounded_listing_collection`, detail access `not_attempted`, and permission `unverified`; they never downgrade detail-complete data.
@@ -325,3 +330,30 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Commute-ready means reliable coordinates or a trustworthy full address only. City/district and region-only records are not route-ready.
 - A write batch must roll back completely on a critical row, identity, provenance, observation, foreign-key, or integrity failure. The verified post-backfill backup stays ignored under `data/backups` and is never committed.
 - v0.1.1 publication remains paused until the owner reviews the backfilled data and verified backup.
+
+## Local real-use today collection protection
+
+- `collect:today` is local-only, manual, and fixed to one Asia/Seoul calendar date at run start. It is not historical backfill and must never be scheduled automatically.
+- Today selection requires deterministic per-card posting-date evidence. `unknown` and `future_invalid` never qualify, and excluded/failed today candidates are never replaced with older postings.
+- JobKorea local today collection은 공개 채용 목록의 form-urlencoded POST `_GI_List` HTML 계약만 사용한다. `condition[local]=I000,B000`, `order=2`, `pagesize=50`을 고정하고 쿠키, Playwright, 상세 요청, retry를 사용하지 않는다. 이 계약을 공식 API로 표현하지 않는다.
+- local today parser는 `div.tplJobListWrap` 안의 `tr.devloopArea[data-gno]`만 읽고 `span.time.dotum` 등록 정보와 `span.date.dotum` 마감 정보를 분리한다. `/Search`와 기존 browser/history collector는 historical/manual 용도로 유지하며 TODAY 경로에 재사용하지 않는다.
+- 검증된 `order=2` 등록순 계약에서는 유효한 한 페이지 전체가 older이고 today/unknown/future가 0일 때만 날짜 경계 종료를 허용한다. duplicate-only나 existing identity는 종료 근거가 아니다.
+- Albamon combined `I000,B000` source-filter evidence is `capital_scope`, not simultaneous exact Seoul and Gyeonggi. Individual `I000` and `B000` evidence remains exact for its respective single-region query.
+- Exact Albamon subregion enrichment would require separate explicitly authorized `I000` and `B000` membership queries; do not infer it from the combined filter or run that enrichment automatically.
+- Local hard ceilings are JobKorea 100 HTTP listing pages and 5,000 TODAY candidates, plus Albamon 50 combined-capital listing pages and 2,500 candidates. Details, BFF, retries, and listing concurrency above one remain prohibited.
+- Dry-run/write authorization binds sources, regions, limits, exclusions, timezone, and resolved local date. A date change or zero date-verified candidates invalidates the write gate.
+- `NEARBY_JOBS_REAL_USE_MODE=1` hides fixture/demo records from the main page without changing public demo behavior. Runtime cleanup uses provenance, is transactional, and never deletes fixture source code.
+- 오늘 등록 uses source posting-date evidence; 오늘 처음 발견 uses local first-seen evidence. These concepts must remain separate.
+- Real-use branches and runtime data remain local with no upstream, tag, release, or push unless the owner later requests publication.
+
+## Local user-triggered historical backfill protection
+
+- Historical backfill is a distinct local-only collection boundary. It runs only after an explicit UI preview/write action or explicit CLI `--dry-run`/`--confirm`; it must never run at startup or from a scheduler, cron, recurring worker, remote queue, build, migration, or test.
+- Normal/manual ordinary collection retains its source-specific 5-page limits. TODAY collection retains its existing independent ceilings. These limits must not be widened implicitly by historical backfill support.
+- Date-cutoff historical backfill defaults to 100 pages. The Albamon personal-profile backfill defaults to 150 pages. Both accept an explicit user maximum of 300 pages. The internal transport hard ceiling is 500 pages; values above 500 must be rejected, and 500 is not exposed as a normal UI option.
+- The Albamon personal-profile collection universe is exactly `searchPeriodType=ALL`, `areas=I000,B000`, `excludeBar=true`, and the current source-neutral exclusion keyword configuration. Contract reproduction from an imported normal public search URL preserves its observed `sortType=MONTHLY_SALARY`; this sort is pagination configuration and must not be interpreted as a monthly-pay eligibility filter. Salary type, salary amount, coordinates, and distance are local viewing/ranking criteria and must not narrow the source collection universe.
+- The Albamon personal-profile preview/write binds the exact normalized exclusion configuration. A changed exclusion configuration invalidates the preview authorization. The URL import preview shows the full decoded ordered list and count before explicit save, never fetches the pasted URL, ignores `page` and unknown parameters, and does not persist the original encoded source URL.
+- Historical listing requests are sequential with concurrency 1 and retry 0. Date-cutoff runs stop before their selected page limit when a complete trustworthy registration-ordered page proves the requested cutoff has been passed. Albamon personal-profile runs have no posting-date cutoff and continue until source-total/final-page exhaustion, a valid empty page, repeated page fingerprint, source failure, user cancellation, selected page ceiling, or internal hard ceiling.
+- Existing identities and duplicate-only pages are not exhaustion evidence. Albamon personal-profile backfill must retain valid monthly, hourly, daily, and unknown-pay records for local filtering after ingestion.
+- UI write requires a matching successful dry-run authorization and explicit confirmation. CLI write requires explicit `--confirm`. Dry-run writes no jobs, runs, items, provenance, observations, or backup; write creates one verified pre-write backup, not one per page.
+- Historical backfill shares the exclusive collection run lock, preserves source identity, completeness precedence, firstSeen discovery semantics, user state, and observation rules, and never requests JobKorea or Albamon detail pages, BFF endpoints, login, cookies, stealth, or proxies.

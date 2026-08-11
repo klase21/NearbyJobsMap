@@ -5,6 +5,7 @@ import type {
   JobKoreaShadowStructureDiagnostics, JobKoreaSnapshotDiagnostic, JobKoreaSnapshotExcludedCandidate,
   JobKoreaStructuralGroupRejectionReason,
 } from "./jobkorea-search-types";
+import { createSourcePostingDateEvidence } from "../../../services/collection-date";
 
 export const JOBKOREA_SNAPSHOT_SCHEMA_VERSION = 2 as const;
 export const JOBKOREA_SNAPSHOT_MAX_BYTES = 256 * 1024;
@@ -370,10 +371,20 @@ export function validateJobKoreaPageSnapshot(value: unknown): JobKoreaPageSnapsh
       if (!isPlainRecord(item.listingFields)) fail("collection listing fields가 plain object가 아닙니다.");
       const employmentTypes = item.listingFields.employmentTypes;
       if (!Array.isArray(employmentTypes) || employmentTypes.length > 10 || employmentTypes.some((entry) => typeof entry !== "string" || entry.length > 100)) fail("listing employment types가 유효하지 않습니다.");
+      const rawDateEvidence = item.listingFields.postingDateEvidence;
+      let postingDateEvidence = null;
+      if (rawDateEvidence !== null && rawDateEvidence !== undefined) {
+        if (!isPlainRecord(rawDateEvidence)) fail("listing posting-date evidence가 plain object가 아닙니다.");
+        const sourceField = stringField(rawDateEvidence, "sourceField", 30);
+        if (!["listing_registered", "listing_posted_at"].includes(sourceField)) fail("listing posting-date evidence contract가 유효하지 않습니다.");
+        const normalized = createSourcePostingDateEvidence(stringField(rawDateEvidence, "raw", 50), sourceField as "listing_registered" | "listing_posted_at");
+        if (normalized.kind === "unknown" || normalized.kind !== stringField(rawDateEvidence, "kind", 30)) fail("listing posting-date evidence kind가 raw value와 일치하지 않습니다.");
+        postingDateEvidence = normalized;
+      }
       listingFields = { title: nullableString(item.listingFields, "title", 300), companyName: nullableString(item.listingFields, "companyName", 200),
         regionText: nullableString(item.listingFields, "regionText", 300), salaryText: nullableString(item.listingFields, "salaryText", 300),
         employmentTypes: [...employmentTypes], experienceRequirement: nullableString(item.listingFields, "experienceRequirement", 200),
-        educationRequirement: nullableString(item.listingFields, "educationRequirement", 200), postedAt: nullableString(item.listingFields, "postedAt", 50),
+        educationRequirement: nullableString(item.listingFields, "educationRequirement", 200), postedAt: nullableString(item.listingFields, "postedAt", 50), postingDateEvidence,
         deadlineText: nullableString(item.listingFields, "deadlineText", 100) };
     }
     return { postingId, canonicalUrl: stringField(item, "canonicalUrl", 2_048), firstSourcePosition: countField(item, "firstSourcePosition")!,
@@ -427,7 +438,9 @@ export function validateAndRoundTripJobKoreaSnapshot(value: unknown, maximumByte
 }
 
 export const JOBKOREA_PAGE_READINESS_EVALUATOR_SOURCE = String.raw`(() => {
-  const ordinarySelectors = "tr.devloopArea[data-gno], .list-default, .recruit-info, .recruit-list, .search-list, .list-post, [class*='recruit-list'], [class*='search-list']";
+  const surfacePath = (() => { try { return new URL(document.baseURI).pathname; } catch { return location.pathname; } })();
+  const jobListSurface = /^\/recruit\/joblist\/?$/i.test(surfacePath);
+  const ordinarySelectors = jobListSurface ? "tr.devloopArea[data-gno]" : "tr.devloopArea[data-gno], .list-default, .recruit-info, .recruit-list, .search-list, .list-post, [class*='recruit-list'], [class*='search-list']";
   const text = String(document.body?.innerText ?? "").slice(0, 200000);
   const numericDetailLinkCount = Array.from(document.querySelectorAll('a[href*="/Recruit/GI_Read"]')).filter((node) => /\/Recruit\/GI_Read\/\d+(?:[/?#]|$)/i.test(node.getAttribute("href") ?? "")).length;
   const ordinaryContainerCount = document.querySelectorAll(ordinarySelectors).length;
@@ -447,7 +460,9 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
   const schemaVersion = 2;
   const ordinaryCandidateLimit = 200, ordinarySampleLimit = 10, promotedSampleLimit = 10, rejectedSampleLimit = 20, signatureLimit = 20, ancestorLimit = 8, promotionAncestorLimit = 6;
   const structuralLinkLimit = 200, structuralGroupLimit = 100, structuralGroupSampleLimit = 40, structuralSummaryLimit = 20, siblingChildLimit = 200, repeatedSiblingMinimum = 3;
-  const ordinarySelectors = "tr.devloopArea[data-gno], .list-default, .recruit-info, .recruit-list, .search-list, .list-post, [class*='recruit-list'], [class*='search-list']";
+  const surfacePath = (() => { try { return new URL(document.baseURI).pathname; } catch { return location.pathname; } })();
+  const jobListSurface = /^\/recruit\/joblist\/?$/i.test(surfacePath);
+  const ordinarySelectors = jobListSurface ? "tr.devloopArea[data-gno]" : "tr.devloopArea[data-gno], .list-default, .recruit-info, .recruit-list, .search-list, .list-post, [class*='recruit-list'], [class*='search-list']";
   const resultRootSelectors = "main, [role='main'], .list-default, .recruit-info, .recruit-list, .search-list, .list-post, [class*='recruit-list'], [class*='search-list']";
   const recommendationSelectors = "[class*='recommend'], [class*='attention']";
   const recentSelectors = "[class*='recent']";
@@ -499,10 +514,19 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
     const explicitCompany=companyElements.map((element)=>safeText(element,200)).find((value)=>value.length>=2&&value!==title&&!actionPattern.test(value))??null;
     const alternateCompany=anchorTexts.filter((value)=>value!==title&&value.length<=100).sort((a,b)=>a.length-b.length||a.localeCompare(b))[0]??null;
     const semanticText=(tokens,maximum) => {for(const element of Array.from(selected.querySelectorAll("span,div,p,li,dd"))){const classes=Array.from(element.classList).map((token)=>token.toLowerCase());if(classes.some((token)=>tokens.includes(token)||tokens.some((allowed)=>token.startsWith(allowed+"-")))){const value=safeText(element,maximum);if(value)return value;}}return null;};
-    const dateText=semanticText(["date","posted","deadline","closing"],100);const isoDates=dateText?dateText.match(/20\d{2}[-.]\d{1,2}[-.]\d{1,2}/g)??[]:[];
+    const dateValuePattern=/(?:오늘|방금|\d{1,3}\s*분\s*전|\d{1,2}\s*시간\s*전|어제|\d+\s*일\s*전|20\d{2}[.\-/]\d{1,2}[.\-/]\d{1,2}|\d{1,2}[.\-/]\d{1,2})/;
+    const boundedDate=(value)=>safeText(value instanceof Element?value:null,80).match(dateValuePattern)?.[0]??null;
+    const dateKind=(raw)=>/^(?:오늘|방금)$/.test(raw)?'relative_today':raw==='어제'||/(?:분|시간|일)\s*전$/.test(raw)?'relative_age':'absolute_date';
+    const postingDateEvidence=(()=>{
+      const nodes=Array.from(selected.querySelectorAll("[class], [data-field], [data-type], [data-testid], [aria-label]" )).slice(0,200);
+      for(const node of nodes){const values=[...Array.from(node.classList).map((token)=>token.toLowerCase()),...['data-field','data-type','data-testid','aria-label'].map((name)=>(node.getAttribute(name)??'').toLowerCase())];const dedicated=values.some((value)=>/(?:^|[-_])(?:posted-at|posting-date|registered-at|registered|register-date|registration-date|reg-date|regist-date)(?:$|[-_])/.test(value));const deadline=values.some((value)=>/(?:deadline|closing|close-date|due-date)/.test(value));if(dedicated&&!deadline){const raw=boundedDate(node);if(raw)return {raw,kind:dateKind(raw),sourceField:values.some((value)=>/(?:posted-at|posting-date)/.test(value))?'listing_posted_at':'listing_registered'};}}
+      for(const label of Array.from(selected.querySelectorAll("dt,th,label,strong,b,span"))){const labelText=safeText(label,80);const sourceField=/^게시/.test(labelText)?'listing_posted_at':'listing_registered';const inline=labelText.match(/^(?:등록일?|게시일?|등록일자)\s*[:：]?\s*(.+)$/)?.[1]??null;if(inline){const raw=inline.match(dateValuePattern)?.[0]??null;if(raw)return {raw,kind:dateKind(raw),sourceField};}if(/^(?:등록일?|게시일?|등록일자)\s*[:：]?$/.test(labelText)){const valueNode=label.nextElementSibling??(label.parentElement?.querySelector("dd,[data-value],time")??null);const raw=boundedDate(valueNode);if(raw)return {raw,kind:dateKind(raw),sourceField};}}
+      if(jobListSurface){for(const node of Array.from(selected.querySelectorAll("td,dd,span,time"))){const value=safeText(node,120);if(!value||value.length>120||node.querySelectorAll("*").length>8)continue;const registered=value.match(/(방금|오늘|\d{1,4}\s*분\s*전|\d{1,3}\s*시간\s*전|\d+\s*일\s*전|20\d{2}[.\-/]\d{1,2}[.\-/]\d{1,2}|\d{1,2}[.\-/]\d{1,2})\s*등록/u)?.[1]??null;if(registered)return {raw:registered,kind:dateKind(registered),sourceField:'listing_registered'};}}
+      return null;
+    })();
     const explicitRegion=Array.from(selected.querySelectorAll("span,p,li,dd")).map((element)=>safeText(element,120)).find((value)=>/^(?:서울(?:특별시)?|경기(?:도)?)(?:\s+(?:전지역|전체|[가-힣]+(?:구|시|군)))(?:\s*[,·/]\s*(?:서울(?:특별시)?|경기(?:도)?)?\s*(?:전지역|전체|[가-힣]+(?:구|시|군)))*/.test(value))??null;
     const employment=semanticText(["employment","job-type"],200);
-    return {title,companyName:explicitCompany??alternateCompany,regionText:semanticText(["location","region","address"],300)??explicitRegion,salaryText:semanticText(["salary","pay"],300),employmentTypes:employment?[employment]:[],experienceRequirement:semanticText(["experience","career"],200),educationRequirement:semanticText(["education"],200),postedAt:isoDates[0]?.replace(/\./g,"-")??null,deadlineText:isoDates[1]?.replace(/\./g,"-")??null};
+    return {title,companyName:explicitCompany??alternateCompany,regionText:semanticText(["location","region","address"],300)??explicitRegion,salaryText:semanticText(["salary","pay"],300),employmentTypes:employment?[employment]:[],experienceRequirement:semanticText(["experience","career"],200),educationRequirement:semanticText(["education"],200),postedAt:postingDateEvidence?.raw??null,postingDateEvidence,deadlineText:semanticText(["deadline","closing"],100)};
   };
   const exclusionFlags = (anchors) => ({promoted:anchors.some((anchor)=>Boolean(promotionEvidence(anchor))),recommendation:anchors.some((anchor)=>Boolean(anchor.closest(recommendationSelectors))||/지금\s*주목할\s*만한\s*공고|추천\s*공고/.test(compact((anchor.closest("li,article,section,div,tr")??anchor).textContent,1000))),recent:anchors.some((anchor)=>Boolean(anchor.closest(recentSelectors))||/최근\s*본\s*공고/.test(compact((anchor.closest("li,article,section,div,tr")??anchor).textContent,1000)))});
   const buildShadowStructure = (detailNodes,resultRoots,ordinaryCandidates,diagnostics) => {
@@ -585,7 +609,7 @@ export const JOBKOREA_PAGE_SNAPSHOT_EVALUATOR_SOURCE = String.raw`(() => {
       const recent=Boolean(recentRoot)||/최근\s*본\s*공고/.test(containerText);
       const promoted=Boolean(promotedEvidence); if(promotedEvidence)explicitPromotedElements.add(promotedEvidence.element);
       const flags={resultRoot,row:Boolean(row),promoted,recommendation,recent};
-      if(pathId&&parsed&&["www.jobkorea.co.kr","m.jobkorea.co.kr"].includes(parsed.hostname)&&resultRoot){const existing=collectionCandidateMap[pathId];const listingClassification=recent?"recent_view":recommendation?"recommendation":promoted?"explicit_promoted":row||(ordinaryRoot&&!recommendationRoot&&!recentRoot)?"verified_ordinary":"unclassified_result_link";if(existing){existing.observedLinkCount+=1;}else{collectionCandidateMap[pathId]={postingId:pathId,canonicalUrl:"https://www.jobkorea.co.kr/Recruit/GI_Read/"+pathId,firstSourcePosition:position,observedLinkCount:1,listingClassification};}}
+      if(pathId&&parsed&&["www.jobkorea.co.kr","m.jobkorea.co.kr"].includes(parsed.hostname)&&resultRoot&&(!jobListSurface||Boolean(row))){const existing=collectionCandidateMap[pathId];const listingClassification=recent?"recent_view":recommendation?"recommendation":promoted?"explicit_promoted":row||(ordinaryRoot&&!recommendationRoot&&!recentRoot)?"verified_ordinary":"unclassified_result_link";if(existing){existing.observedLinkCount+=1;}else{collectionCandidateMap[pathId]={postingId:pathId,canonicalUrl:"https://www.jobkorea.co.kr/Recruit/GI_Read/"+pathId,firstSourcePosition:position,observedLinkCount:1,listingClassification};}}
       let rejection=null;
       if(!parsed) rejection="INVALID_DETAIL_PATH";
       else if(!["www.jobkorea.co.kr","m.jobkorea.co.kr"].includes(parsed.hostname)) rejection="DISALLOWED_HOST";

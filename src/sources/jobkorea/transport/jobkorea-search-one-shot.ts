@@ -119,7 +119,8 @@ export async function runJobKoreaSearchOneShot(options: JobKoreaSearchOptions, d
           sourceFixtureReference: `bounded_public_browser_observation:${execution.transportUsed}:${candidate.pageNumber}:${candidate.sourcePostingId}`,
           mapPosition: null, permissionStatus: "unverified", listingUrl: options.searchUrl, detailUrl: detailResponse.finalUrl,
           observedAt, sanitizerVersion: JOBKOREA_SANITIZER_VERSION, parserVersion: JOBKOREA_PARSER_CONTRACT_VERSION,
-          observationKind: "bounded_public_browser_observation", observationTransport: execution.transportUsed,
+          observationKind: "bounded_public_browser_observation",
+          observationTransport: execution.transportUsed === "http_post_listing" ? "direct" : execution.transportUsed,
           pageNumber: candidate.pageNumber, listingPosition: candidate.listingPosition } };
         records.push(record);
         const preview = jobs.previewUpsert(job, record.metadata);

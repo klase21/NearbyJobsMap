@@ -4,6 +4,19 @@ import { parseSalary } from "../../services/salary-parser";
 
 describe("한국어 급여 파서", () => {
   it.each([
+    ["3,000~4,300만원", "annual", 30_000_000, 43_000_000],
+    ["4,516만원 이상", "annual", 45_160_000, null],
+    ["3,240~3,400만원", "annual", 32_400_000, 34_000_000],
+    ["270~300만원(월)", "monthly", 2_700_000, 3_000_000],
+    ["300~316만원(월)", "monthly", 3_000_000, 3_160_000],
+    ["280만원 이상(월)", "monthly", 2_800_000, null],
+    ["700~750만원(월)", "monthly", 7_000_000, 7_500_000],
+  ] as const)("JobKorea listing salary %s", (input, type, minimum, maximum) => {
+    const parsed = parseSalary(input, { bareManwonPeriod: "annual" });
+    expect(parsed).toMatchObject({ originalText: input, type, minimumAmount: minimum, maximumAmount: maximum });
+  });
+
+  it.each([
     ["시급 13,500원", "hourly", 13_500, 13_500],
     ["일급 150,000원", "daily", 150_000, 150_000],
     ["주급 700,000원", "weekly", 700_000, 700_000],

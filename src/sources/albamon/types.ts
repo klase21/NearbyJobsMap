@@ -66,8 +66,13 @@ export interface AlbamonDetailFixture {
 
 export interface AlbamonListing {
   sourcePostingId: string; sourceUrl: string; title: string; companyName: string;
-  salaryText: string | null; regionText: string | null; workDaysText: string | null; workHoursText: string | null;
+  salaryText: string | null; salaryFromStructured?: boolean; regionText: string | null; workDaysText: string | null; workHoursText: string | null;
   employmentTypes: string[]; deadlineText: string | null; promoted: boolean | null; capturedAt: string;
+  payType?: "hourly" | "daily" | "monthly" | "annual" | null;
+  workplaceAddress?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  regionConflict?: boolean;
 }
 
 export interface AlbamonDetail {

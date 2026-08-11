@@ -8,11 +8,11 @@ import type { ExclusionField } from "../services/collection-exclusion";
 import type { AddressQuality, SalaryQuality } from "../services/job-data-quality";
 
 export type ActiveJobSource = "jobkorea" | "albamon";
-export type RegionFilter = "all" | "seoul" | "gyeonggi" | "other" | "unknown";
+export type RegionFilter = "all" | "seoul" | "gyeonggi" | "capital_scope" | "other" | "unknown";
 export type ProvenanceFilter = "all" | "manual" | "fixture" | "demo";
 export type CompletenessFilter = "all" | "listing_only" | "detail_complete";
 export type UserJobStatus = "reviewing" | "saved" | "planned" | "applied" | "excluded";
-export type SortOption = "newest" | "deadline" | "distance" | "hourly" | "daily" | "monthly" | "annual" | "normalized_monthly" | "company";
+export type SortOption = "newest" | "deadline" | "distance" | "monthly_distance" | "hourly" | "daily" | "monthly" | "annual" | "normalized_monthly" | "company";
 
 export interface UserOrigin { name: string; latitude: number; longitude: number; example: boolean }
 export interface MapPosition { latitude: number; longitude: number; kind: "exact" | "estimated"; provenance: "source" | "fictional_demo" }
@@ -35,6 +35,10 @@ export interface UiJobRecord {
   addressQuality?: AddressQuality;
   salaryQuality?: SalaryQuality;
   commuteReady?: boolean;
+  postingDateStatus?: import("../services/collection-date").PostingDateStatus;
+  postingDateEvidence?: string | null;
+  postingDateLocalDate?: string | null;
+  firstSeenAt?: string | null;
 }
 
 export interface SalaryThresholds { hourly: number; daily: number; monthly: number; annual: number; normalizedMonthly: number }
@@ -58,6 +62,8 @@ export interface JobFilterState {
   locationAccuracy: "all" | LocationAccuracy;
   locationMode: "all" | "exact" | "estimated";
   deadline: "all" | "within_3_days" | "within_7_days" | "no_deadline";
+  discoveryDate: "all" | "today_posted" | "today_first_seen";
+  maxDistanceKm: number;
   showDemo: boolean;
   exclusionKeywords: string[];
   exclusionFields: ExclusionField[];

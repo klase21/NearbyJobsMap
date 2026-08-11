@@ -22,14 +22,15 @@ function candidate(id: string, position: number, regionText: string | null = "�
   return { postingId: id, canonicalUrl: `https://www.jobkorea.co.kr/Recruit/GI_Read/${id}`, firstSourcePosition: position,
     observedLinkCount: 1, listingClassification: "structurally_provisional",
     listingFields: { title: `AI 운영 ${id}`, companyName: `예시회사 ${id}`, regionText, salaryText: "연봉 4,000만원",
-      employmentTypes: ["정규직"], experienceRequirement: "경력무관", educationRequirement: "학력무관", postedAt: "2026-08-07", deadlineText: "채용시" } };
+      employmentTypes: ["정규직"], experienceRequirement: "경력무관", educationRequirement: "학력무관", postedAt: "2026-08-07",
+      postingDateEvidence: { raw: "2026-08-07", kind: "absolute_date", sourceField: "listing_registered" }, deadlineText: "채용시" } };
 }
 
-function page(number: number, candidates: JobKoreaCollectionCandidate[]) {
+function page(number: number, candidates: JobKoreaCollectionCandidate[], observedAt: string | null = null) {
   const links = candidates.reduce((sum, item) => sum + item.observedLinkCount, 0);
   return buildJobKoreaListingPageResult(jobKoreaSnapshot([], { finalUrl: `https://www.jobkorea.co.kr/Search?stext=AI&Page_No=${number}`,
     collectionCandidates: candidates, shadowStructure: emptyJobKoreaShadowStructure(links),
-    evidence: { resultRootCount: 1, allNumericDetailLinkCount: links, numericLinksInsideKnownResultRoots: links, rejectedDetailLinkCount: 0 } }), number);
+    evidence: { resultRootCount: 1, allNumericDetailLinkCount: links, numericLinksInsideKnownResultRoots: links, rejectedDetailLinkCount: 0 } }), number, new Set(), observedAt);
 }
 
 function execution(pages: ReturnType<typeof page>[], onClose?: () => void): JobKoreaSearchExecution {
@@ -58,6 +59,18 @@ describe("JobKorea listing-only backfill CLI", () => {
 });
 
 describe("JobKorea listing-only backfill service", () => {
+  it("classifies relative registration age using each page observation time", async () => {
+    const test = createTestDatabase(); databases.push(test);
+    const today = candidate("90900001", 1); today.listingFields = { ...today.listingFields!, postedAt: "30분 전",
+      postingDateEvidence: { raw: "30분 전", kind: "relative_age", sourceField: "listing_registered" } };
+    const older = candidate("90900002", 2); older.listingFields = { ...older.listingFields!, postedAt: "600분 전",
+      postingDateEvidence: { raw: "600분 전", kind: "relative_age", sourceField: "listing_registered" } };
+    const result = await backfillJobKoreaListingsOnce({ ...options("dry-run", 1), localTodayMode: true,
+      collectionDate: { timezone: "Asia/Seoul", resolvedDate: "2026-08-07" } }, { database: test.database,
+      createExecution: async () => execution([page(1, [today, older], "2026-08-07T00:52:00.000Z")]) });
+    expect(result).toMatchObject({ selectedCandidates: 1, postingDateCounts: { today: 1, older: 1, unknown: 0, futureInvalid: 0 },
+      postingDateKinds: { minuteRelative: 2, hourRelative: 0, absolute: 0, midnightAmbiguous: 0 } });
+  });
   it("visits the explicit range, keeps duplicate-only pages, filters before the cap, and never requests details", async () => {
     const test = createTestDatabase(); databases.push(test); let closed = false; let receivedPages: number[] | undefined;
     const pages = [page(1, [candidate("91000001", 1), candidate("91000002", 2, "부산")]), page(2, [candidate("91000001", 1), candidate("91000003", 2, "경기 성남시")])];
@@ -80,6 +93,21 @@ describe("JobKorea listing-only backfill service", () => {
     expect(test.database.prepare("SELECT COUNT(*) count FROM ingestion_items").get()).toEqual({ count: 1 });
     expect(test.database.prepare("SELECT COUNT(*) count FROM job_observations").get()).toEqual({ count: 1 });
     expect(() => assertJobKoreaDatabaseIntegrity(test.database, ["92000001"])).not.toThrow();
+  });
+
+  it("persists the local HTTP POST listing transport without changing legacy transport constraints", async () => {
+    const test = createTestDatabase(); databases.push(test);
+    const httpExecution = execution([page(1, [candidate("92000002", 1)], "2026-08-07T01:00:00.000Z")]);
+    const result = await backfillJobKoreaListingsOnce({ ...options("write", 1), localTodayMode: true,
+      collectionDate: { timezone: "Asia/Seoul", resolvedDate: "2026-08-07" } }, { database: test.database,
+      createExecution: async () => ({ ...httpExecution, transportUsed: "http_post_listing", searchNavigationCount: 0,
+        directRequestCount: 1, completedByExhaustion: true, stopReason: "hard_limit" }) });
+    expect(result).toMatchObject({ transportUsed: "http_post_listing", actualInserts: 1, observationsAdded: 1 });
+    expect(test.database.prepare("SELECT selected_transport,content_request_count,browser_navigation_count,direct_request_count FROM ingestion_runs").get())
+      .toEqual({ selected_transport: "direct", content_request_count: 1, browser_navigation_count: 0, direct_request_count: 1 });
+    expect(test.database.prepare("SELECT observation_transport,parser_version,source_fixture_reference FROM jobs").get())
+      .toEqual({ observation_transport: "direct", parser_version: "jobkorea-http-today-v1",
+        source_fixture_reference: "bounded_listing_backfill:capital-ai:listing_http_post:sort2:size50:1:1:structurally_provisional:1:92000002" });
   });
 
   it("rejects contaminated location before the cap and selects the next trustworthy record", async () => {

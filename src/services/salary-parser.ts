@@ -1,5 +1,7 @@
 import type { CanonicalSalary, SalaryType } from "../domain/salary";
 
+export interface SalaryParseContext { bareManwonPeriod?: "annual" }
+
 const TYPE_PATTERNS: Array<[RegExp, SalaryType]> = [
   [/시급|시간급/, "hourly"],
   [/일급/, "daily"],
@@ -31,7 +33,7 @@ function parseAmounts(text: string): [number | null, number | null] {
   return [value, value];
 }
 
-export function parseSalary(originalText: string): CanonicalSalary {
+export function parseSalary(originalText: string, context: SalaryParseContext = {}): CanonicalSalary {
   const text = originalText.replace(/\s+/g, " ").trim();
   const negotiable = /면접\s*후\s*결정|협의|협상/.test(text);
   const companyPolicy = /회사\s*내규|내규에\s*따름/.test(text);
@@ -43,6 +45,8 @@ export function parseSalary(originalText: string): CanonicalSalary {
       break;
     }
   }
+  if (/\(\s*월\s*\)/u.test(text)) type = "monthly";
+  else if (type === "unknown" && context.bareManwonPeriod === "annual" && /만원/u.test(text)) type = "annual";
   if (includesIncentive && /기본급/.test(text)) type = "mixed";
   const [minimumAmount, maximumAmount] = companyPolicy && !/\d/.test(text) ? [null, null] : parseAmounts(text);
   return {

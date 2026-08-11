@@ -12,6 +12,7 @@ import { normalizeCollectionExclusionConfig } from "../../services/collection-ex
 import { exclusionConfigurationHash } from "../../services/collection-exclusion-hash.server";
 import { SavedCollectionProfileRepository } from "../collection-profiles/repository";
 import type { CollectionControlConfig, CollectionControlMode, CollectionRunSnapshot } from "./contracts";
+import { acquireCollectionRun, activeCollectionRunOwner, releaseCollectionRun } from "./run-lock";
 
 const WRITE_AUTH_TTL_MS = 30 * 60_000;
 const MAX_RETAINED_RUNS = 20;
@@ -38,7 +39,7 @@ export class CollectionRunManager {
   constructor(private readonly dependencies: CollectionRunManagerDependencies = {}) {}
 
   start(input: StartRequest): CollectionRunSnapshot {
-    if (this.activeId) throw Object.assign(new Error("이미 실행 중인 수집이 있습니다."), { code: "COLLECTION_RUN_CONFLICT", status: 409 });
+    if (this.activeId || activeCollectionRunOwner()) throw Object.assign(new Error("이미 실행 중인 수집이 있습니다."), { code: "COLLECTION_RUN_CONFLICT", status: 409 });
     const resolved = this.resolve(input); const { preset, config } = resolved;
     if (input.mode !== "dry_run" && input.mode !== "write") throw Object.assign(new Error("올바른 실행 모드가 아닙니다."), { code: "COLLECTION_MODE_INVALID", status: 400 });
     if (input.mode === "write") this.consumeWriteAuthorization(input, config);
@@ -48,7 +49,7 @@ export class CollectionRunManager {
       exclusion: config.exclusion, exclusionConfigHash: exclusionConfigurationHash(config.exclusion), savedProfile: config.savedProfile ?? null,
       startedAt: now.toISOString(), updatedAt: now.toISOString(), elapsedMs: 0, result: null, error: null,
       writeAuthorizationToken: null, writeAuthorizationExpiresAt: null };
-    this.runs.set(runId, snapshot); this.activeId = runId; this.trim();
+    acquireCollectionRun(`collection:${runId}`); this.runs.set(runId, snapshot); this.activeId = runId; this.trim();
     if (input.mode === "write" && config.savedProfile) this.markProfileUsed(config.savedProfile.id);
     void this.execute(runId, resolved, input.mode); return structuredClone(snapshot);
   }
@@ -102,7 +103,7 @@ export class CollectionRunManager {
       }
       this.touch(current, started);
     } catch (error) { const current = this.runs.get(runId)!; current.status = "failed"; current.message = "수집 실행 실패"; current.error = safeError(error); this.touch(current, started); }
-    finally { database?.close(); if (this.activeId === runId) this.activeId = null; }
+    finally { database?.close(); if (this.activeId === runId) this.activeId = null; releaseCollectionRun(`collection:${runId}`); }
   }
 
   private loadProfile(id: string): SavedCollectionProfile | null { if (this.dependencies.loadProfile) return this.dependencies.loadProfile(id); const database = openReadonlyDatabase(getDatabasePath()); try { return new SavedCollectionProfileRepository(database).get(id); } finally { database.close(); } }

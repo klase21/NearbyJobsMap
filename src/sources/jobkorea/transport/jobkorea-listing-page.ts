@@ -22,7 +22,7 @@ export function classifyJobKoreaRenderedPage(snapshot: JobKoreaPageSnapshot): Jo
   return "unexpected_page";
 }
 
-export function buildJobKoreaListingPageResult(snapshot: JobKoreaPageSnapshot, pageNumber: number, globalSeen = new Set<string>()): JobKoreaListingPageResult {
+export function buildJobKoreaListingPageResult(snapshot: JobKoreaPageSnapshot, pageNumber: number, globalSeen = new Set<string>(), observedAt: string | null = null): JobKoreaListingPageResult {
   const classificationStartedAt = performance.now();
   const classification = classifyJobKoreaRenderedPage(snapshot);
   const classificationDurationMs = Math.max(0, performance.now() - classificationStartedAt);
@@ -60,7 +60,7 @@ export function buildJobKoreaListingPageResult(snapshot: JobKoreaPageSnapshot, p
   }
   const parserFailure = classification === "malformed_results" || classification === "unexpected_page" || (classification === "valid_search_results" && candidates.length === 0);
   return {
-    pageNumber, snapshotSchemaVersion: snapshot.schemaVersion, serializedSnapshotBytes: snapshot.serializedSnapshotBytes,
+    pageNumber, observedAt, snapshotSchemaVersion: snapshot.schemaVersion, serializedSnapshotBytes: snapshot.serializedSnapshotBytes,
     finalUrl: snapshot.finalUrl, pageTitle: snapshot.pageTitle, documentReadyState: snapshot.documentReadyState,
     readinessReason: snapshot.readiness?.reason ?? null,
     readinessNumericDetailLinkCount: snapshot.readiness?.numericDetailLinkCount ?? null,

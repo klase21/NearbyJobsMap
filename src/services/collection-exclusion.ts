@@ -39,7 +39,9 @@ export interface ExclusionSummary {
   exclusionSamplesTruncated: boolean;
 }
 
-export const MAX_EXCLUSION_KEYWORDS = 30;
+export const MAX_MANUAL_EXCLUSION_KEYWORDS = 30;
+export const MAX_EXCLUSION_KEYWORDS = MAX_MANUAL_EXCLUSION_KEYWORDS;
+export const MAX_IMPORTED_EXCLUSION_KEYWORDS = 500;
 export const MIN_EXCLUSION_KEYWORD_LENGTH = 2;
 export const MAX_EXCLUSION_KEYWORD_LENGTH = 50;
 export const MAX_EXCLUSION_SAMPLES = 20;
@@ -54,14 +56,14 @@ export function normalizeExclusionText(value: string): string {
   return value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("en-US");
 }
 
-export function normalizeCollectionExclusionConfig(value?: Partial<CollectionExclusionConfig> | null): CollectionExclusionConfig {
+function normalizeExclusionConfig(value: Partial<CollectionExclusionConfig> | null | undefined, maximumKeywords: number): CollectionExclusionConfig {
   const rawKeywords = value?.keywords ?? [];
   const rawFields = value?.fields ?? [];
   if (!Array.isArray(rawKeywords) || !rawKeywords.every((item) => typeof item === "string")) {
     throw new CollectionExclusionValidationError("COLLECTION_EXCLUSION_KEYWORDS_INVALID", "제외 키워드는 문자열 배열이어야 합니다.");
   }
-  if (rawKeywords.length > MAX_EXCLUSION_KEYWORDS) {
-    throw new CollectionExclusionValidationError("COLLECTION_EXCLUSION_KEYWORD_LIMIT", `제외 키워드는 최대 ${MAX_EXCLUSION_KEYWORDS}개까지 사용할 수 있습니다.`);
+  if (rawKeywords.length > maximumKeywords) {
+    throw new CollectionExclusionValidationError("COLLECTION_EXCLUSION_KEYWORD_LIMIT", `제외 키워드는 최대 ${maximumKeywords}개까지 사용할 수 있습니다.`);
   }
   const keywords: string[] = [];
   const seen = new Set<string>();
@@ -81,8 +83,21 @@ export function normalizeCollectionExclusionConfig(value?: Partial<CollectionExc
   return { keywords, fields };
 }
 
+export function normalizeCollectionExclusionConfig(value?: Partial<CollectionExclusionConfig> | null): CollectionExclusionConfig {
+  return normalizeExclusionConfig(value, MAX_EXCLUSION_KEYWORDS);
+}
+
+export function normalizeImportedCollectionExclusionConfig(value?: Partial<CollectionExclusionConfig> | null): CollectionExclusionConfig {
+  return normalizeExclusionConfig(value, MAX_IMPORTED_EXCLUSION_KEYWORDS);
+}
+
 export function canonicalizeExclusionConfig(config: CollectionExclusionConfig): string {
   const normalized = normalizeCollectionExclusionConfig(config);
+  return JSON.stringify({ keywords: normalized.keywords, fields: normalized.fields });
+}
+
+export function canonicalizeImportedExclusionConfig(config: CollectionExclusionConfig): string {
+  const normalized = normalizeImportedCollectionExclusionConfig(config);
   return JSON.stringify({ keywords: normalized.keywords, fields: normalized.fields });
 }
 
@@ -111,8 +126,8 @@ export function matchCandidateExclusion(candidate: ExclusionCandidateText, confi
 const sortedRecord = (counts: Map<string, number>): Record<string, number> => Object.fromEntries([...counts.entries()].sort(([a], [b]) => a.localeCompare(b, "ko")));
 
 export function applyCandidateExclusions<T>(candidates: T[], configInput: CollectionExclusionConfig,
-  toText: (candidate: T) => ExclusionCandidateText): { candidates: T[]; summary: ExclusionSummary } {
-  const config = normalizeCollectionExclusionConfig(configInput);
+  toText: (candidate: T) => ExclusionCandidateText, maximumKeywords = MAX_EXCLUSION_KEYWORDS): { candidates: T[]; summary: ExclusionSummary } {
+  const config = normalizeExclusionConfig(configInput, maximumKeywords);
   const retained: T[] = []; const samples: ExcludedCandidateSample[] = [];
   const keywords = new Map<string, number>(); const fields = new Map<string, number>(); const pairs = new Map<string, number>();
   let excluded = 0;

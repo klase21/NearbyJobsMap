@@ -9,16 +9,17 @@ import { COLLECTION_PRESETS } from "../../sources/collection/collection-presets"
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const dashboard: CollectionDashboardData = {
   generatedAt: "2026-08-06T00:00:00Z", filters: { period: "30d", source: "all", status: "all" },
+  todayCollection: { localDate: "2026-08-06", jobkorea: { inserted: 2, updated: 1 }, albamon: { inserted: 3, updated: 0 }, unchanged: 4, excluded: 1, sourceFailures: 0, lastRunAt: "2026-08-06T00:00:00Z" },
   inventory: { totalJobs: 46, jobkoreaJobs: 38, albamonJobs: 8, fixtureRecords: 6, fictionalRecords: 10, manuallyCollectedRecords: 30,
     listingOnlyRecords: 30, detailCompleteRecords: 0, completenessUnknownRecords: 16, mapEligibleRecords: 8, listOnlyRecords: 38 },
   sources: [
     { source: "jobkorea", storedJobs: 38, manuallyCollected: 30, fixture: 3, listingOnly: 30, detailComplete: 0, completenessUnknown: 8, mapEligible: 4, latestObservedAt: "2026-08-06T00:00:00Z", latestRun: { status: "completed", startedAt: "2026-08-06T00:00:00Z", presetLabel: "서울 AI 일자리" } },
     { source: "albamon", storedJobs: 8, manuallyCollected: 0, fixture: 3, listingOnly: 0, detailComplete: 0, completenessUnknown: 8, mapEligible: 4, latestObservedAt: null, latestRun: null },
   ],
-  regions: { seoul: { total: 12, manual: 10 }, gyeonggi: { total: 10, manual: 8 }, multiple: { total: 2, manual: 2 }, other: { total: 1, manual: 0 }, unknown: { total: 21, manual: 10 } },
+  regions: { seoul: { total: 12, manual: 10 }, gyeonggi: { total: 10, manual: 8 }, capitalScope: { total: 0, manual: 0 }, multiple: { total: 2, manual: 2 }, other: { total: 1, manual: 0 }, unknown: { total: 21, manual: 10 } },
   completenessBySource: [{ source: "jobkorea", listingOnly: 30, detailComplete: 0, unknown: 8 }, { source: "albamon", listingOnly: 0, detailComplete: 0, unknown: 8 }],
   mapCoverage: { eligible: 8, listOnly: 38, percentage: 17.4, bySource: [{ source: "jobkorea", eligible: 4, total: 38, percentage: 10.5 }, { source: "albamon", eligible: 4, total: 8, percentage: 50 }] },
-  dataQuality: { address: { full_address: 2, city_district: 3, region_only: 20, multiple_locations: 1, unknown: 20, contaminated: 0 }, salary: { structured: 4, display_only: 12, negotiable: 2, unknown: 28, invalid: 0 }, coordinateRecords: 8, commuteReadyRecords: 10 },
+  dataQuality: { address: { full_address: 2, city_district: 3, region_only: 20, multiple_locations: 1, unknown: 20, contaminated: 0 }, salary: { structured: 4, display_only: 12, negotiable: 2, unknown: 28, invalid: 0 }, coordinateRecords: 8, commuteReadyRecords: 10, capitalScopeOnlyRecords: 0 },
   effectiveness: { runs: 2, selectedCandidates: 50, detailAttempts: 50, successfulDetailParses: 0, listingFallbacks: 50, inserted: 30, updated: 20, unchanged: 0, lowerCompletenessSkips: 0, failedItems: 0, excludedCandidates: null, validRecordYield: 100, insertUpdateYield: 100, listingFallbackRate: 100, failureRate: 0 },
   exclusions: { runsUsingExclusions: 0, candidatesBefore: null, candidatesExcluded: null, candidatesAfter: null, exclusionRate: null, topKeywords: [], fields: [] },
   recentRuns: [{ id: "11111111-1111-4111-8111-111111111111", source: "jobkorea", presetId: null, presetLabel: null, status: "completed", startedAt: "2026-08-06T00:00:00Z", completedAt: "2026-08-06T00:00:10Z", selectedCandidates: 20, inserted: 0, updated: 20, unchanged: 0, skipped: 0, failed: 0, excluded: null, durationMs: 10_000 }],

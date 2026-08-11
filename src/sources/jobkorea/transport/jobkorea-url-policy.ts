@@ -53,11 +53,24 @@ export function normalizeJobKoreaSearchUrl(candidate: string): string {
   return url.toString();
 }
 
-export function jobKoreaSearchPageUrl(searchUrl: string, pageNumber: number): string {
-  if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > 10) {
-    throw new JobKoreaTransportError("JOBKOREA_SEARCH_PAGE_INVALID", "Page_No는 1~10 정수여야 합니다.", null);
+export function normalizeJobKoreaTodayListUrl(candidate: string): string {
+  const normalized = normalizeJobKoreaUrl(candidate, "listing");
+  const url = new URL(normalized);
+  if (!/^\/recruit\/joblist\/?$/i.test(url.pathname)) throw new JobKoreaTransportError("JOBKOREA_TODAY_LIST_URL_REJECTED", "공개 /recruit/joblist 경로만 허용합니다.", null);
+  const page = url.searchParams.get("Page_No");
+  if (page !== null && (!/^\d+$/.test(page) || Number(page) < 1 || Number(page) > 50)) throw new JobKoreaTransportError("JOBKOREA_SEARCH_PAGE_INVALID", "Page_No는 1~50 정수여야 합니다.", null);
+  url.searchParams.set("Page_No", page ?? "1");
+  return url.toString();
+}
+
+export function jobKoreaSearchPageUrl(searchUrl: string, pageNumber: number, maximumPage = 10): string {
+  if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > maximumPage || ![10, 50].includes(maximumPage)) {
+    throw new JobKoreaTransportError("JOBKOREA_SEARCH_PAGE_INVALID", `Page_No는 1~${maximumPage} 정수여야 합니다.`, null);
   }
-  const url = new URL(normalizeJobKoreaSearchUrl(searchUrl));
+  const candidate = new URL(normalizeJobKoreaUrl(searchUrl, "listing"));
+  const url = /^\/recruit\/joblist\/?$/i.test(candidate.pathname)
+    ? new URL(normalizeJobKoreaTodayListUrl(candidate.toString()))
+    : new URL(normalizeJobKoreaSearchUrl(candidate.toString()));
   url.searchParams.set("Page_No", String(pageNumber));
   return url.toString();
 }

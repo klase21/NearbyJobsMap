@@ -20,7 +20,8 @@ const collectionCandidate = (postingId: string, position: number, classification
 
 const listingCandidate = (postingId: string, position = 1, regionText: string | null = "서울 중구"): SnapshotCandidate => ({ ...collectionCandidate(postingId, position, "structurally_provisional", 3),
   listingFields: { title: `목록 공고 ${postingId}`, companyName: `목록 회사 ${postingId}`, regionText, salaryText: "연봉 4,000만원",
-    employmentTypes: ["정규직"], experienceRequirement: null, educationRequirement: null, postedAt: "2026-08-05", deadlineText: null } });
+    employmentTypes: ["정규직"], experienceRequirement: null, educationRequirement: null, postedAt: "2026-08-05",
+    postingDateEvidence: { raw: "2026-08-05", kind: "absolute_date", sourceField: "listing_registered" }, deadlineText: null } });
 
 function page(number: number, candidates: SnapshotCandidate[]) {
   const linkCount = candidates.reduce((sum, item) => sum + item.observedLinkCount, 0);

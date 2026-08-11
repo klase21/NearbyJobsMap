@@ -1,25 +1,26 @@
 import type { JobFilterState, SavedPreferences, SortOption, UserJobStatus, UserOrigin } from "../domain/ui-job";
 import { validateOrigin } from "../services/distance";
 import { DEFAULT_FILTERS } from "../services/job-search";
-import { EXCLUSION_FIELDS, normalizeExclusionText, type ExclusionField } from "../services/collection-exclusion";
+import { EXCLUSION_FIELDS, MAX_IMPORTED_EXCLUSION_KEYWORDS, normalizeExclusionText, type ExclusionField } from "../services/collection-exclusion";
 
 export const PREFERENCES_STORAGE_KEY = "nearby-jobs-map:preferences:v1";
 export interface StorageLike { getItem(key: string): string | null; setItem(key: string, value: string): void; removeItem(key: string): void }
 export interface PreferencesLoadResult { value: SavedPreferences; corrupted: boolean }
 
-const SORT_OPTIONS = new Set<SortOption>(["newest", "deadline", "distance", "hourly", "daily", "monthly", "annual", "normalized_monthly", "company"]);
+const SORT_OPTIONS = new Set<SortOption>(["newest", "deadline", "distance", "monthly_distance", "hourly", "daily", "monthly", "annual", "normalized_monthly", "company"]);
 const USER_STATUSES = new Set<UserJobStatus>(["reviewing", "saved", "planned", "applied", "excluded"]);
 const FILTER_OPTIONS = {
   source: new Set(["all", "jobkorea", "albamon"]),
   provenance: new Set(["all", "manual", "fixture", "demo"]),
   completeness: new Set(["all", "listing_only", "detail_complete"]),
-  region: new Set(["all", "seoul", "gyeonggi", "other", "unknown"]),
+  region: new Set(["all", "seoul", "gyeonggi", "capital_scope", "other", "unknown"]),
   mapEligibility: new Set(["all", "map", "list_only"]),
   salaryType: new Set(["all", "hourly", "daily", "weekly", "monthly", "annual", "per_task", "negotiable", "company_policy", "mixed", "unknown"]),
   postingStatus: new Set(["all", "active", "closing_soon", "expired", "closed", "removed", "unknown"]),
   locationAccuracy: new Set(["all", "exact_coordinate", "exact_address", "neighborhood", "district", "city", "station_area", "multiple_locations", "headquarters_only", "location_undecided", "unavailable"]),
   locationMode: new Set(["all", "exact", "estimated"]),
   deadline: new Set(["all", "within_3_days", "within_7_days", "no_deadline"]),
+  discoveryDate: new Set(["all", "today_posted", "today_first_seen"]),
 } as const;
 export const DEFAULT_ORIGIN: UserOrigin = { name: "출발지 예시 · 범계역", latitude: 37.3897, longitude: 126.9506, example: true };
 export const DEFAULT_PREFERENCES: SavedPreferences = { filters: DEFAULT_FILTERS, sort: "newest", mapVisible: true, origin: DEFAULT_ORIGIN, userJobStatuses: {} };
@@ -31,8 +32,9 @@ export function validateJobFilterState(value: unknown): value is JobFilterState 
   if (Object.keys(value).some((key) => !(key in DEFAULT_FILTERS))) return false;
   const salaryThresholds = value.salaryThresholds;
   if (Object.keys(salaryThresholds).some((key) => !(key in DEFAULT_FILTERS.salaryThresholds))) return false;
-  const strings = ["keyword", "source", "provenance", "completeness", "region", "mapEligibility", "city", "district", "category", "employmentType", "experienceRequirement", "educationRequirement", "salaryType", "postingStatus", "locationAccuracy", "locationMode", "deadline"];
+  const strings = ["keyword", "source", "provenance", "completeness", "region", "mapEligibility", "city", "district", "category", "employmentType", "experienceRequirement", "educationRequirement", "salaryType", "postingStatus", "locationAccuracy", "locationMode", "deadline", "discoveryDate"];
   return strings.every((key) => typeof value[key] === "string") && typeof value.showDemo === "boolean"
+    && typeof value.maxDistanceKm === "number" && Number.isFinite(value.maxDistanceKm) && value.maxDistanceKm >= 0 && value.maxDistanceKm <= 500
     && Array.isArray(value.exclusionKeywords) && value.exclusionKeywords.every((item) => typeof item === "string")
     && Array.isArray(value.exclusionFields) && value.exclusionFields.every((item) => typeof item === "string" && EXCLUSION_FIELDS.includes(item as ExclusionField))
     && Object.entries(FILTER_OPTIONS).every(([key, options]) => options.has(value[key] as never))
@@ -51,7 +53,7 @@ function parsePreferences(raw: string): SavedPreferences | null {
     const value = parsed.value;
     const rawFilters = isRecord(value.filters) ? value.filters : null;
     const filters = rawFilters ? { ...DEFAULT_FILTERS, ...rawFilters,
-      exclusionKeywords: Array.isArray(rawFilters.exclusionKeywords) ? [...new Set(rawFilters.exclusionKeywords.filter((item): item is string => typeof item === "string").map(normalizeExclusionText).filter((item) => item.length >= 2 && item.length <= 50))].slice(0, 30) : [],
+      exclusionKeywords: Array.isArray(rawFilters.exclusionKeywords) ? [...new Set(rawFilters.exclusionKeywords.filter((item): item is string => typeof item === "string").map(normalizeExclusionText).filter((item) => item.length >= 2 && item.length <= 50))].slice(0, MAX_IMPORTED_EXCLUSION_KEYWORDS) : [],
       exclusionFields: Array.isArray(rawFilters.exclusionFields) ? rawFilters.exclusionFields.filter((item): item is ExclusionField => typeof item === "string" && EXCLUSION_FIELDS.includes(item as ExclusionField)) : DEFAULT_FILTERS.exclusionFields,
       salaryThresholds: isRecord(rawFilters.salaryThresholds) ? { ...DEFAULT_FILTERS.salaryThresholds, ...rawFilters.salaryThresholds } : DEFAULT_FILTERS.salaryThresholds } : null;
     if (!validateJobFilterState(filters) || typeof value.sort !== "string" || !SORT_OPTIONS.has(value.sort as SortOption)

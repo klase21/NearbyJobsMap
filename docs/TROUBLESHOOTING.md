@@ -62,6 +62,8 @@ The adapter uses only explicit browser-rendered public `/jobs/total` pages with 
 
 The August 2026 bounded probe returned HTTP 200 with no DNS, TLS, timeout, redirect, crash, or cleanup error. A later approved Seoul run used the historically recorded public area mapping `I000 → Seoul` (`B000 → Gyeonggi`), isolated 100 numeric posting-ID cards across two pages, and wrote 20 listing-only records. None exposed a trustworthy displayed location, so their original location remains `null` and their Seoul classification is explicitly attributed to the single-region source filter. Title/company/card-wide text is prohibited as a location fallback, and a displayed region that contradicts the source filter is excluded before the candidate cap.
 
+For local today collection, a combined `areas=I000,B000` query proves only that a card appeared in the requested capital-area result scope. When no dedicated card location exists, the UI reports `수도권 범위만 확인`; it must not be interpreted as two exact per-job locations. Exact enrichment would require a separately authorized comparison of the individual `I000` and `B000` result memberships and is not performed automatically.
+
 Use `--diagnostic` only for a specifically authorized bounded run when transport classification is needed. It reports sanitized URL/status/redirect, elapsed time, failure category, lifecycle state, and cleanup—never HTML, response bodies, cookies, headers, or page text. Area codes are an observed public-page contract, not an official API or permission grant. Do not call undocumented BFF endpoints, automate authentication, or add detail crawling.
 
 ## Map tiles are unavailable
@@ -108,3 +110,7 @@ npm.cmd run build
 ```
 
 Never “fix” failures by enabling live source access or disabling broad safety/type rules.
+
+## 오늘 수집에서 등록일이 모두 정보 없음으로 표시됨
+
+`searchPeriodType=TODAY`나 페이지 정렬만으로 개별 공고의 등록일을 만들어 내지 않습니다. 카드의 전용 등록일 필드에서 결정적인 증거를 읽지 못하면 `unknown`으로 보고하고 write 승인을 발급하지 않습니다. 오래된 공고나 firstSeen을 오늘 등록으로 바꾸지 마세요. 소스 화면 계약이 변경된 경우에는 저장 없이 synthetic fixture로 날짜 필드 selector를 먼저 검증한 뒤, 별도로 승인된 bounded dry-run에서 확인해야 합니다.
