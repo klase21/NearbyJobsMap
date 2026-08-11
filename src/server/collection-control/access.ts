@@ -1,4 +1,5 @@
 import "server-only";
+import { isVercelPublicDemo } from "../runtime/public-demo";
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
@@ -7,6 +8,7 @@ export function collectionUiFeatureEnabled(environment: Partial<NodeJS.ProcessEn
 }
 
 export function assertLocalCollectionAccess(request: Request, environment: Partial<NodeJS.ProcessEnv> = process.env): void {
+  if (isVercelPublicDemo(environment)) throw Object.assign(new Error("공개 데모에서는 수집 기능을 실행할 수 없습니다."), { code: "PUBLIC_DEMO_READ_ONLY", status: 403 });
   if (!collectionUiFeatureEnabled(environment)) throw Object.assign(new Error("수집 관리 기능이 비활성화되어 있습니다."), { code: "COLLECTION_UI_DISABLED", status: 403 });
   const hostname = new URL(request.url).hostname.toLowerCase();
   if (!LOCAL_HOSTS.has(hostname)) throw Object.assign(new Error("수집 실행은 로컬 호스트에서만 허용됩니다."), { code: "COLLECTION_NON_LOCAL_REJECTED", status: 403 });

@@ -10,6 +10,7 @@ import {
   type PersonalAlbamonProfileFile,
   type PersonalAlbamonProfileInput,
 } from "../../services/personal-albamon-profile";
+import { isVercelPublicDemo } from "../runtime/public-demo";
 
 export const PERSONAL_ALBAMON_PROFILE_PATH = resolve("data/private/personal-search-profile.json");
 const PERSONAL_ALBAMON_PROFILE_MAX_BYTES = 128 * 1024;
@@ -25,6 +26,7 @@ export function computePersonalAlbamonProfileHash(value: unknown): string {
 }
 
 export function getPersonalAlbamonProfile(filePath = PERSONAL_ALBAMON_PROFILE_PATH): PersonalAlbamonProfileState {
+  if (filePath === PERSONAL_ALBAMON_PROFILE_PATH && isVercelPublicDemo()) return { configured: false, profile: null, profileHash: null };
   if (!existsSync(filePath)) return { configured: false, profile: null, profileHash: null };
   if (statSync(filePath).size > PERSONAL_ALBAMON_PROFILE_MAX_BYTES) {
     throw Object.assign(new Error("저장된 알바몬 개인 검색 프로필이 허용 크기를 초과했습니다."),
@@ -43,6 +45,7 @@ export function getPersonalAlbamonProfile(filePath = PERSONAL_ALBAMON_PROFILE_PA
 }
 
 export function savePersonalAlbamonProfile(value: unknown, options: { filePath?: string; now?: Date } = {}): PersonalAlbamonProfileState {
+  if (!options.filePath && isVercelPublicDemo()) throw Object.assign(new Error("공개 데모는 읽기 전용입니다."), { code: "PUBLIC_DEMO_READ_ONLY", status: 403 });
   const albamon = normalizePersonalAlbamonProfile(value);
   const profile: PersonalAlbamonProfileFile = { version: PERSONAL_ALBAMON_PROFILE_VERSION, albamon,
     updatedAt: (options.now ?? new Date()).toISOString() };

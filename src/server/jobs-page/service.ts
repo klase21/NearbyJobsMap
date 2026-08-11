@@ -9,6 +9,7 @@ import type { JobFilterState, SortOption } from "../../domain/ui-job";
 import { validateJobsPageRequest, type DuplicateJobGroupDetails, type JobsFacetSummary, type JobsPageRequest, type JobsPageResult } from "./contracts";
 import { semanticJobGroupKey } from "../../services/semantic-job-group";
 import { getPersonalAlbamonProfile, type PersonalAlbamonProfileState } from "../personal-albamon-profile/service";
+import { getJobsDatabasePath } from "../runtime/public-demo-database";
 
 type Parameters = Array<string | number>;
 type Row = Record<string, unknown>;
@@ -198,7 +199,7 @@ function registerPersonalExclusionFunction(db: Database.Database, keywords: read
 export function getJobsPage(raw: JobsPageRequest, path?: string, now = new Date(), dependencies: JobsPageDependencies = {}): JobsPageResult {
   const request = validateJobsPageRequest(raw);
   const personalExclusions = resolvePersonalExclusions(request, dependencies);
-  const db = openReadonlyDatabase(path);
+  const db = openReadonlyDatabase(getJobsDatabasePath(path));
   try {
     db.function("jobs_distance_km",{deterministic:true},(latitude:unknown,longitude:unknown,originLatitude:unknown,originLongitude:unknown)=>{
       if(typeof latitude!=="number"||typeof longitude!=="number"||typeof originLatitude!=="number"||typeof originLongitude!=="number")return null;
@@ -233,7 +234,7 @@ export function getJobsPage(raw: JobsPageRequest, path?: string, now = new Date(
 export function getDuplicateJobGroup(raw: JobsPageRequest, representativeId: string, path?: string, now=new Date(), dependencies: JobsPageDependencies = {}): DuplicateJobGroupDetails {
   const request=validateJobsPageRequest(raw);if(!representativeId||representativeId.length>200)throw new Error("INVALID_REPRESENTATIVE_ID");
   const personalExclusions=resolvePersonalExclusions(request,dependencies);
-  const db=openReadonlyDatabase(path);
+  const db=openReadonlyDatabase(getJobsDatabasePath(path));
   try{
     registerPersonalExclusionFunction(db,personalExclusions.keywords);
     const where=buildWhere(request.filters,request.workspaceView,now,request.sort,request.origin,personalExclusions.keywords);const rows=filteredGroupRows(db,where);const origin=request.origin??{latitude:37.5665,longitude:126.978};if(request.sort==="monthly_distance")scoreMonthlyDistance(rows,origin,request.filters.maxDistanceKm>0?request.filters.maxDistanceKm:50);const representative=rows.find(row=>row.id===representativeId);
