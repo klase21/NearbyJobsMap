@@ -1,4 +1,4 @@
-export type NormalizedRegion = "seoul" | "gyeonggi" | "incheon" | "other";
+export type NormalizedRegion = "seoul" | "gyeonggi" | "capital_scope" | "incheon" | "other";
 export type RegionNormalizationConfidence = "exact" | "mapped_city" | "multiple" | "exact_source_filter" | "unknown";
 export type RegionEvidenceSource = "displayed_location" | "mapped_displayed_location" | "source_filter" | "unknown";
 export type CollectionRegion = "seoul" | "gyeonggi";

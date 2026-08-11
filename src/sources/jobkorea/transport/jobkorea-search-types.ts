@@ -1,9 +1,10 @@
 import type { ParseDiagnostic } from "../../../domain/source-contract";
+import type { SourcePostingDateEvidence } from "../../../services/collection-date";
 import type { JobKoreaDetailOutcome, JobKoreaPermissionStatus, JobKoreaRunStatus } from "./types";
 import type { JobKoreaLifecycleDiagnostic } from "./jobkorea-lifecycle";
 
 export type JobKoreaSearchTransportChoice = "auto" | "playwright" | "direct";
-export type JobKoreaSelectedSearchTransport = Exclude<JobKoreaSearchTransportChoice, "auto">;
+export type JobKoreaSelectedSearchTransport = Exclude<JobKoreaSearchTransportChoice, "auto"> | "http_post_listing";
 export type JobKoreaSearchPageClassification =
   | "valid_search_results" | "valid_empty_results" | "login_redirect" | "verification_page"
   | "captcha_page" | "access_denied" | "root_redirect" | "malformed_results"
@@ -11,13 +12,18 @@ export type JobKoreaSearchPageClassification =
 
 export interface JobKoreaSearchOptions {
   searchUrl: string;
-  pages: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+  pages: number;
   pageNumbers?: number[];
   maxDetails: number;
   transport: JobKoreaSearchTransportChoice;
   confirm: true;
   dryRun: boolean;
   diagnostic: boolean;
+  localTodayMode?: boolean;
+  collectionDate?: { timezone: "Asia/Seoul"; resolvedDate: string };
+  backfillCutoffDate?: string;
+  signal?: AbortSignal;
+  onPage?: (page: JobKoreaListingPageResult) => void;
 }
 
 export type JobKoreaListingClassificationMetadata =
@@ -42,7 +48,10 @@ export interface JobKoreaListingCardFields {
   experienceRequirement: string | null;
   educationRequirement: string | null;
   postedAt: string | null;
+  postingDateEvidence: SourcePostingDateEvidence | null;
   deadlineText: string | null;
+  positionGrade?: string | null;
+  salaryCandidateRejected?: boolean;
 }
 
 export interface JobKoreaListingCandidate {
@@ -271,6 +280,7 @@ export interface JobKoreaFailedResourceSummary {
 
 export interface JobKoreaListingPageResult {
   pageNumber: number;
+  observedAt?: string | null;
   snapshotSchemaVersion: 2 | null;
   serializedSnapshotBytes: number | null;
   finalUrl: string | null;
@@ -326,6 +336,8 @@ export interface JobKoreaSearchExecution {
   readonly detailNavigationCount: number;
   readonly directRequestCount: number;
   readonly lifecycleDiagnostics: JobKoreaLifecycleDiagnostic[];
+  readonly completedByExhaustion?: boolean;
+  readonly stopReason?: import("../today/jobkorea-http-today").JobKoreaTodayStopReason;
   close(): Promise<void>;
   fetchDetail(url: string): Promise<{ finalUrl: string; html: string; explicitClosed: boolean }>;
 }

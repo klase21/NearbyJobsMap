@@ -17,7 +17,7 @@ export const SALARY_TYPE_LABELS: Record<SalaryType, string> = {
   negotiable: "협의", company_policy: "회사 내규", mixed: "혼합 보상", unknown: "미확인",
 };
 export const SORT_LABELS: Record<SortOption, string> = {
-  newest: "최신 등록순", deadline: "마감 임박순", distance: "가까운 순", hourly: "시급 높은 순", daily: "일급 높은 순",
+  newest: "최신 등록순", deadline: "마감 임박순", distance: "가까운 순", monthly_distance: "월급+거리", hourly: "시급 높은 순", daily: "일급 높은 순",
   monthly: "월급 높은 순", annual: "연봉 높은 순", normalized_monthly: "월 환산 예상금액 높은 순", company: "회사명순",
 };
 export const USER_STATUS_LABELS: Record<UserJobStatus, string> = {

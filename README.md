@@ -3,151 +3,122 @@
 [![CI](https://github.com/klase21/NearbyJobsMap/actions/workflows/ci.yml/badge.svg)](https://github.com/klase21/NearbyJobsMap/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## 내 주변 일자리 지도
+NearbyJobsMap is a local-first workspace for discovering and reviewing Korean job listings. Source records live in local SQLite, the job list is the primary interface, and the map is a secondary way to explore the current bounded result page.
 
-NearbyJobsMap is a local-first Korean job discovery and application workspace. It keeps a unified job list in SQLite, uses a map as a secondary exploration tool, and provides bounded, manually initiated collection operations for supported source adapters.
+> NearbyJobsMap is not an official source API client or hosted service. Source permission is `unverified`; this project does not grant permission to collect data. Source terms, robots policies, and applicable rules remain the user's responsibility.
 
-> **Status: local MVP.** This repository is not an official API client or a hosted service. Collection permissions remain unverified and users must review source terms and applicable rules themselves.
+## Highlights
 
-## Current status and limitations
+- Server-side SQLite filtering, deterministic sorting, and pagination; page sizes are 25, 50, or 100 with 50 as the default.
+- Same-source semantic duplicate grouping using conservative normalized company and title equality. Source identities and per-job personal state remain independent.
+- URL-backed filters, saved job views, favorites, workflow status, notes, application dates, follow-up dates, personal deadlines, hidden state, and archives.
+- Source-neutral literal exclusion filtering. A local personal exclusion profile can be imported from a normal Albamon search URL and is applied before grouping, ranking, and pagination.
+- Current-page map markers only. Missing, estimated, conflicting, and source-observed locations remain distinct; no geocoding is performed.
 
-- Collection is manual only. There is no scheduler, recurring worker, automated login, CAPTCHA bypass, cookie reuse, stealth, or proxy rotation.
-- JobKorea public search-page listing collection and listing-only fallback are implemented. Anonymous detail responses may return login or verification content, so many collected records remain explicitly labeled as listing-only. An explicitly approved August 2026 capital-region backfill visited pages 1–10 once, selected 196 Seoul/Gyeonggi records, and wrote 177 inserts, 5 updates, and 14 unchanged observations with zero detail requests or failed items.
-- The Albamon listing adapter uses public browser-rendered `/jobs/total` pages only. A bounded August 2026 Seoul run used the historically recorded public area mapping `I000 → Seoul` (`B000 → Gyeonggi`), isolated 100 cards across two explicit pages, selected 20, and wrote 20 listing-only records with no failures. Displayed location is optional: when absent, the single-region source filter is stored as separate region evidence and the original location remains `null`. This project does not call undocumented Albamon BFF endpoints or crawl Albamon detail pages.
-- Seoul and Gyeonggi classification uses trustworthy displayed location or a verified single-region source filter. A contradictory displayed region is rejected, and unknown locations are never guessed or copied from title/company text.
-- Source permission is `unverified`; the project does not grant collection permission.
-- Work24 integration is deferred.
+## Supported sources
 
-## Features
+### JobKorea
 
-### Job discovery
+The current safe listing path reads public Seoul/Gyeonggi recruitment-list responses without login, cookies, browser profiles, private credentials, or detail-page crawling. It extracts numeric listing identity, company, title, structured listing metadata, registration evidence, deadline, location, employment information when present, and source-visible salary text.
 
-- Responsive unified list with a supplementary Leaflet/OpenStreetMap view
-- JobKorea and Albamon source filters plus provenance, completeness, region, status, salary, location, and map filters
-- Seoul/Gyeonggi normalization while preserving original location text
-- Positive search and source-neutral exclusion keywords
-- Synchronized list counts and map markers; jobs without coordinates remain usable in the list
+The observed listing transport is a public-page contract rather than an official API. If it begins requiring authentication, signed values, or access-control workarounds, collection must stop.
 
-### Collection operations
+### Albamon
 
-- Local-only `/collection` control screen with built-in bounded presets
-- Dry-run before write, opaque 30-minute authorization, and exact typed write confirmation
-- One active run maximum, concurrency maximum 2, and zero retries
-- Progress polling, persisted write history, dashboard analytics, and bounded failure summaries
-- No arbitrary URLs, commands, SQL, source keywords, or environment variables through the control API
+The Albamon listing adapter uses normal public `/jobs/total` listing pages for Seoul and Gyeonggi. The listing-only parser preserves identity, company, title, workplace area and address, conflict-safe region evidence, safe source coordinates, salary and pay type, working schedule, posting evidence, deadline, categories, and payment-condition badges.
 
-### Collection profiles
+It does not call private BFF endpoints or crawl detail pages. A payment-condition badge such as `당일지급` is never treated as salary.
 
-- SQLite-backed saved profiles with revisions, deterministic configuration hashes, favorites, duplication, and optimistic concurrency
-- Two-to-four profile configuration and persisted-result comparison
-- Preview-first, transactional JSON import/export with conflict-safe create, skip, rename, and replace actions
+## Salary and distance
 
-### Personal job search
+Filters support original structured salary periods and straight-line Haversine distance from a locally configured origin. Available sorts include newest, salary-highest, nearest, and `monthly_distance`.
 
-- Favorite, hidden, and archived states stored separately from source data
-- Workflow states from unreviewed through planned, applied, interview, offer, hired, rejected, and ignored
-- Plain-text notes plus application, follow-up, and personal-deadline dates
-- Saved filter views and first-run onboarding
+`monthly_distance` ranks eligible jobs with a transparent combined score:
 
-### Data operations
+- 70% normalized structured monthly salary
+- 30% normalized distance
 
-- Append-only bounded observations and field-level change history
-- First/last-seen and not-observed freshness labels; stale never means closed
-- SQLite backup, verification, pre-restore backup, and guarded restore
+Only structured monthly salary participates in monthly comparison. Hourly, daily, and annual pay are not converted to monthly values, and no working-hour assumptions are invented.
 
-## 화면 미리보기
+## Manual collection and backfill
 
-화면 이미지는 외부 사이트에서 가져온 실데이터가 아닌, 프로젝트의 정제된 데모 데이터로 생성되었습니다. 캡처 과정은 격리된 임시 SQLite 데이터베이스를 사용하고 모든 외부 브라우저 요청을 차단합니다.
+Collection and backfill are manual only.
 
-### 공고 목록과 지도
+Collection controls are local-only and disabled unless explicitly enabled. There is no scheduler, recurring worker, remote queue, automatic startup collection, or retry loop.
 
-![서울 수동 수집·목록 정보 필터가 적용된 공고 목록과 보조 지도](docs/images/jobs-list-map-desktop.png)
+Manual backfill supports:
 
-### 수집 현황과 실행
+- JobKorea registration-ordered Seoul/Gyeonggi listing traversal to an explicit date cutoff.
+- A personal Albamon profile using ALL period, Seoul/Gyeonggi, and user-configured exclusions.
+- A full read-only preview before write.
+- A server-issued, single-use preview authorization valid for 30 minutes.
+- Configuration and profile-hash binding; relevant changes require a new preview.
+- One verified SQLite backup immediately before write.
+- A fresh source traversal during write, allowing bounded live-source changes since preview.
+- One active collection run, concurrency 1 for backfill, zero retries, cancellation between pages, and explicit page ceilings.
 
-![소스, 지역, 완성도, 지도 범위와 최근 합성 실행을 보여 주는 수집 현황](docs/images/collection-dashboard-desktop.png)
+The personal profile is stored only in ignored local data. A fresh clone treats a missing profile as a normal unconfigured state.
 
-![기본 프리셋, 저장 프로필, 제외 키워드와 드라이런 준비 화면](docs/images/collection-execution-desktop.png)
+## Safety boundaries
 
-### 저장 프로필 비교
+- Collection is manually initiated and bounded.
+- No login automation, cookie/session reuse, CAPTCHA solving, stealth, proxy rotation, or access-control bypass.
+- No undocumented private endpoints.
+- Dry-runs do not write jobs, provenance, ingestion history, or observations.
+- Source salary, address, schedule, and posting evidence are preserved; missing data is not fabricated.
+- Exact source identity is `(source, sourcePostingId)`. Probable duplicates are presentation groups, never destructive merges.
+- Runtime databases, backups, personal profiles, environment files, browser state, and support artifacts are ignored and excluded from public packaging.
 
-![두 저장 프로필의 구성, 제외 키워드, 실행 성과와 정확 ID 중복 비교](docs/images/profile-comparison-desktop.png)
+## Screenshots
 
-### 개인 구직 관리
+The committed screenshots use deterministic synthetic data (정제된 데모 데이터) and block external browser requests.
 
-![관심, 지원 예정, 메모, 날짜와 최신성을 보여 주는 모바일 개인 구직 화면](docs/images/job-workspace-mobile.png)
+![Job list and secondary map](docs/images/jobs-list-map-desktop.png)
 
-### 첫 실행 안내
+![Collection dashboard](docs/images/collection-dashboard-desktop.png)
 
-![데모, 픽스처, 수동 수집과 완성도 라벨을 설명하는 모바일 온보딩](docs/images/onboarding-mobile.png)
+![Collection execution](docs/images/collection-execution-desktop.png)
 
-재생성 및 검토 절차는 [스크린샷 가이드](docs/SCREENSHOTS.md)를 참고하세요.
+![Saved profile comparison](docs/images/profile-comparison-desktop.png)
+
+![Personal job workspace](docs/images/job-workspace-mobile.png)
+
+![First-run onboarding](docs/images/onboarding-mobile.png)
+
+See [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md) for the synthetic capture process.
 
 ## Architecture
 
-- Next.js 16.3 App Router and React 19
-- Strict TypeScript and Tailwind CSS 4
+- Next.js 16 App Router and React 19
+- Strict TypeScript
 - Local SQLite with append-only migrations and server-only repositories
-- Isolated JobKorea and Albamon source adapters
-- Playwright only for bounded rendering of normal public pages
-- In-memory, manual-only collection run manager
+- Isolated JobKorea and Albamon adapters
+- Server-side job query, grouping, ranking, and bounded hydration
+- Versioned browser preferences plus server-readable ignored personal profile storage
 - No cloud database, account system, telemetry, or required hosted service
 
-See [Architecture](docs/ARCHITECTURE.md) for boundaries and data flow.
-
-Key directories:
-
-```text
-src/app/             Next.js pages and local APIs
-src/components/      List, map, collection, onboarding, and workspace UI
-src/db/              SQLite migrations, repositories, and ingestion services
-src/server/          Server-only run, profile, dashboard, and backup services
-src/sources/         Isolated source adapters and sanitized fixtures
-src/tests/           Offline tests using temporary SQLite databases
-scripts/             Database, backup, release, and Windows launcher tools
-docs/                Public installation, troubleshooting, and architecture guides
-```
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full boundaries and data flow.
 
 ## Requirements
 
 - Windows 10 or Windows 11
 - Windows PowerShell 5.1 or PowerShell 7
-- Node.js 20.9 or newer (the clean validation environment used Node 24)
+- Node.js 20.9 or newer
 - npm 10 or newer
-- Playwright Chromium only when manual collection is enabled
-- Project storage for dependencies, SQLite data, and optional backups
+- Playwright Chromium only for explicitly enabled browser-backed collection
 
-## Windows quick start
+## Quick start
 
-1. Clone or download this repository:
+```powershell
+git clone https://github.com/klase21/NearbyJobsMap.git
+Set-Location NearbyJobsMap
+.\scripts\install.ps1
+.\scripts\start.ps1
+```
 
-   ```powershell
-   git clone https://github.com/klase21/NearbyJobsMap.git
-   Set-Location NearbyJobsMap
-   ```
+Open <http://127.0.0.1:3000>. Collection remains disabled unless the application is started with the explicit local collection option.
 
-2. Open PowerShell in the project directory.
-3. Install and initialize:
-
-   ```powershell
-   .\scripts\install.ps1
-   ```
-
-4. Start locally:
-
-   ```powershell
-   .\scripts\start.ps1
-   ```
-
-5. Open <http://127.0.0.1:3000>.
-
-Collection execution stays disabled unless `-EnableCollectionUI` is explicitly supplied.
-
-Chromium is needed only for browser-backed manual collection. If its download is unavailable, use `install.ps1 -SkipBrowserInstall`; the list, dashboard, profiles, workflow, and local database remain usable. Repair it later with `.\scripts\install-browser.ps1` and check readiness with `.\scripts\doctor.ps1`.
-
-For a GitHub issue, `.\scripts\support-bundle.ps1` can create a bounded diagnostic ZIP. Inspect it before sharing: it excludes databases, job and personal data, environment values, credentials, and local absolute paths, but does not guarantee anonymity.
-
-Manual npm setup remains available:
+Manual npm setup:
 
 ```powershell
 npm.cmd ci
@@ -157,73 +128,9 @@ npm.cmd run typecheck
 npm.cmd run dev -- --hostname 127.0.0.1 --port 3000
 ```
 
-For details, see [Windows installation](docs/WINDOWS_INSTALL.md).
+The default database is `data/nearby-jobs.sqlite`; it is ignored by Git. Fresh setup applies migrations and can load only sanitized fixture-derived and explicitly fictional demo records.
 
-## Environment variables
-
-Copy `.env.example` to `.env.local` and adjust only local values:
-
-```dotenv
-NEARBY_JOBS_DB_PATH=./data/nearby-jobs.sqlite
-NEARBY_JOBS_ENABLE_COLLECTION_UI=0
-HOSTNAME=127.0.0.1
-PORT=3000
-NEARBY_JOBS_BACKUP_DIR=./data/backups
-```
-
-`NEARBY_JOBS_ENABLE_COLLECTION_UI=1` enables execution endpoints only when the request is also local and passes the existing origin checks. It does not make collection public.
-
-## Database and demo data
-
-The runtime database defaults to `data/nearby-jobs.sqlite` and is ignored by Git.
-
-```powershell
-npm.cmd run db:init
-npm.cmd run setup:local
-npm.cmd run db:status
-```
-
-`setup:local` applies migrations and idempotently loads six sanitized fixture-derived records and ten explicitly fictional demo records. Fixture, demo, listing-only collection, and detail-complete collection remain visibly distinct.
-
-To replace a local database with deterministic demo data, first back it up, then use the exact confirmation:
-
-```powershell
-npm.cmd run db:reset:demo -- --confirm "RESET LOCAL DATABASE"
-```
-
-Never use reset when you intend to preserve an existing database.
-
-## Collection safety
-
-- Manual initiation only; no scheduler or automatic retries
-- JobKorea listing maximum 5 pages and candidate maximum 50; detail concurrency maximum 2
-- The separate manual `backfill:jobkorea:once` maintenance command is listing-only and bounded to an explicit page range of 1–10 and 200 candidates. It requires a dry-run plus the exact write phrase, makes no detail requests, has zero retries, and does not weaken the ordinary collection-control limits.
-- Albamon listing maximum 5 explicit pages and candidate maximum 50; public `/jobs/total` rendering uses `DOMContentLoaded`, bounded scrolling, verified single-region area filters (`I000` Seoul, `B000` Gyeonggi), local conflict checks, and no detail or undocumented BFF requests
-- No authentication, cookie/session reuse, access-control bypass, CAPTCHA solving, or stealth
-- Dry-run writes no collection run, item, provenance, or job data
-- Write requires the matching recent dry-run and exact confirmation
-- Failed candidates are not replaced after selection
-
-Collection examples and controls are documented in the application. Review source rules and obtain any required permission before enabling them.
-
-### JobKorea data quality
-
-The backfill preserves displayed location and salary text without inventing missing detail fields. Address quality is classified as full address, city/district, region only, multiple locations, unknown, or contaminated. Salary quality is classified as structured, display-only, negotiable, unknown, or invalid without converting between hourly, daily, monthly, and annual units. A record is conservatively marked commute-ready only when it has reliable coordinates or a trustworthy full address; external geocoding, route calculation, commute cost, and after-tax income are not implemented.
-
-The verified post-backfill inventory contains 215 JobKorea records: 207 bounded live listing observations, 3 fixture-derived records, and 5 fictional records. All 215 passed numeric public-ID rules where applicable, canonical URL matching, title/company, location contamination, coordinate-pair, salary, provenance, observation, foreign-key, and duplicate-identity checks. The 207 live records remain `listing_only` with detail access `not_attempted` and permission `unverified`.
-
-## Backup and restore
-
-```powershell
-.\scripts\backup.ps1
-.\scripts\backup.ps1 -List
-.\scripts\backup.ps1 -Verify -File "nearby-jobs-20260806T120000Z.sqlite"
-.\scripts\restore.ps1 -File "nearby-jobs-20260806T120000Z.sqlite" -Confirm "RESTORE DATABASE"
-```
-
-Restore verifies the SQLite header, integrity result, manifest, and SHA-256 checksum; creates a pre-restore backup; and requires the exact phrase `RESTORE DATABASE`. Stop the application before restoring.
-
-## Testing and release checks
+## Validation
 
 ```powershell
 npm.cmd run typecheck
@@ -231,32 +138,10 @@ npm.cmd run lint
 npm.cmd test
 npm.cmd run build
 npm.cmd run db:status
-npm.cmd run release:audit
-.\scripts\release-check.ps1
 ```
 
-Automated tests use temporary databases and must never access JobKorea or Albamon.
+Automated tests use temporary SQLite databases and must not contact JobKorea or Albamon.
 
-## Public-data and legal notice
+## License and contributing
 
-Users are responsible for complying with third-party terms, robots policies, applicable law, and data-use permissions. This project does not grant permission to collect from any service and includes no access-control bypass. Do not commit personal data, credentials, cookies, private notes, runtime databases, raw source pages, or profile exports.
-
-## Roadmap
-
-- Owner review and publication of v0.1.1 First-User Hardening after the verified backfill backup
-- 통근비·실질소득 계산기, only after workplace-address and salary quality are sufficient: saved origins, manual commute time/cost, before-tax monthly estimates, after-tax estimates, commute-adjusted income, effective hourly wage, and route display
-- Optional source integrations only after permission and contract review
-
-No dates are promised.
-
-## License
-
-Licensed under the [MIT License](LICENSE).
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Security
-
-See [SECURITY.md](SECURITY.md).
+Licensed under the [MIT License](LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).

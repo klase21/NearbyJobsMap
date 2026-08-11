@@ -14,6 +14,15 @@ const record = (overrides: Partial<CanonicalJob> = {}, fictional = false, coords
 const filters = (overrides: Partial<JobFilterState> = {}): JobFilterState => ({ ...DEFAULT_FILTERS, ...overrides, salaryThresholds: { ...DEFAULT_FILTERS.salaryThresholds, ...overrides.salaryThresholds } });
 const now = new Date("2026-08-05T00:00:00Z");
 
+describe("today discovery filters", () => {
+  it("keeps source posting date and first discovery distinct", () => {
+    const postedToday = { ...record({ id: "posted" }), postingDateLocalDate: "2026-08-05", firstSeenAt: "2026-08-04T00:00:00Z" };
+    const firstSeenToday = { ...record({ id: "seen" }), postingDateLocalDate: "2026-08-04", firstSeenAt: "2026-08-05T01:00:00+09:00" };
+    expect(filterJobs([postedToday, firstSeenToday], filters({ discoveryDate: "today_posted" }), now)).toEqual([postedToday]);
+    expect(filterJobs([postedToday, firstSeenToday], filters({ discoveryDate: "today_first_seen" }), now)).toEqual([firstSeenToday]);
+  });
+});
+
 describe("UI 공고 필터", () => {
   const jobs = [
     record({ id: "jobkorea:1", title: "주방 보조", companyName: "새봄물류", source: "jobkorea", categories: ["외식"], employmentTypes: ["정규직"], city: "서울", district: "강남구", addressOriginalText: "서울 강남구", postingStatus: "active", locationAccuracy: "exact_address" }),
@@ -43,6 +52,12 @@ describe("UI 공고 필터", () => {
     const unknown = record({ id: "unknown", addressOriginalText: null, city: null, district: null, workplaces: [] });
     expect(filterJobs([other, unknown], filters({ region: "other" }), now).map(({ job }) => job.id)).toEqual(["other"]);
     expect(filterJobs([other, unknown], filters({ region: "unknown" }), now).map(({ job }) => job.id)).toEqual(["unknown"]);
+  });
+  it("결합 수도권 검색범위를 서울·경기 개별 지역으로 중복 집계하지 않는다", () => {
+    const scoped = { ...record({ id: "capital" }), normalizedRegions: ["capital_scope" as const], regionEvidenceSource: "source_filter" as const, sourceAreaCode: "I000,B000" };
+    expect(filterJobs([scoped], filters({ region: "seoul" }), now)).toEqual([]);
+    expect(filterJobs([scoped], filters({ region: "gyeonggi" }), now)).toEqual([]);
+    expect(filterJobs([scoped], filters({ region: "capital_scope" }), now)).toEqual([scoped]);
   });
   it("지도 가능 여부와 AND 결합", () => {
     const mapped = record({ id: "mapped", source: "jobkorea", addressOriginalText: "서울 강남구" }, false, [37.5, 127]);

@@ -45,6 +45,17 @@ export class CollectionDashboardRepository {
   constructor(private readonly database: Database.Database, private readonly now: () => Date = () => new Date()) {}
 
   getDashboard(filters: CollectionDashboardFilters): CollectionDashboardData {
+    const todayLocalDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(this.now());
+    const todayRows = this.database.prepare(`SELECT source, SUM(inserted_count) inserted, SUM(updated_count) updated,
+      SUM(unchanged_count) unchanged, SUM(excluded_candidate_count) excluded, SUM(source_failure_count) source_failures,
+      MAX(started_at) last_run_at FROM ingestion_runs WHERE dry_run=0 AND collection_date_scope='today' AND collection_local_date=? GROUP BY source`).all(todayLocalDate) as Row[];
+    const todayBySource = new Map(todayRows.map((row) => [String(row.source), row]));
+    const todayCollection = { localDate: todayLocalDate,
+      jobkorea: { inserted: n(todayBySource.get("jobkorea")?.inserted), updated: n(todayBySource.get("jobkorea")?.updated) },
+      albamon: { inserted: n(todayBySource.get("albamon")?.inserted), updated: n(todayBySource.get("albamon")?.updated) },
+      unchanged: todayRows.reduce((sum, row) => sum + n(row.unchanged), 0), excluded: todayRows.reduce((sum, row) => sum + n(row.excluded), 0),
+      sourceFailures: todayRows.reduce((sum, row) => sum + n(row.source_failures), 0),
+      lastRunAt: todayRows.map((row) => nullableString(row.last_run_at)).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null };
     const profileRow = this.database.prepare(`SELECT COUNT(*) total, SUM(source='jobkorea') jobkorea, SUM(source='albamon') albamon,
       SUM(is_favorite=1) favorites, SUM(last_used_at >= ?) used_30 FROM saved_collection_profiles`).get(new Date(this.now().getTime() - 30 * 86_400_000).toISOString()) as Row;
     const profileRows = this.database.prepare(`SELECT id,name,source,is_favorite,last_used_at FROM saved_collection_profiles
@@ -88,12 +99,13 @@ export class CollectionDashboardRepository {
 
     const regionRows = this.database.prepare(`SELECT
       CASE WHEN json_valid(normalized_regions_json)=0 OR json_array_length(normalized_regions_json)=0 THEN 'unknown'
+        WHEN EXISTS(SELECT 1 FROM json_each(normalized_regions_json) WHERE value='capital_scope') THEN 'capitalScope'
         WHEN json_array_length(normalized_regions_json)>1 THEN 'multiple'
         WHEN EXISTS(SELECT 1 FROM json_each(normalized_regions_json) WHERE value='seoul') THEN 'seoul'
         WHEN EXISTS(SELECT 1 FROM json_each(normalized_regions_json) WHERE value='gyeonggi') THEN 'gyeonggi'
         ELSE 'other' END region_group,
       COUNT(*) total, SUM(${manualSql}) manual FROM jobs GROUP BY region_group`).all() as Row[];
-    const regions = { seoul: { total: 0, manual: 0 }, gyeonggi: { total: 0, manual: 0 }, multiple: { total: 0, manual: 0 }, other: { total: 0, manual: 0 }, unknown: { total: 0, manual: 0 } };
+    const regions = { seoul: { total: 0, manual: 0 }, gyeonggi: { total: 0, manual: 0 }, capitalScope: { total: 0, manual: 0 }, multiple: { total: 0, manual: 0 }, other: { total: 0, manual: 0 }, unknown: { total: 0, manual: 0 } };
     for (const row of regionRows) { const key = String(row.region_group) as keyof typeof regions; regions[key] = { total: n(row.total), manual: n(row.manual) }; }
 
     const completenessBySource = sources.map((source) => ({ source: source.source, listingOnly: source.listingOnly, detailComplete: source.detailComplete, unknown: source.completenessUnknown }));
@@ -113,7 +125,8 @@ export class CollectionDashboardRepository {
     const qualityTotals = this.database.prepare(`SELECT
       SUM(display_map_latitude IS NOT NULL AND display_map_longitude IS NOT NULL) coordinate_records,
       SUM(commute_ready=1) commute_ready_records FROM jobs`).get() as Row;
-    const dataQuality = { address, salary, coordinateRecords: n(qualityTotals.coordinate_records), commuteReadyRecords: n(qualityTotals.commute_ready_records) };
+    const capitalScopeOnlyRecords = n((this.database.prepare(`SELECT COUNT(*) count FROM jobs WHERE json_valid(normalized_regions_json)=1 AND json_array_length(normalized_regions_json)=1 AND EXISTS(SELECT 1 FROM json_each(normalized_regions_json) WHERE value='capital_scope')`).get() as Row).count);
+    const dataQuality = { address, salary, coordinateRecords: n(qualityTotals.coordinate_records), commuteReadyRecords: n(qualityTotals.commute_ready_records), capitalScopeOnlyRecords };
 
     const where = runWhere(filters, this.now());
     const runRows = this.database.prepare(`SELECT r.*,
@@ -158,7 +171,7 @@ export class CollectionDashboardRepository {
       fields: [...fieldUses].map(([field, uses]) => ({ field, uses })).sort((a, b) => b.uses - a.uses || a.field.localeCompare(b.field)) };
 
     const recentRuns = runRows.slice(0, 20).map((row) => summary({ ...row, selected_candidates: row.selected_after_exclusion ?? row.selected_detail_count }));
-    return { generatedAt: this.now().toISOString(), filters, inventory, sources, regions, completenessBySource, mapCoverage, dataQuality, effectiveness, exclusions, recentRuns, profiles };
+    return { generatedAt: this.now().toISOString(), filters, todayCollection, inventory, sources, regions, completenessBySource, mapCoverage, dataQuality, effectiveness, exclusions, recentRuns, profiles };
   }
 
   getRunDetail(runId: string): CollectionRunDetail | null {

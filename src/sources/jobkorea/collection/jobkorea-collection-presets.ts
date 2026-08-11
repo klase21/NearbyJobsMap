@@ -29,3 +29,8 @@ export function buildJobKoreaKeywordSearchUrl(keyword: string): string {
   url.searchParams.set("Page_No", "1");
   return normalizeJobKoreaSearchUrl(url.toString());
 }
+
+/** Public main recruitment list used only by the local today collector. */
+export function buildJobKoreaTodayListUrl(): string {
+  return "https://www.jobkorea.co.kr/recruit/joblist";
+}

@@ -46,6 +46,15 @@ export interface CollectionRunSummary {
 export interface CollectionDashboardData {
   generatedAt: string;
   filters: CollectionDashboardFilters;
+  todayCollection: {
+    localDate: string;
+    jobkorea: { inserted: number; updated: number };
+    albamon: { inserted: number; updated: number };
+    unchanged: number;
+    excluded: number;
+    sourceFailures: number;
+    lastRunAt: string | null;
+  };
   inventory: {
     totalJobs: number;
     jobkoreaJobs: number;
@@ -60,7 +69,7 @@ export interface CollectionDashboardData {
     listOnlyRecords: number;
   };
   sources: DashboardSourceOverview[];
-  regions: Record<"seoul" | "gyeonggi" | "multiple" | "other" | "unknown", DashboardCountPair>;
+  regions: Record<"seoul" | "gyeonggi" | "capitalScope" | "multiple" | "other" | "unknown", DashboardCountPair>;
   completenessBySource: Array<{ source: "jobkorea" | "albamon"; listingOnly: number; detailComplete: number; unknown: number }>;
   mapCoverage: { eligible: number; listOnly: number; percentage: number | null; bySource: Array<{ source: "jobkorea" | "albamon"; eligible: number; total: number; percentage: number | null }> };
   dataQuality: {
@@ -68,6 +77,7 @@ export interface CollectionDashboardData {
     salary: Record<"structured" | "display_only" | "negotiable" | "unknown" | "invalid", number>;
     coordinateRecords: number;
     commuteReadyRecords: number;
+    capitalScopeOnlyRecords: number;
   };
   effectiveness: {
     runs: number;

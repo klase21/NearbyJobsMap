@@ -15,7 +15,8 @@ function normalizeCompany(value: string): string {
 }
 
 export function normalizeJobKorea(listing: JobKoreaListing, detail?: JobKoreaDetail): CanonicalJob {
-  const salary = normalizeSalary(parseSalary(detail?.salaryText ?? listing.salaryText ?? ""));
+  const salaryText = detail?.salaryText ?? listing.salaryText ?? "";
+  const salary = normalizeSalary(parseSalary(salaryText, detail ? {} : { bareManwonPeriod: "annual" }));
   const addressOriginalText = detail?.addressOriginalText ?? listing.regionText;
   const canonicalUrl = canonicalizeUrl(detail?.canonicalUrl ?? listing.sourceUrl);
   const expiresAt = detail?.expiresAt ?? null;

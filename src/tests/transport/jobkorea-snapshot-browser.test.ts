@@ -4,6 +4,7 @@ import { chromium } from "playwright";
 import { buildJobKoreaListingPageResult, classifyJobKoreaRenderedPage } from "../../sources/jobkorea/transport/jobkorea-listing-page";
 import { captureJobKoreaPageSnapshot, captureJobKoreaReadinessEvidence } from "../../sources/jobkorea/transport/jobkorea-page-snapshot";
 import { syntheticJobKoreaPages } from "./jobkorea-synthetic-pages";
+import { classifyPostingDateEvidence } from "../../services/collection-date";
 
 let browser: Browser;
 let context: BrowserContext;
@@ -56,7 +57,7 @@ describe("잡코리아 synthetic page snapshot browser boundary", () => {
     expect(value.collectionCandidates).toEqual([{ postingId: "50009991", canonicalUrl: "https://www.jobkorea.co.kr/Recruit/GI_Read/50009991",
       firstSourcePosition: 1, observedLinkCount: 2, listingClassification: "structurally_provisional",
       listingFields: { title: "공고", companyName: "회사", regionText: null, salaryText: null, employmentTypes: [],
-        experienceRequirement: null, educationRequirement: null, postedAt: null, deadlineText: null } }]);
+        experienceRequirement: null, educationRequirement: null, postedAt: null, postingDateEvidence: null, deadlineText: null } }]);
     expect(classifyJobKoreaRenderedPage(value)).toBe("malformed_results");
   });
 
@@ -69,6 +70,35 @@ describe("잡코리아 synthetic page snapshot browser boundary", () => {
     expect(value.collectionCandidates[0]?.listingFields).toMatchObject({ title: "긴 가상 공고 제목 하나", companyName: "가상회사 하나", regionText: "서울 중구", salaryText: "연봉 4,000만원" });
     expect(value.collectionCandidates[1]?.listingFields).toMatchObject({ title: "긴 가상 공고 제목 둘", companyName: "가상회사 둘", regionText: "경기 수원시" });
     expect(value.collectionCandidates[0]?.listingFields?.companyName).not.toBe("가상회사 둘");
+  });
+
+  it.each(["오늘", "방금", "15분 전", "3시간 전", "08.07", "2026.08.07", "어제"])("전용 등록 필드에서 %s를 추출한다", async (rawDate) => {
+    const value = await snapshot(`<base href="https://www.jobkorea.co.kr/Search?stext=AI"><main data-section="recruit-search-results"><div class="cards">
+      <article><a class="company" href="/Recruit/Co_Read/C/date">가상회사</a><a href="/Recruit/GI_Read/71000001">가상 등록일 공고</a><span class="location">서울 중구</span><span class="salary">연봉 4,000만원</span><span class="registered">${rawDate}</span><span class="deadline">08.20</span></article>
+      <article><a class="company" href="/Recruit/Co_Read/C/peer">다른회사</a><a href="/Recruit/GI_Read/71000002">다른 공고</a></article>
+    </div></main>`);
+    expect(value.collectionCandidates[0]?.listingFields).toMatchObject({ postedAt: rawDate, postingDateEvidence: { raw: rawDate, sourceField: "listing_registered" }, regionText: "서울 중구", salaryText: "연봉 4,000만원", deadlineText: "08.20" });
+    expect(classifyPostingDateEvidence(value.collectionCandidates[0]?.listingFields?.postingDateEvidence?.raw, "2026-08-07").status).toBe(rawDate === "어제" ? "older" : "today");
+  });
+
+  it("등록 라벨은 마감과 분리하고 deadline-only·unrelated date를 posting date로 쓰지 않는다", async () => {
+    const value = await snapshot(`<base href="https://www.jobkorea.co.kr/Search?stext=AI"><main data-section="recruit-search-results"><div class="cards">
+      <article><a class="company" href="/Recruit/Co_Read/C/a">가상회사 A</a><a href="/Recruit/GI_Read/72000001">등록과 마감</a><dl><dt>등록일</dt><dd>08.07</dd><dt>마감</dt><dd class="deadline">08.20</dd></dl></article>
+      <article><a class="company" href="/Recruit/Co_Read/C/b">가상회사 B</a><a href="/Recruit/GI_Read/72000002">마감만 있음</a><span class="deadline">오늘</span><span>2024.01.01</span></article>
+    </div></main>`);
+    expect(value.collectionCandidates[0]?.listingFields?.postingDateEvidence).toMatchObject({ raw: "08.07", sourceField: "listing_registered" });
+    expect(value.collectionCandidates[1]?.listingFields).toMatchObject({ postedAt: null, postingDateEvidence: null, deadlineText: "오늘" });
+  });
+
+  it("/recruit/joblist 주 결과 행만 수집하고 등록 부분을 마감과 분리한다", async () => {
+    const value = await snapshot(`<base href="https://www.jobkorea.co.kr/recruit/joblist"><main><table><tbody>
+      <tr class="devloopArea" data-gno="73000001"><td><a class="company" href="/Recruit/Co_Read/C/main">가상회사</a><a href="/Recruit/GI_Read/73000001">가상 운영 공고</a></td><td><span class="location">서울 강남구</span></td><td>30분 전 등록 / 오늘 마감</td></tr>
+      <tr class="devloopArea" data-gno="73000002"><td><a class="company" href="/Recruit/Co_Read/C/deadline">다른회사</a><a href="/Recruit/GI_Read/73000002">마감만 있는 공고</a></td><td><span class="location">경기 성남시</span></td><td>오늘 마감</td></tr>
+    </tbody></table><aside class="recommend"><a href="/Recruit/GI_Read/73999999">추천 공고</a></aside></main>`);
+    expect(value.collectionCandidates.map((candidate) => candidate.postingId)).toEqual(["73000001", "73000002"]);
+    expect(value.collectionCandidates[0]?.listingFields).toMatchObject({ postingDateEvidence: { raw: "30분 전", sourceField: "listing_registered" }, deadlineText: null, regionText: "서울 강남구" });
+    expect(value.collectionCandidates[1]?.listingFields?.postingDateEvidence).toBeNull();
+    expect(value.collectionCandidates.some((candidate) => candidate.postingId === "73999999")).toBe(false);
   });
 
   it("ordinary·AD·추천·영역 밖 링크를 분리한다", async () => {

@@ -33,6 +33,7 @@ const JOB_COLUMNS = [
   "observation_kind", "observation_transport", "observation_page_number", "observation_listing_position",
   "collection_preset_id", "collection_preset_label", "collection_keyword", "requested_regions_json", "normalized_regions_json",
   "region_normalization_confidence", "region_evidence_source", "source_area_code", "displayed_location_present", "detail_access_status", "observed_link_count",
+  "posting_date_evidence", "posting_date_status", "posting_date_local_date",
   "address_quality", "salary_quality", "commute_ready",
   "content_hash", "created_at", "updated_at",
 ] as const;
@@ -76,6 +77,8 @@ function parameters(job: CanonicalJob, metadata: IngestionMetadata, contentHash:
     region_evidence_source: metadata.regionEvidenceSource ?? "unknown", source_area_code: metadata.sourceAreaCode ?? null,
     displayed_location_present: metadata.displayedLocationPresent === undefined || metadata.displayedLocationPresent === null ? null : booleanToSql(metadata.displayedLocationPresent),
     detail_access_status: metadata.detailAccessStatus ?? null, observed_link_count: metadata.observedLinkCount ?? null,
+    posting_date_evidence: metadata.postingDateEvidence ?? null, posting_date_status: metadata.postingDateStatus ?? "unknown",
+    posting_date_local_date: metadata.postingDateLocalDate ?? null,
     address_quality: metadata.addressQuality ?? quality.addressQuality, salary_quality: metadata.salaryQuality ?? quality.salaryQuality,
     commute_ready: booleanToSql(metadata.commuteReady ?? quality.commuteReady),
     content_hash: contentHash, created_at: createdAt, updated_at: updatedAt,
@@ -176,8 +179,9 @@ export class JobRepository {
       (job_id, provenance_kind, evidence_type, source_reference, permission_status, listing_url, detail_url, observed_at, sanitizer_version, parser_version,
        observation_kind, observation_transport, page_number, listing_position, collection_preset_id, collection_preset_label, collection_keyword,
         requested_regions_json, normalized_regions_json, region_normalization_confidence, region_evidence_source, source_area_code,
-        displayed_location_present, detail_access_status, observed_link_count, first_seen_at, last_seen_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        displayed_location_present, detail_access_status, observed_link_count, posting_date_evidence, posting_date_status,
+        posting_date_local_date, first_seen_at, last_seen_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(job_id, provenance_kind, source_reference) DO UPDATE SET
         permission_status = excluded.permission_status, listing_url = excluded.listing_url, detail_url = excluded.detail_url,
         observed_at = excluded.observed_at, sanitizer_version = excluded.sanitizer_version, parser_version = excluded.parser_version,
@@ -189,6 +193,8 @@ export class JobRepository {
         region_evidence_source = excluded.region_evidence_source, source_area_code = excluded.source_area_code,
         displayed_location_present = excluded.displayed_location_present,
         detail_access_status = excluded.detail_access_status, observed_link_count = excluded.observed_link_count,
+        posting_date_evidence = excluded.posting_date_evidence, posting_date_status = excluded.posting_date_status,
+        posting_date_local_date = excluded.posting_date_local_date,
         last_seen_at = excluded.last_seen_at`)
       .run(jobId, metadata.recordKind, metadata.evidenceType, metadata.sourceFixtureReference, metadata.permissionStatus ?? null,
         metadata.listingUrl ?? null, metadata.detailUrl ?? null, metadata.observedAt ?? null, metadata.sanitizerVersion ?? null,
@@ -197,7 +203,8 @@ export class JobRepository {
         metadata.collectionKeyword ?? null, JSON.stringify(metadata.requestedRegions ?? []), JSON.stringify(metadata.normalizedRegions ?? []),
         metadata.regionConfidence ?? "unknown", metadata.regionEvidenceSource ?? "unknown", metadata.sourceAreaCode ?? null,
         metadata.displayedLocationPresent === undefined || metadata.displayedLocationPresent === null ? null : booleanToSql(metadata.displayedLocationPresent),
-        metadata.detailAccessStatus ?? null, metadata.observedLinkCount ?? null, now, now);
+        metadata.detailAccessStatus ?? null, metadata.observedLinkCount ?? null, metadata.postingDateEvidence ?? null,
+        metadata.postingDateStatus ?? "unknown", metadata.postingDateLocalDate ?? null, now, now);
   }
 
   previewUpsert(job: CanonicalJob, metadata: IngestionMetadata): UpsertResult {
@@ -297,7 +304,7 @@ export class JobRepository {
       ? { latitude: mapLatitude, longitude: mapLongitude, kind: mapKind, provenance: mapProvenance }
       : null;
     const requestedRegions = stringArray<CollectionRegion>(row, "requested_regions_json", new Set(["seoul", "gyeonggi"]));
-    const normalizedRegions = stringArray<NormalizedRegion>(row, "normalized_regions_json", new Set(["seoul", "gyeonggi", "incheon", "other"]));
+    const normalizedRegions = stringArray<NormalizedRegion>(row, "normalized_regions_json", new Set(["seoul", "gyeonggi", "capital_scope", "incheon", "other"]));
     const regionConfidence = requiredString(row, "region_normalization_confidence") as RegionNormalizationConfidence;
     if (!["exact", "mapped_city", "multiple", "exact_source_filter", "unknown"].includes(regionConfidence)) throw new JobRepositoryError("INVALID_DATABASE_ROW", "region normalization confidence가 유효하지 않습니다.");
     const regionEvidenceSource = requiredString(row, "region_evidence_source") as NonNullable<IngestionMetadata["regionEvidenceSource"]>;
@@ -336,7 +343,10 @@ export class JobRepository {
         collectionKeyword: nullableString(row, "collection_keyword"), requestedRegions, normalizedRegions, regionConfidence,
         regionEvidenceSource, sourceAreaCode: nullableString(row, "source_area_code"),
         displayedLocationPresent: sqlBoolean(row, "displayed_location_present", true),
-        detailAccessStatus, observedLinkCount: nullableNumber(row, "observed_link_count"), addressQuality, salaryQuality,
+        detailAccessStatus, observedLinkCount: nullableNumber(row, "observed_link_count"),
+        postingDateEvidence: nullableString(row, "posting_date_evidence"),
+        postingDateStatus: requiredString(row, "posting_date_status") as NonNullable<IngestionMetadata["postingDateStatus"]>,
+        postingDateLocalDate: nullableString(row, "posting_date_local_date"), addressQuality, salaryQuality,
         commuteReady: sqlBoolean(row, "commute_ready") },
       contentHash: requiredString(row, "content_hash"), createdAt: requiredString(row, "created_at"), updatedAt: requiredString(row, "updated_at"),
     };
@@ -359,7 +369,7 @@ export class JobRepository {
   listUiRecords(): { records: UiJobRecord[]; diagnostics: RepositoryListResult["diagnostics"] } {
     const result = this.listAllWithDiagnostics();
     return {
-      records: result.records.map(({ job, metadata }) => ({
+      records: result.records.map(({ job, metadata, createdAt }) => ({
         job, isFictional: metadata.recordKind === "fictional_demo",
         safeSourceUrl: metadata.recordKind === "fictional_demo" || job.source === "work24" ? null : getSafeSourceUrl(job.source, job.canonicalUrl ?? job.sourceUrl),
         mapPosition: metadata.mapPosition, provenanceKind: metadata.recordKind, observedAt: metadata.observedAt ?? null,
@@ -367,9 +377,43 @@ export class JobRepository {
         collectionPresetId: metadata.collectionPresetId ?? null, collectionPresetLabel: metadata.collectionPresetLabel ?? null,
         collectionKeyword: metadata.collectionKeyword ?? null, normalizedRegions: metadata.normalizedRegions ?? [], regionConfidence: metadata.regionConfidence ?? "unknown",
         regionEvidenceSource: metadata.regionEvidenceSource ?? "unknown", sourceAreaCode: metadata.sourceAreaCode ?? null,
+        postingDateEvidence: metadata.postingDateEvidence ?? null, postingDateStatus: metadata.postingDateStatus ?? "unknown",
+        postingDateLocalDate: metadata.postingDateLocalDate ?? null,
         addressQuality: metadata.addressQuality ?? "unknown", salaryQuality: metadata.salaryQuality ?? "unknown", commuteReady: metadata.commuteReady ?? false,
+        firstSeenAt: createdAt,
       })),
       diagnostics: result.diagnostics,
+    };
+  }
+
+  listUiRecordsByIds(ids: string[]): { records: UiJobRecord[]; diagnostics: RepositoryListResult["diagnostics"] } {
+    if (ids.length === 0) return { records: [], diagnostics: [] };
+    const records: PersistedJobRecord[] = [];
+    const diagnostics: RepositoryListResult["diagnostics"] = [];
+    const statement = this.database.prepare("SELECT * FROM jobs WHERE id = ?");
+    for (const id of ids) {
+      const row = statement.get(id) as SqlRow | undefined;
+      if (!row) continue;
+      try { records.push(this.hydrateRow(row)); }
+      catch (error) {
+        diagnostics.push({ jobId: id, code: error instanceof JobRepositoryError ? error.code : "INVALID_DATABASE_ROW", message: error instanceof Error ? error.message : "DB row validation failed" });
+      }
+    }
+    return {
+      records: records.map(({ job, metadata, createdAt }) => ({
+        job, isFictional: metadata.recordKind === "fictional_demo",
+        safeSourceUrl: metadata.recordKind === "fictional_demo" || job.source === "work24" ? null : getSafeSourceUrl(job.source, job.canonicalUrl ?? job.sourceUrl),
+        mapPosition: metadata.mapPosition, provenanceKind: metadata.recordKind, observedAt: metadata.observedAt ?? null,
+        observationKind: metadata.observationKind ?? null,
+        collectionPresetId: metadata.collectionPresetId ?? null, collectionPresetLabel: metadata.collectionPresetLabel ?? null,
+        collectionKeyword: metadata.collectionKeyword ?? null, normalizedRegions: metadata.normalizedRegions ?? [], regionConfidence: metadata.regionConfidence ?? "unknown",
+        regionEvidenceSource: metadata.regionEvidenceSource ?? "unknown", sourceAreaCode: metadata.sourceAreaCode ?? null,
+        postingDateEvidence: metadata.postingDateEvidence ?? null, postingDateStatus: metadata.postingDateStatus ?? "unknown",
+        postingDateLocalDate: metadata.postingDateLocalDate ?? null,
+        addressQuality: metadata.addressQuality ?? "unknown", salaryQuality: metadata.salaryQuality ?? "unknown", commuteReady: metadata.commuteReady ?? false,
+        firstSeenAt: createdAt,
+      })),
+      diagnostics,
     };
   }
 

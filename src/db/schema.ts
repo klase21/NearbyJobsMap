@@ -5,7 +5,7 @@ import type { DataProvenanceKind, PermissionStatus } from "../domain/data-proven
 import type { CollectionRegion, NormalizedRegion, RegionEvidenceSource, RegionNormalizationConfidence } from "../services/region-normalizer";
 import type { ExclusionField } from "../services/collection-exclusion";
 
-export const REQUIRED_MIGRATION_VERSION = "0012";
+export const REQUIRED_MIGRATION_VERSION = "0015";
 
 export type RecordKind = DataProvenanceKind;
 export type EvidenceType = "observed_html" | "observed_json_ld" | "observed_internal_json" | "fictional_demo" | "public_page_observation";
@@ -42,6 +42,9 @@ export interface IngestionMetadata {
   commuteReady?: boolean;
   detailAccessStatus?: "available" | "access_blocked" | "unavailable" | "not_attempted" | null;
   observedLinkCount?: number | null;
+  postingDateEvidence?: string | null;
+  postingDateStatus?: import("../services/collection-date").PostingDateStatus;
+  postingDateLocalDate?: string | null;
 }
 
 export interface TransportRunMetadata {
@@ -60,6 +63,17 @@ export interface TransportRunMetadata {
   savedProfileName?: string | null;
   savedProfileRevision?: number | null;
   savedProfileConfigurationHash?: string | null;
+  collectionDateScope?: "all" | "today";
+  collectionTimezone?: "Asia/Seoul" | null;
+  collectionLocalDate?: string | null;
+  postingDateCounts?: { today: number; older: number; unknown: number; futureInvalid: number };
+  sourceFailureCount?: number;
+  operationKind?: "collection" | "manual_backfill";
+  cutoffDate?: string | null;
+  pagesScanned?: number;
+  stopReason?: string | null;
+  oldestPostingDate?: string | null;
+  preWriteBackupFile?: string | null;
 }
 
 export interface TransportRunCompletion {

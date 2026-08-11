@@ -1,0 +1,2 @@
+import {NextResponse}from"next/server";import{assertLocalCollectionAccess,collectionControlError}from"../../../../server/collection-control/access";import{getManualBackfillManager}from"../../../../server/manual-backfill/manager";
+export async function GET(request:Request){try{assertLocalCollectionAccess(request);return NextResponse.json({run:getManualBackfillManager().active()})}catch(error){const safe=collectionControlError(error);return NextResponse.json({error:safe},{status:safe.status})}}

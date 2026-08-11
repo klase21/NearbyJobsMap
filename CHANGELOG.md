@@ -1,30 +1,26 @@
 # Changelog
 
-All notable changes are documented here. Version 0.1.1 remains unreleased.
+All notable public changes are documented here.
 
-## 0.1.1 — Unreleased hardening
+## 0.2.0 - 2026-08-11
 
-- Updated official GitHub Actions to Node 24-based action runtimes while preserving offline validation.
-- Added bounded Chromium installation, a repair command, richer doctor checks, and sanitized support bundles.
-- Added in-app help, installation readiness, first-user troubleshooting, and issue intake guidance.
-- Restored the bounded Albamon public-listing URL contract (`excludeBar=true`), sanitized transport classification, canonical HTTPS redirect checks, bounded rendering stabilization, and active-result empty-page semantics.
-- Verified the recorded Albamon area mapping (`I000` Seoul, `B000` Gyeonggi), made displayed location optional, and persisted source-filter evidence separately from original location.
-- Rejected title/company/card-wide location contamination and explicit region conflicts before the candidate cap. A bounded two-page Seoul dry-run selected 20 of 100 valid cards and the matching write inserted 20 listing-only records, 20 observations, and no failures or duplicates; no BFF or detail request was made.
-- Added a separate, manually confirmed JobKorea listing-only backfill boundary with an explicit 1–10 page range, 200-candidate maximum, zero retries, zero detail requests, deterministic region filtering, and transactional post-write integrity gates without weakening ordinary collection limits.
-- Completed the approved capital-region backfill: 10 pages yielded 206 unique valid cards, 196 selected records, 177 inserts, 5 updates, 14 unchanged records, 196 observations, 5 bounded change events, and no failed item or duplicate identity.
-- Added deterministic address and salary quality classifications plus conservative coordinate/full-address commute-readiness counts. No geocoding, unit conversion, commute calculation, or tax calculation is performed.
-- Created and verified the post-backfill schema-0012 SQLite backup with 243 jobs, 12 ingestion runs, 330 items, 282 provenance rows, 262 observations, and 5 change events.
+- Added scalable server-side filtering, deterministic sorting, 25/50/100 pagination, and bounded page hydration.
+- Added conservative same-source semantic duplicate grouping without merging source identities or personal state.
+- Added richer listing-only JobKorea and Albamon metadata, including registration evidence, salary/pay type, workplace, safe coordinates, schedules, and deadlines where available.
+- Added structured monthly salary and distance filtering plus the transparent 70% salary / 30% distance `monthly_distance` ranking.
+- Added server-readable local personal Albamon profiles, safe URL import, and source-neutral exclusion filtering before grouping, ranking, and pagination.
+- Added manually triggered JobKorea date backfill and Albamon personal-profile backfill with bounded pagination, run locking, cancellation, dry-run/write separation, backup protection, and compact run history.
+- Added 30-minute, single-use preview authorization so an interactive write reuses the completed preview decision while still performing a fresh source traversal.
+- Fixed personal workspace feature boundaries, bounded persistence errors, collapsed support panels, and paginated state updates.
+- Added deterministic cleanup for legacy Albamon payment badges incorrectly stored as salary.
 
-## Unreleased
+## 0.1.1
 
-- Sanitized documentation screenshots and a local v0.1.0 release candidate package.
-- Owner review checklist and release notes for manual GitHub publication.
+- Hardened Windows installation, browser readiness, diagnostics, support bundles, backup/restore, and public packaging.
+- Added bounded local collection controls, saved collection profiles, profile comparison, and configuration-only import/export.
+- Added personal workflow state, observations, change history, saved job views, and first-run guidance.
 
-## 0.1.0 — Local MVP
+## 0.1.0
 
-- Unified job list and supplementary map with local filters.
-- Bounded manual JobKorea collection and listing fallback.
-- Albamon listing adapter with conservative live-transport limitations.
-- Local collection dashboard, presets, saved profiles, profile comparison, and import/export.
-- Personal workflow, notes, dates, saved views, observations, and change history.
-- SQLite backup and guarded restore tooling.
+- Initial local-first unified job list and supplementary map MVP.
+- Added isolated JobKorea and Albamon source adapters, SQLite persistence, conservative normalization, and offline fixture tests.

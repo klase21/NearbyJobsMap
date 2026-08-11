@@ -9,6 +9,15 @@ class MemoryStorage implements StorageLike {
 }
 
 describe("버전형 로컬 설정 저장소", () => {
+  it("수동 입력 한도를 넘는 완전한 알바몬 URL 제외 프로필을 왕복 보존한다", () => {
+    const storage = new MemoryStorage();
+    const repository = createPreferencesRepository(storage);
+    const keywords = Array.from({ length: 244 }, (_, index) => `제외어${index + 1}`);
+    expect(repository.save({ ...DEFAULT_PREFERENCES, filters: { ...DEFAULT_PREFERENCES.filters,
+      exclusionKeywords: keywords, exclusionFields: ["title", "category"] } })).toBe(true);
+    expect(createPreferencesRepository(storage).load().value.filters.exclusionKeywords).toEqual(keywords);
+  });
+
   it("저장 후 검증된 값을 읽는다", () => {
     const storage = new MemoryStorage(); const repository = createPreferencesRepository(storage);
     expect(repository.save({ ...DEFAULT_PREFERENCES, sort: "distance" })).toBe(true);

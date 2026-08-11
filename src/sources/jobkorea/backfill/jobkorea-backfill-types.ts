@@ -1,4 +1,5 @@
 import type { CollectionExclusionConfig } from "../../../services/collection-exclusion";
+import type { CollectionRegion } from "../../../services/region-normalizer";
 import type Database from "better-sqlite3";
 import type { JobKoreaListingPageResult, JobKoreaSearchExecution } from "../transport/jobkorea-search-types";
 import type { JobKoreaQualityAudit } from "./jobkorea-quality-audit";
@@ -14,6 +15,12 @@ export interface JobKoreaBackfillOptions {
   listingOnly: true;
   mode: "dry-run" | "write";
   exclusion: CollectionExclusionConfig;
+  localTodayMode?: boolean;
+  collectionDate?: { timezone: "Asia/Seoul"; resolvedDate: string };
+  backfillCutoffDate?: string;
+  signal?: AbortSignal;
+  onPage?: (page: JobKoreaListingPageResult) => void;
+  requestedRegions?: CollectionRegion[];
 }
 
 export interface JobKoreaBackfillDependencies {
@@ -53,6 +60,14 @@ export interface JobKoreaBackfillResult {
   predictedSkips: number;
   predictedObservations: number;
   predictedChangeEvents: number;
+  salaryDisplayPresent: number;
+  salaryDisplayMissing: number;
+  annualStructuredSalary: number;
+  monthlyStructuredSalary: number;
+  otherStructuredSalary: number;
+  validUnstructuredSalary: number;
+  rejectedSalaryCandidates: number;
+  salaryExamples: string[];
   actualInserts: number;
   actualUpdates: number;
   actualUnchanged: number;
@@ -67,4 +82,9 @@ export interface JobKoreaBackfillResult {
   browserDetailNavigations: number;
   retries: 0;
   elapsedMs: number;
+  postingDateCounts?: { today: number; older: number; unknown: number; futureInvalid: number };
+  postingDateEvidenceExamples?: string[];
+  postingDateKinds?: { minuteRelative: number; hourRelative: number; dayRelative: number; absolute: number; midnightAmbiguous: number };
+  stopReason?: import("../today/jobkorea-http-today").JobKoreaTodayStopReason;
+  transportUsed: import("../transport/jobkorea-search-types").JobKoreaSelectedSearchTransport;
 }

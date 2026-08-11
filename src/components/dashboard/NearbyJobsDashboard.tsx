@@ -3,22 +3,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JobFilterState, SavedPreferences, SortOption, UserJobStatus, UiJobRecord, UserOrigin } from "../../domain/ui-job";
 import { createPreferencesRepository, DEFAULT_PREFERENCES } from "../../repositories/preferences-repository";
-import { countActiveFilters, filterJobs, DEFAULT_FILTERS, isMapEligible, reconcileSelectedJobId, sortJobs } from "../../services/job-search";
+import { countActiveFilters, DEFAULT_FILTERS, isMapEligible, reconcileSelectedJobId } from "../../services/job-search";
 import { FilterPanel } from "../filters/FilterPanel";
 import { AppHeader } from "../header/AppHeader";
 import { JobList } from "../jobs/JobList";
 import { MapPanel } from "../map/MapPanel";
 import { SummaryStrip } from "../summary/SummaryStrip";
 import { FirstRunOnboarding } from "../onboarding/FirstRunOnboarding";
-import { defaultJobUserState,type JobUserState,type JobUserStateInput,type JobWorkflowStatus } from "../../services/job-user-state";
+import { defaultJobUserState,type JobUserState,type JobUserStateInput } from "../../services/job-user-state";
 import type{JobFreshness}from"../../services/job-freshness";
 import {SavedViewsBar} from "../saved-views/SavedViewsBar";
 import type { LocalReadiness } from "../../services/local-readiness";
+import type { JobsPageResult, WorkspaceView } from "../../server/jobs-page/contracts";
 
-interface NearbyJobsDashboardProps { initialJobs: UiJobRecord[]; readiness?: LocalReadiness; dataError?: string; dataWarning?: string | undefined }
-const REFERENCE_NOW = new Date("2026-08-05T12:00:00+09:00");
+interface NearbyJobsDashboardProps { initialPage?: JobsPageResult; initialJobs?: UiJobRecord[]; readiness?: LocalReadiness; dataError?: string; dataWarning?: string | undefined }
 
-export function NearbyJobsDashboard({ initialJobs, readiness = {version:"0.1.1",databaseReady:true,migrationsReady:true,chromiumReady:false,collectionUiEnabled:false,localhostSafe:true,latestBackupAvailable:false}, dataError, dataWarning }: NearbyJobsDashboardProps) {
+const legacyPage=(items:UiJobRecord[]):JobsPageResult=>({items,userStates:[],freshness:[],duplicateGroups:[],monthlyDistanceRankings:[],pagination:{page:1,pageSize:50,totalItems:items.length,totalPages:1,hasPrevious:false,hasNext:false},summary:{total:items.length,filtered:items.length,exact:0,todayOrClosing:0,jobKorea:items.filter(r=>r.job.source==="jobkorea").length,albamon:items.filter(r=>r.job.source==="albamon").length,mapEligible:items.filter(isMapEligible).length},facets:{total:items.length,sources:{jobkorea:items.filter(r=>r.job.source==="jobkorea").length,albamon:items.filter(r=>r.job.source==="albamon").length},provenance:{manual:0,fixture:0,demo:items.filter(r=>r.isFictional).length},completeness:{listing_only:0,detail_complete:0},regions:{},mapEligible:items.filter(isMapEligible).length,cities:[],districts:[],categories:[],employmentTypes:[],experienceRequirements:[],educationRequirements:[]},diagnostics:[]});
+
+export function NearbyJobsDashboard({ initialPage, initialJobs = [], readiness = {version:"0.1.1",databaseReady:true,migrationsReady:true,chromiumReady:false,collectionUiEnabled:false,localhostSafe:true,latestBackupAvailable:false}, dataError, dataWarning }: NearbyJobsDashboardProps) {
+  const startingPage=initialPage??legacyPage(initialJobs);
   const [filters, setFilters] = useState<JobFilterState>(DEFAULT_PREFERENCES.filters);
   const [sort, setSort] = useState<SortOption>(DEFAULT_PREFERENCES.sort);
   const [mapVisible, setMapVisible] = useState(DEFAULT_PREFERENCES.mapVisible);
@@ -34,20 +37,48 @@ export function NearbyJobsDashboard({ initialJobs, readiness = {version:"0.1.1",
   const [hydrated, setHydrated] = useState(false);
   const [helpOpen,setHelpOpen]=useState(false);
   const [jobStates,setJobStates]=useState<Record<string,JobUserState>>({});
-  const [workspaceView,setWorkspaceView]=useState<"all"|"favorite"|JobWorkflowStatus|"archived"|"hidden">("all");
+  const [workspaceView,setWorkspaceView]=useState<WorkspaceView>("all");
+  const [pageResult,setPageResult]=useState(startingPage);
+  const [page,setPage]=useState(startingPage.pagination.page);
+  const [pageSize,setPageSize]=useState(startingPage.pagination.pageSize);
   const[freshness,setFreshness]=useState<Record<string,JobFreshness>>({});
-  const hasOneShotObservation = initialJobs.some(({ provenanceKind }) => provenanceKind === "live_one_shot_observation");
+  const [requestError,setRequestError]=useState<string|null>(null);
+  const [jobStateError,setJobStateError]=useState<string|null>(null);
+  const [isLoading,setIsLoading]=useState(false);
+  const [refreshVersion,setRefreshVersion]=useState(0);
+  const [applyPersonalExclusions,setApplyPersonalExclusions]=useState(startingPage.personalExclusions?.applied??false);
+  const [personalExclusionCount,setPersonalExclusionCount]=useState(startingPage.personalExclusions?.count??0);
+  const searchTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const requestId=useRef(0);
+  const pendingJobStateSaves=useRef(new Set<string>());
+  const initialRequest=useRef(true);
+  const hasOneShotObservation = pageResult.items.some(({ provenanceKind }) => provenanceKind === "live_one_shot_observation") || pageResult.facets.total > (pageResult.facets.provenance.fixture??0)+(pageResult.facets.provenance.demo??0);
   const listPanelRef = useRef<HTMLElement>(null);
   const mapSlotRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const result = createPreferencesRepository(window.localStorage).load();
-    setFilters(result.value.filters); setSort(result.value.sort); setMapVisible(result.value.mapVisible);
+    const params=new URLSearchParams(window.location.search);
+    const source=params.get("source");const region=params.get("region");const discoveryDate=params.get("discoveryDate");
+    setFilters({...result.value.filters,
+      ...(source==="jobkorea"||source==="albamon"?{source}:{}),
+      ...(["seoul","gyeonggi","capital_scope","other","unknown"].includes(region??"")?{region:region as JobFilterState["region"]}:{}),
+      ...(discoveryDate==="today_posted"||discoveryDate==="today_first_seen"?{discoveryDate}:{}),
+    });
+    const urlSort=params.get("sort") as SortOption|null;
+    setSort(urlSort&&["newest","deadline","distance","monthly_distance","hourly","daily","monthly","annual","normalized_monthly","company"].includes(urlSort)?urlSort:result.value.sort);
+    const urlPage=Number(params.get("page"));const urlPageSize=Number(params.get("pageSize"));
+    if(Number.isInteger(urlPage)&&urlPage>=1)setPage(urlPage);
+    if([25,50,100].includes(urlPageSize))setPageSize(urlPageSize);
+    setMapVisible(result.value.mapVisible);
     setOrigin(result.value.origin); setUserStatuses(result.value.userJobStatuses); setCorruptedSettings(result.corrupted);
     setHydrated(true);
   }, []);
-  useEffect(()=>{void fetch("/api/job-user-state",{cache:"no-store"}).then(async r=>r.ok?(await r.json()).states:[]).then((states:JobUserState[])=>setJobStates(Object.fromEntries(states.map(s=>[s.jobId,s])))).catch(()=>{});},[]);
-  useEffect(()=>{void fetch("/api/job-observations",{cache:"no-store"}).then(async r=>r.ok?(await r.json()).freshness:[]).then((rows:JobFreshness[])=>setFreshness(Object.fromEntries(rows.map(row=>[row.jobId,row])))).catch(()=>{});},[]);
+  useEffect(()=>{
+    setJobStates(Object.fromEntries(pageResult.userStates.map(state=>[state.jobId,state])));
+    setFreshness(Object.fromEntries(pageResult.freshness.map(row=>[row.jobId,row])));
+    if(pageResult.personalExclusions)setPersonalExclusionCount(pageResult.personalExclusions.count);
+  },[pageResult.userStates,pageResult.freshness,pageResult.personalExclusions]);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 900px)");
@@ -63,11 +94,53 @@ export function NearbyJobsDashboard({ initialJobs, readiness = {version:"0.1.1",
     setStorageFailed(!createPreferencesRepository(window.localStorage).save(value));
   }, [filters, hydrated, mapVisible, origin, sort, userStatuses]);
 
-  const workspaceJobs=useMemo(()=>initialJobs.filter(({job})=>{const s=jobStates[job.id]??defaultJobUserState(job.id);if(workspaceView==="hidden")return s.isHidden;if(s.isHidden)return false;if(workspaceView==="archived")return s.isArchived;if(s.isArchived)return false;if(workspaceView==="favorite")return s.isFavorite;if(workspaceView!=="all")return s.workflowStatus===workspaceView;return true;}),[initialJobs,jobStates,workspaceView]);
-  const filtered = useMemo(() => filterJobs(workspaceJobs, filters, REFERENCE_NOW), [filters, workspaceJobs]);
-  const sorted = useMemo(() => sortJobs(filtered, sort, origin), [filtered, origin, sort]);
+  const previousQueryShape=useRef("");
+  useEffect(()=>{
+    if(!hydrated)return;
+    const shape=JSON.stringify({filters,sort,workspaceView,pageSize,applyPersonalExclusions});
+    if(previousQueryShape.current&&previousQueryShape.current!==shape)setPage(1);
+    previousQueryShape.current=shape;
+  },[filters,sort,workspaceView,pageSize,applyPersonalExclusions,hydrated]);
+
+  const lastRequestedKeyword=useRef("");
+  useEffect(()=>{
+    if(!hydrated)return;
+    if(initialRequest.current){initialRequest.current=false;}
+    const currentRequest=++requestId.current;
+    const execute=()=>{
+      setIsLoading(true);
+      const body={page,pageSize,filters,sort,workspaceView,applyPersonalExclusions,origin:{latitude:origin.latitude,longitude:origin.longitude}};
+      void fetch("/api/jobs",{method:"POST",headers:{"content-type":"application/json"},cache:"no-store",body:JSON.stringify(body)})
+        .then(async response=>{if(!response.ok)throw new Error("JOBS_PAGE_FAILED");return await response.json() as JobsPageResult;})
+        .then(result=>{if(currentRequest!==requestId.current)return;setPageResult(result);setPage(result.pagination.page);setRequestError(null);})
+        .catch(()=>{if(currentRequest===requestId.current)setRequestError("공고 목록을 새로 불러오지 못했습니다.");})
+        .finally(()=>{if(currentRequest===requestId.current)setIsLoading(false);});
+      lastRequestedKeyword.current=filters.keyword;
+    };
+    const keywordChanged=lastRequestedKeyword.current!==filters.keyword;
+    if(searchTimer.current)clearTimeout(searchTimer.current);
+    if(keywordChanged)searchTimer.current=setTimeout(execute,300);else execute();
+    return()=>{if(searchTimer.current){clearTimeout(searchTimer.current);searchTimer.current=null;}};
+  },[page,pageSize,filters,sort,workspaceView,applyPersonalExclusions,origin.latitude,origin.longitude,hydrated,refreshVersion]);
+
+  useEffect(()=>{
+    if(!hydrated)return;
+    const params=new URLSearchParams(window.location.search);
+    params.set("page",String(page));params.set("pageSize",String(pageSize));params.set("sort",sort);
+    if(filters.source!=="all")params.set("source",filters.source);else params.delete("source");
+    if(filters.region!=="all")params.set("region",filters.region);else params.delete("region");
+    if(filters.discoveryDate!=="all")params.set("discoveryDate",filters.discoveryDate);else params.delete("discoveryDate");
+    window.history.replaceState(null,"",`${window.location.pathname}?${params.toString()}`);
+  },[page,pageSize,sort,filters.source,filters.region,filters.discoveryDate,hydrated]);
+
+  useEffect(()=>{
+    const restore=()=>{const params=new URLSearchParams(window.location.search);const restoredPage=Number(params.get("page"));const restoredPageSize=Number(params.get("pageSize"));if(Number.isInteger(restoredPage)&&restoredPage>=1)setPage(restoredPage);if([25,50,100].includes(restoredPageSize))setPageSize(restoredPageSize);setFilters(current=>({...current,source:params.get("source")==="jobkorea"||params.get("source")==="albamon"?params.get("source") as JobFilterState["source"]:"all",region:["seoul","gyeonggi","capital_scope","other","unknown"].includes(params.get("region")??"")?params.get("region") as JobFilterState["region"]:"all",discoveryDate:params.get("discoveryDate")==="today_posted"||params.get("discoveryDate")==="today_first_seen"?params.get("discoveryDate") as JobFilterState["discoveryDate"]:"all"}));};
+    window.addEventListener("popstate",restore);return()=>window.removeEventListener("popstate",restore);
+  },[]);
+
+  const sorted = pageResult.items;
   const visibleIds = useMemo(() => sorted.map(({ job }) => job.id), [sorted]);
-  const availableSources = useMemo(() => [...new Set(initialJobs.map(({ job }) => job.source).filter((source): source is "jobkorea" | "albamon" => source === "jobkorea" || source === "albamon"))], [initialJobs]);
+  const availableSources = useMemo(() => (["jobkorea","albamon"] as const).filter(source=>(pageResult.facets.sources[source]??0)>0), [pageResult.facets.sources]);
   const mapVisibleCount = useMemo(() => sorted.filter(isMapEligible).length, [sorted]);
   useEffect(() => {
     if (!hydrated) return;
@@ -104,15 +177,20 @@ export function NearbyJobsDashboard({ initialJobs, readiness = {version:"0.1.1",
     setMapVisible(true);
     if (isSinglePane) showMobileView("map");
   };
-  const updateJobState=async(jobId:string,input:JobUserStateInput)=>{const response=await fetch(`/api/job-user-state/${jobId}`,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify(input)});if(response.ok){const body=await response.json();setJobStates(current=>({...current,[jobId]:body.state}));}};
-  const summary = useMemo(() => ({
-    total: initialJobs.length,
-    filtered: sorted.length,
-    exact: sorted.filter(({ job }) => job.locationAccuracy === "exact_coordinate" || job.locationAccuracy === "exact_address").length,
-    todayOrClosing: sorted.filter(({ job }) => job.postedAt?.startsWith("2026-08-05") || job.postingStatus === "closing_soon").length,
-    jobKorea: sorted.filter(({ job }) => job.source === "jobkorea").length,
-    albamon: sorted.filter(({ job }) => job.source === "albamon").length,
-  }), [initialJobs.length, sorted]);
+  const updateJobState=async(jobId:string,input:JobUserStateInput)=>{
+    if(pendingJobStateSaves.current.has(jobId))return;
+    const current=jobStates[jobId]??defaultJobUserState(jobId);
+    if(current.isFavorite===input.isFavorite&&current.workflowStatus===input.workflowStatus&&current.isHidden===input.isHidden&&current.isArchived===input.isArchived&&current.note===input.note&&current.applicationDate===input.applicationDate&&current.followUpAt===input.followUpAt&&current.personalDeadline===input.personalDeadline)return;
+    pendingJobStateSaves.current.add(jobId);setJobStateError(null);
+    try{
+      const response=await fetch(`/api/job-user-state/${jobId}`,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify(input)});
+      if(!response.ok){const body=await response.json().catch(()=>null) as {error?:{message?:string}}|null;throw new Error(body?.error?.message??"개인 지원 정보를 저장하지 못했습니다.");}
+      const body=await response.json();setJobStates(state=>({...state,[jobId]:body.state}));setRefreshVersion(value=>value+1);
+    }catch(error){setJobStateError(error instanceof Error?error.message:"개인 지원 정보를 저장하지 못했습니다.");}
+    finally{pendingJobStateSaves.current.delete(jobId);}
+  };
+  const loadDuplicateGroup=async(representativeId:string)=>{const response=await fetch("/api/jobs/duplicates",{method:"POST",headers:{"content-type":"application/json"},cache:"no-store",body:JSON.stringify({representativeId,page:1,pageSize,filters,sort,workspaceView,applyPersonalExclusions,origin})});if(!response.ok)throw new Error("DUPLICATE_GROUP_FAILED");return await response.json();};
+  const summary = pageResult.summary;
 
   return (
     <main className="app-shell">
@@ -127,20 +205,26 @@ export function NearbyJobsDashboard({ initialJobs, readiness = {version:"0.1.1",
       {storageFailed && <div className="warning-banner" role="alert">브라우저 저장공간에 설정을 저장하지 못했습니다. 현재 화면에서는 계속 사용할 수 있습니다.</div>}
       {dataWarning && <div className="warning-banner" role="status">{dataWarning}</div>}
       <SummaryStrip {...summary} />
-      <SavedViewsBar filters={filters} onApply={setFilters} />
-      <div className="workspace-quick-filters" aria-label="개인 지원 상태 빠른 보기">{([['all','전체'],['favorite','관심 공고'],['apply_planned','지원 예정'],['applied','지원 완료'],['waiting','연락 대기'],['interview','면접'],['archived','보관됨'],['hidden','숨김']] as const).map(([value,label])=><button key={value} className={workspaceView===value?"active":""} aria-pressed={workspaceView===value} onClick={()=>setWorkspaceView(value)}>{label}</button>)}</div>
-      <p className="result-count-line" aria-live="polite">{initialJobs.length}개 중 {sorted.length}개 표시 · 지도 {mapVisibleCount}개</p>
-      {filtersOpen && <FilterPanel filters={filters} jobs={initialJobs} onChange={setFilters} onClose={closeFilters} />}
+      <SavedViewsBar filters={filters} sort={sort} onApply={(nextFilters,nextSort)=>{setFilters(nextFilters);if(nextSort)setSort(nextSort)}} />
+      <div className="workspace-quick-filters" aria-label="개인 지원 상태 빠른 보기">{([['all','전체'],['favorite','관심 공고'],['apply_planned','지원 예정'],['applied','지원 완료'],['waiting','연락 대기'],['interview','면접'],['archived','보관됨'],['hidden','숨김']] as const).map(([value,label])=><button key={value} className={workspaceView===value?"active":""} aria-pressed={workspaceView===value} onClick={()=>setWorkspaceView(value)}>{label}</button>)}<label className="checkbox-line personal-exclusion-toggle"><input type="checkbox" checked={applyPersonalExclusions} onChange={event=>setApplyPersonalExclusions(event.target.checked)} />내 제외어 적용 ({personalExclusionCount}개)</label></div>
+      <p className="result-count-line" aria-live="polite">전체 {pageResult.pagination.totalItems.toLocaleString("ko-KR")}개 중 {pageResult.pagination.totalItems ? ((pageResult.pagination.page-1)*pageResult.pagination.pageSize+1).toLocaleString("ko-KR") : 0}–{Math.min(pageResult.pagination.page*pageResult.pagination.pageSize,pageResult.pagination.totalItems).toLocaleString("ko-KR")} · 현재 페이지 지도 {mapVisibleCount}개</p>
+      {requestError&&<div className="warning-banner" role="alert">{requestError}</div>}
+      {jobStateError&&<div className="warning-banner" role="alert">{jobStateError}</div>}
+      {isLoading&&<div className="jobs-loading" role="status">공고 목록을 갱신하는 중입니다.</div>}
+      {filtersOpen && <FilterPanel filters={filters} facets={pageResult.facets} onChange={setFilters} onClose={closeFilters} />}
       <div className="mobile-view-switch" aria-label="모바일 화면 전환">
         <button type="button" className={mobileView === "list" ? "active" : ""} onClick={() => showMobileView("list")} aria-pressed={mobileView === "list"}>목록</button>
         <button type="button" className={mobileView === "map" ? "active" : ""} onClick={() => showMobileView("map")} aria-pressed={mobileView === "map"}>지도</button>
       </div>
       <p className="sr-only" aria-live="polite">현재 필터 결과 {sorted.length}건</p>
       {dataError ? <div className="state-panel" role="alert"><h2>데이터를 표시할 수 없습니다</h2><p>{dataError}</p></div>
-        : initialJobs.length === 0 ? <div className="state-panel"><h2>불러온 공고가 없습니다</h2><p>sanitized fixture와 demo provider를 확인해 주세요.</p></div>
+        : pageResult.summary.total === 0 ? <div className="state-panel"><h2>불러온 공고가 없습니다</h2><p>데이터베이스 초기화와 수집 상태를 확인해 주세요.</p></div>
         : <div className={`dashboard-body ${mapVisible ? "" : "map-hidden"}`}>
           <section ref={listPanelRef} className={`list-panel ${mobileView === "map" ? "mobile-hidden" : ""}`} aria-label="통합 공고 목록 패널">
-            <JobList records={sorted} selectedJobId={selectedJobId} origin={origin} sort={sort} userStates={jobStates} freshness={freshness}
+            <JobList records={sorted} selectedJobId={selectedJobId} origin={origin} sort={sort} userStates={jobStates} freshness={freshness} duplicateGroups={pageResult.duplicateGroups}
+              monthlyDistanceRankings={pageResult.monthlyDistanceRankings??[]}
+              loadDuplicateGroup={loadDuplicateGroup}
+              pagination={pageResult.pagination} loading={isLoading} onPageChange={setPage} onPageSizeChange={setPageSize}
               onSortChange={setSort} onSelect={setSelectedJobId} onMapFocus={focusMapJob}
               onUserStateChange={(jobId,state)=>void updateJobState(jobId,state)}
               onResetFilters={() => setFilters({ ...DEFAULT_FILTERS, salaryThresholds: { ...DEFAULT_FILTERS.salaryThresholds } })} />

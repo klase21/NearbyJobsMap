@@ -12,7 +12,7 @@ const RUN = "11111111-1111-4111-8111-111111111111";
 function prepared() {
   testDatabase = createTestDatabase(); const db = testDatabase.database;
   ingestSanitizedFixtures(db); seedFictionalDemoJobs(db);
-  const jobs = db.prepare("SELECT id FROM jobs ORDER BY id LIMIT 3").all() as Array<{ id: string }>;
+  const jobs = db.prepare("SELECT id FROM jobs ORDER BY id LIMIT 4").all() as Array<{ id: string }>;
   db.prepare(`UPDATE jobs SET observation_kind='bounded_listing_collection', normalized_regions_json='["seoul"]',
     region_normalization_confidence='exact', display_map_latitude=37.5, display_map_longitude=127.0,
     collection_preset_id='seoul-ai', collection_preset_label='서울 AI 일자리', collection_keyword='AI', observed_at=? WHERE id=?`)
@@ -21,6 +21,8 @@ function prepared() {
     region_normalization_confidence='multiple', collection_preset_id='capital-ai', collection_preset_label='서울·경기 AI 일자리',
     collection_keyword='AI', observed_at=? WHERE id=?`).run("2026-08-05T02:00:00.000Z", jobs[1]!.id);
   db.prepare(`UPDATE jobs SET normalized_regions_json='[]', region_normalization_confidence='unknown' WHERE id=?`).run(jobs[2]!.id);
+  db.prepare(`UPDATE jobs SET normalized_regions_json='["capital_scope"]', region_normalization_confidence='exact_source_filter',
+    region_evidence_source='source_filter', source_area_code='I000,B000', displayed_location_present=0 WHERE id=?`).run(jobs[3]!.id);
   db.prepare(`INSERT INTO ingestion_runs (id,source,ingestion_type,status,started_at,completed_at,input_record_count,inserted_count,
     updated_count,unchanged_count,skipped_count,failed_count,permission_status,max_details,selected_detail_count,dry_run,created_at,
     search_page_count,exclusion_keywords_json,exclusion_fields_json,exclusion_config_hash,excluded_candidate_count,selected_candidate_count_after_exclusion)
@@ -56,6 +58,8 @@ describe("CollectionDashboardRepository", () => {
     expect(dashboard.inventory.completenessUnknownRecords).toBe(14);
     expect(dashboard.regions.seoul.total).toBeGreaterThanOrEqual(1);
     expect(dashboard.regions.multiple.total).toBe(1);
+    expect(dashboard.regions.capitalScope.total).toBe(1);
+    expect(dashboard.dataQuality.capitalScopeOnlyRecords).toBe(1);
     expect(dashboard.regions.unknown.total).toBeGreaterThan(0);
     expect(dashboard.mapCoverage.eligible).toBeGreaterThanOrEqual(1);
     expect((db.prepare("SELECT COUNT(*) count FROM job_provenance_history").get() as { count: number }).count).toBe(before);

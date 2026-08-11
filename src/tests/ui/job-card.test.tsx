@@ -12,6 +12,22 @@ const demo: UiJobRecord = { job: canonicalJob({ id: "demo:1", sourcePostingId: "
 afterEach(cleanup);
 
 describe("공고 카드", () => {
+  it("keeps semantic duplicates collapsed and exposes each secondary identity and workspace state", () => {
+    const secondary:UiJobRecord={...demo,isFictional:false,safeSourceUrl:"https://www.jobkorea.co.kr/Recruit/GI_Read/2",job:{...demo.job,id:"jobkorea:2",sourcePostingId:"2",sourceUrl:"https://www.jobkorea.co.kr/Recruit/GI_Read/2",canonicalUrl:"https://www.jobkorea.co.kr/Recruit/GI_Read/2"}};
+    const onSecondaryState=vi.fn();
+    render(<JobCard record={{...demo,job:{...demo.job,id:"jobkorea:1"}}} rank={1} selected={false} origin={DEFAULT_ORIGIN} onSelect={()=>undefined} onMapFocus={()=>undefined} onDuplicateUserStateChange={onSecondaryState} cardRef={()=>undefined}
+      duplicateGroup={{representativeId:"jobkorea:1",totalItems:2,hasUserState:true}} loadDuplicateGroup={async()=>({representativeId:"jobkorea:1",members:[secondary],userStates:[{jobId:"jobkorea:2",isFavorite:true,workflowStatus:"interested",isHidden:false,isArchived:false,note:"review",applicationDate:null,followUpAt:null,personalDeadline:null,createdAt:"2026-08-07",updatedAt:"2026-08-07"}],freshness:[]})} />);
+    expect(screen.queryByRole("region",{name:"같은 공고 2건"})).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button",{name:/같은 공고 2건/}));
+    return screen.findByRole("link",{name:/원문 새 창에서 보기/}).then(link=>{expect(screen.getByRole("region",{name:"같은 공고 2건"})).toBeInTheDocument();expect(link).toHaveAttribute("href","https://www.jobkorea.co.kr/Recruit/GI_Read/2");fireEvent.click(screen.getByRole("button",{name:"★ 관심 해제"}));expect(onSecondaryState).toHaveBeenCalledWith("jobkorea:2",expect.objectContaining({isFavorite:false}));});
+  });
+  it("선택된 첫 카드도 개인 지원 관리를 명시적으로 열기 전에는 접어 둔다", () => {
+    render(<JobCard record={demo} rank={1} selected={true} origin={DEFAULT_ORIGIN} onSelect={() => undefined}
+      onMapFocus={() => undefined} onUserStateChange={() => undefined} cardRef={() => undefined} />);
+    expect(screen.queryByRole("region", { name: "개인 지원 관리" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "개인 지원 관리" }));
+    expect(screen.getByRole("region", { name: "개인 지원 관리" })).toBeInTheDocument();
+  });
   it("가상 공고를 실제 원문 링크로 표시하지 않는다", () => {
     render(<JobCard record={demo} rank={1} selected={false} origin={DEFAULT_ORIGIN} userStatus="reviewing" onSelect={() => undefined}
       onMapFocus={() => undefined} onUserStatusChange={() => undefined} cardRef={() => undefined} />);
@@ -94,7 +110,17 @@ describe("공고 카드", () => {
         addressOriginalText: null, city: null, district: null, locationAccuracy: "unavailable" } };
     render(<JobCard record={record} rank={1} selected={false} origin={DEFAULT_ORIGIN} userStatus="reviewing" onSelect={() => undefined} onMapFocus={() => undefined} onUserStatusChange={() => undefined} cardRef={() => undefined} />);
     expect(screen.getByText(/알바몬 목록 페이지/)).toBeInTheDocument();
-    expect(screen.getByText("서울 · 지역은 알바몬 검색 조건을 기준으로 분류되었습니다.")).toBeInTheDocument();
+    expect(screen.getByText("서울 · 지역은 알바몬 검색 조건 범위만 확인되었으며 개별 주소를 뜻하지 않습니다.")).toBeInTheDocument();
     expect(screen.queryByText("위치", { selector: "strong" })).not.toBeInTheDocument();
+  });
+
+  it("알바몬 결합 검색은 정확한 서울·경기 대신 수도권 검색범위로 표시한다", () => {
+    const record: UiJobRecord = { ...demo, isFictional: false, normalizedRegions: ["capital_scope"], regionConfidence: "exact_source_filter",
+      regionEvidenceSource: "source_filter", sourceAreaCode: "I000,B000", observationKind: "bounded_listing_collection",
+      job: { ...demo.job, source: "albamon", addressOriginalText: null, city: null, district: null, locationAccuracy: "unavailable" } };
+    render(<JobCard record={record} rank={1} selected={false} origin={DEFAULT_ORIGIN} userStatus="reviewing" onSelect={() => undefined} onMapFocus={() => undefined} onUserStatusChange={() => undefined} cardRef={() => undefined} />);
+    expect(screen.getByText(/서울·경기 검색범위 · 지역은/)).toBeInTheDocument();
+    expect(screen.queryByText(/^서울 ·/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^경기 ·/)).not.toBeInTheDocument();
   });
 });
