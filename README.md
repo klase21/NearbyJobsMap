@@ -5,6 +5,14 @@
 
 NearbyJobsMap is a local-first workspace for discovering and reviewing Korean job listings. Source records live in local SQLite, the job list is the primary interface, and the map is a secondary way to explore the current bounded result page.
 
+## Live Demo
+
+https://nearby-jobs-map.vercel.app
+
+The hosted version is a read-only public demo using synthetic job data. Filters, pagination, the map, and salary/distance ranking are available; collection, backfill, and persistent personal workspace state are disabled.
+
+The local version is SQLite-backed and supports the personal workspace, a local personal search profile, and explicitly enabled manual collection/backfill. Real JobKorea/Albamon collection, historical backfill, and personal workspace persistence remain local-only.
+
 > NearbyJobsMap is not an official source API client or hosted service. Source permission is `unverified`; this project does not grant permission to collect data. Source terms, robots policies, and applicable rules remain the user's responsibility.
 
 ## Highlights
