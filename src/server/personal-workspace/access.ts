@@ -1,8 +1,10 @@
 import "server-only";
+import { isVercelPublicDemo } from "../runtime/public-demo";
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
 export function assertLocalPersonalWorkspaceAccess(request: Request): void {
+  if (isVercelPublicDemo()) throw Object.assign(new Error("공개 데모는 읽기 전용입니다."), { code: "PUBLIC_DEMO_READ_ONLY", status: 403 });
   const hostname = new URL(request.url).hostname.toLowerCase();
   if (!LOCAL_HOSTS.has(hostname)) throw Object.assign(new Error("개인 구직 정보는 로컬 호스트에서만 사용할 수 있습니다."), { code: "PERSONAL_WORKSPACE_NON_LOCAL_REJECTED", status: 403 });
   const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim().toLowerCase();

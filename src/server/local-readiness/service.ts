@@ -5,16 +5,19 @@ import { createRequire } from "node:module";
 import { getDatabasePath, openReadonlyDatabase } from "../../db/connection";
 import { listAppliedMigrations, loadMigrations } from "../../db/migrate";
 import type { LocalReadiness } from "../../services/local-readiness";
+import { ensurePublicDemoDatabase } from "../runtime/public-demo-database";
+import { isVercelPublicDemo } from "../runtime/public-demo";
 
 const require = createRequire(import.meta.url);
 const isLoopbackHost = (host: string | null) => !host || /^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(host);
 
 export function getLocalReadiness(host: string | null): LocalReadiness {
+  const publicDemo = isVercelPublicDemo();
   const pkg = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8")) as { version: string };
   let databaseReady = false;
   let migrationsReady = false;
   try {
-    const database = openReadonlyDatabase(getDatabasePath());
+    const database = openReadonlyDatabase(publicDemo ? ensurePublicDemoDatabase() : getDatabasePath());
     try {
       databaseReady = true;
       const applied = new Set(listAppliedMigrations(database));
@@ -23,6 +26,7 @@ export function getLocalReadiness(host: string | null): LocalReadiness {
   } catch { /* First-run readiness deliberately hides database details. */ }
   let chromiumReady = false;
   try {
+    if (publicDemo) throw new Error("PUBLIC_DEMO_NO_BROWSER");
     const { chromium } = require("playwright") as typeof import("playwright");
     chromiumReady = existsSync(chromium.executablePath());
   } catch { /* Chromium is optional for non-collection usage. */ }
