@@ -32,7 +32,7 @@ describe("Vercel public demo runtime", () => {
     expect(isVercelPublicDemo({ VERCEL: "1" })).toBe(true);
     expect(isVercelPublicDemo({ VERCEL: "1", NEARBY_JOBS_REAL_USE_MODE: "1" })).toBe(false);
     expect(isVercelPublicDemo({})).toBe(false);
-    expect(getPublicDemoDatabasePath({ VERCEL: "1" }, "C:/runtime-temp", 42)).toBe(resolve("C:/runtime-temp/nearby-jobs-map-demo-v1-42.sqlite"));
+    expect(getPublicDemoDatabasePath({ VERCEL: "1" }, "C:/runtime-temp", 42)).toBe(join("C:/runtime-temp", "nearby-jobs-map-demo-v1-42.sqlite"));
   });
 
   it("builds a deterministic bounded demo universe with duplicate groups", () => {
