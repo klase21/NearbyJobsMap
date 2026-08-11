@@ -2,6 +2,15 @@
 
 All notable public changes are documented here.
 
+## v0.2.1 - 2026-08-11
+
+- Added the read-only Vercel public demo at https://nearby-jobs-map.vercel.app.
+- Added an ephemeral synthetic SQLite runtime for hosted filtering, grouping, pagination, maps, and salary/distance ranking.
+- Added clean HTTP 403 guards for public collection and backfill routes.
+- Avoided loading Playwright and source-execution modules for denied public requests.
+- Polished collection-page centering and button-label alignment.
+- Kept local real-use collection, persistence, and personal workspace behavior unchanged.
+
 ## 0.2.0 - 2026-08-11
 
 - Added scalable server-side filtering, deterministic sorting, 25/50/100 pagination, and bounded page hydration.
