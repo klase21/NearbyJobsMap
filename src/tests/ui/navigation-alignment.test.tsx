@@ -21,10 +21,20 @@ describe("collection navigation alignment", () => {
     expect(action).toHaveClass("button", "soft", "collection-nav-link");
 
     const css = readFileSync("src/app/globals.css", "utf8");
+    const buttonRule = css.match(/(?:^|\n)\.button\s*\{[^}]+\}/u)?.[0] ?? "";
     const linkRule = css.match(/\.collection-nav-link\s*\{[^}]+\}/u)?.[0] ?? "";
+    expect(buttonRule).toContain("display: inline-flex"); expect(buttonRule).toContain("align-items: center"); expect(buttonRule).toContain("justify-content: center"); expect(buttonRule).toContain("line-height: 1");
     expect(linkRule).toContain("display: inline-flex"); expect(linkRule).toContain("align-items: center"); expect(linkRule).toContain("justify-content: center"); expect(linkRule).toContain("line-height: 1"); expect(linkRule).toContain("white-space: nowrap");
     expect(linkRule).not.toMatch(/translateY|transform\s*:|position\s*:\s*relative|top\s*:|margin-top\s*:\s*-/u);
     expect(css).toContain(".header-actions .button { flex: 1; }");
+  });
+  it("centers the collection page and tab labels without positional nudges", () => {
+    const css = readFileSync("src/app/globals.css", "utf8");
+    const pageRule = css.match(/\.collection-page\s*\{[^}]+\}/u)?.[0] ?? "";
+    const tabRule = css.match(/\.collection-tabs button\s*\{[^}]+\}/u)?.[0] ?? "";
+    expect(pageRule).toContain("width:100%"); expect(pageRule).toContain("max-width:1280px"); expect(pageRule).toContain("margin-inline:auto");
+    expect(tabRule).toContain("display:inline-flex"); expect(tabRule).toContain("align-items:center"); expect(tabRule).toContain("justify-content:center"); expect(tabRule).toContain("line-height:1");
+    expect(pageRule + tabRule).not.toMatch(/translateY|transform\s*:|position\s*:\s*relative|top\s*:|margin-top\s*:\s*-/u);
   });
   it.each([1600, 1280, 1024, 768, 430, 390, 320])("retains the shared centered, non-wrapping contract at %ipx", (width) => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
